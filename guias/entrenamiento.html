@@ -295,14 +295,189 @@ Fase 4 — Cooldown (últimos ~5-10% del training):
     <div class="tip"><strong>Perplexity como métrica:</strong> <code>PPL = exp(loss)</code>. Un buen modelo de lenguaje en español alcanza PPL ≈ 8-15 en el set de validación. PPL > 50 sugiere problemas en los datos o configuración.</div>
   </div>
 
+  <!-- 6. PyTorch Lightning -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bolt"></i>6. PyTorch Lightning — training loop sin boilerplate</h2>
+    <p>Lightning organiza el código de entrenamiento en un <code>LightningModule</code> (modelo + lógica de training) y un <code>Trainer</code> (infraestructura: GPUs, precisión, checkpoints, logging). El mismo código corre en 1 GPU o 64 sin cambios.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install lightning wandb</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — train_lightning.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import math
+import torch
+import lightning as L
+from transformers import AutoModelForCausalLM, get_cosine_schedule_with_warmup
+
+
+class LLMPretrainer(L.LightningModule):
+    def __init__(self, model_name: str, lr: float = 3e-4, warmup_steps: int = 1000):
+        super().__init__()
+        self.save_hyperparameters()
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2",
+        )
+
+    def training_step(self, batch, batch_idx):
+        loss = self.model(**batch).loss
+        ppl = math.exp(min(loss.item(), 20))
+        self.log_dict({"train/loss": loss, "train/ppl": ppl}, on_step=True, prog_bar=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.model(**batch).loss
+        self.log("val/loss", loss, on_epoch=True, sync_dist=True)
+
+    def configure_optimizers(self):
+        # Weight decay solo sobre parámetros que no son bias ni layernorm
+        decay = [p for n, p in self.named_parameters() if "bias" not in n and "norm" not in n]
+        no_decay = [p for n, p in self.named_parameters() if "bias" in n or "norm" in n]
+        optimizer = torch.optim.AdamW(
+            [{"params": decay, "weight_decay": 0.1}, {"params": no_decay, "weight_decay": 0.0}],
+            lr=self.hparams.lr, betas=(0.9, 0.95),
+        )
+        scheduler = get_cosine_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=self.hparams.warmup_steps,
+            num_training_steps=self.trainer.estimated_stepping_batches,
+        )
+        return [optimizer], [{"scheduler": scheduler, "interval": "step"}]
+
+
+# Configurar Trainer
+trainer = L.Trainer(
+    max_steps=100_000,
+    precision="bf16-mixed",
+    devices=4,                                  # GPUs
+    strategy="deepspeed_stage_2",               # DeepSpeed ZeRO-2
+    accumulate_grad_batches=8,
+    gradient_clip_val=1.0,
+    val_check_interval=1_000,
+    log_every_n_steps=10,
+    callbacks=[
+        L.pytorch.callbacks.ModelCheckpoint(
+            dirpath="checkpoints/",
+            every_n_train_steps=1_000,
+            save_top_k=3,
+            monitor="val/loss",
+        ),
+        L.pytorch.callbacks.LearningRateMonitor(logging_interval="step"),
+    ],
+    logger=L.pytorch.loggers.WandbLogger(project="latamgpt", log_model=False),
+)
+
+model = LLMPretrainer("meta-llama/Llama-2-7b-hf")
+trainer.fit(model, train_dataloader, val_dataloader)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Lightning vs Accelerate:</strong> Accelerate te da más control sobre el loop y es lo que usa la mayoría de repos industriales (OLMo, TRL). Lightning reduce boilerplate y facilita organizar experimentos. Para investigación y prototipos rápidos, Lightning es más ergonómico. Para producción y mayor flexibilidad, Accelerate.</div>
+  </div>
+
+  <!-- 7. Hydra para gestión de configs -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-settings-2"></i>7. Hydra — gestión de configuraciones</h2>
+    <p>Hydra (Meta Research) compone configuraciones YAML jerárquicas y permite overrides desde la CLI. Elimina el `argparse` y los configs hardcodeados: cada experimento queda completamente reproducible con un solo comando.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install hydra-core omegaconf</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml — configs/train.yaml</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml">defaults:
+  - model: llama7b        # carga configs/model/llama7b.yaml
+  - data: latam_web_v3    # carga configs/data/latam_web_v3.yaml
+  - _self_
+
+training:
+  learning_rate: 3e-4
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  max_steps: 100_000
+  warmup_steps: 1_000
+  weight_decay: 0.1
+  precision: bf16
+
+hardware:
+  num_gpus: 4
+  strategy: deepspeed_stage_2
+
+logging:
+  project: latamgpt
+  run_name: ${model.name}-${now:%Y%m%d_%H%M%S}</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml — configs/model/llama7b.yaml</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml">name: llama7b
+hf_path: meta-llama/Llama-2-7b-hf
+max_seq_len: 2048
+attn_impl: flash_attention_2</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — train.py con Hydra</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import hydra
+from omegaconf import DictConfig, OmegaConf
+import torch
+from transformers import AutoModelForCausalLM
+
+@hydra.main(config_path="configs", config_name="train", version_base=None)
+def main(cfg: DictConfig) -> None:
+    # El config se convierte en un dict anidado accesible con dot notation
+    print(OmegaConf.to_yaml(cfg))   # ver config efectivo del run
+
+    model = AutoModelForCausalLM.from_pretrained(
+        cfg.model.hf_path,
+        torch_dtype=torch.bfloat16,
+    )
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=cfg.training.learning_rate,
+        weight_decay=cfg.training.weight_decay,
+    )
+    # ... resto del training loop
+
+if __name__ == "__main__":
+    main()</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — overrides y sweeps desde CLI</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Lanzar con config base
+python train.py
+
+# Override puntual de cualquier valor
+python train.py training.learning_rate=1e-4 hardware.num_gpus=8
+
+# Cambiar modelo completo (carga configs/model/llama13b.yaml)
+python train.py model=llama13b
+
+# Multi-run: sweep de learning rates (lanza 3 jobs en serie)
+python train.py -m training.learning_rate=1e-4,3e-4,1e-3
+
+# El output de cada run se guarda en outputs/YYYY-MM-DD/HH-MM-SS/
+# con el .hydra/config.yaml que registra exactamente qué parámetros se usaron</code></pre>
+    </div>
+
+    <div class="tip"><strong>Reproducibilidad:</strong> Hydra guarda automáticamente el config completo en cada run. En 6 meses puedes reproducir cualquier experimento exactamente con el comando del log de W&B + el <code>.hydra/config.yaml</code> que quedó guardado.</div>
+  </div>
+
   <div class="sources">
     <div class="sources-title">Fuentes</div>
     <div class="source-list">
       <a class="source-link" href="https://huggingface.co/docs/accelerate" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Accelerate Docs (HuggingFace)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DeepSpeed ZeRO (Rajbhandari et al., 2020)</a>
+      <a class="source-link" href="https://lightning.ai/docs/pytorch/stable/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>PyTorch Lightning Docs</a>
+      <a class="source-link" href="https://hydra.cc/docs/intro/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Hydra Docs (Meta Research)</a>
       <a class="source-link" href="https://github.com/allenai/OLMo" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>OLMo Training Code (AllenAI)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LLaMA 3 Tech Report (Meta, 2024)</a>
-      <a class="source-link" href="https://deepspeed.readthedocs.io/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>DeepSpeed Docs</a>
     </div>
   </div>
 </main>

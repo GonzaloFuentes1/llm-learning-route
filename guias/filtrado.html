@@ -360,6 +360,209 @@ executor.run()</code></pre>
     <div class="tip"><strong>Orden importa:</strong> Poner los filtros más baratos primero (longitud, idioma) elimina documentos antes de aplicar filtros costosos (perplejidad, clasificadores ML). Esto reduce el tiempo total de procesamiento.</div>
   </div>
 
+  <!-- 7. DCLM: clasificador OH2.5 + ELI5 -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-robot"></i>7. DCLM: clasificador OH2.5 + ELI5 vs RefinedWeb</h2>
+    <p>La innovación principal de DCLM fue usar <strong>datos de instrucción</strong> (OpenHermes 2.5 + ELI5 Reddit) como positivos en vez de Wikipedia. La hipótesis: si quieres que el modelo escriba como en instrucciones de alta calidad, entrena el clasificador con esos ejemplos. El umbral real usado en DCLM-Baseline es <code>0.018112</code> — muy permisivo, deja pasar casi todo excepto spam claro.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — preparar datos y entrenar clasificador DCLM</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Instalar DCLM
+git clone https://github.com/mlfoundations/dclm
+cd dclm && pip install -e .
+
+# Preparar archivo de entrenamiento en formato fastText
+# Positivos: OpenHermes 2.5 (instruction data)
+# Negativos: muestra aleatoria de RefinedWeb / CommonCrawl
+
+python baselines/train_fasttext_classifier.py \
+  --input training_data.txt \    # __label__hq y __label__cc alternados
+  --valid_frac 0.05 \
+  --name fasttext_oh_eli5 \
+  --epoch 3 \
+  --dim 100 \
+  --wordNgrams 1 \
+  --output_dir models/</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml — config DCLM para aplicar el filtro (umbral real del paper)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml"># baselines/baselines_configs/fasttext_filter.yaml
+- source: cc
+  steps:
+    - func: classify_fasttext_hq_prob_enricher
+      model_filename: fasttext_oh_eli5.bin
+      key: fasttext_oh_eli5_vs_rw_v2_prob
+    - func: quality_filter
+      key: fasttext_oh_eli5_vs_rw_v2_prob
+      threshold: 0.018112   # umbral real usado en DCLM-Baseline</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — alternativa directa con fasttext</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import fasttext
+
+model = fasttext.load_model("fasttext_oh_eli5.bin")
+
+def dclm_score(text: str) -> float:
+    """
+    Retorna P(hq) según el clasificador DCLM.
+    Threshold del paper: 0.018112 (muy permisivo, elimina solo spam claro).
+    """
+    clean = text.replace("\n", " ").strip()[:300]
+    pred = model.predict(clean, k=2)
+    labels, probs = pred
+    # Si el label "hq" es primero, su probabilidad es probs[0]
+    if labels[0] == "__label__hq":
+        return float(probs[0])
+    return float(1.0 - probs[0])
+
+
+# Filtrar corpus
+DCLM_THRESHOLD = 0.018112  # del paper; sube a 0.1-0.3 para corpus más pequeño/limpio
+filtered = [doc for doc in corpus if dclm_score(doc["text"]) >= DCLM_THRESHOLD]</code></pre>
+    </div>
+
+    <div class="tip"><strong>OH2.5 vs Wikipedia como positivos:</strong> Wikipedia captura "texto enciclopédico bien escrito". OpenHermes/ELI5 captura "texto explicativo, instructivo, útil para un asistente". Para un LLM de chat/instrucción, el segundo da mejores resultados downstream según los ablaciones de DCLM.</div>
+  </div>
+
+  <!-- 8. Dolma Toolkit (OLMo) -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package"></i>8. Dolma Toolkit — pipeline de OLMo/AllenAI</h2>
+    <p>Dolma es el toolkit de curaciónde datos de AllenAI, usado para construir el corpus de OLMo. Está escrito en Rust + Python, es muy rápido y usa deduplicación con Bloom filters en Rust. Los "taggers" son módulos Python que anotantributos sobre cada documento; el paso de mezcla/filtrado aplica los umbrales.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — instalar y aplicar taggers</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install dolma
+
+# Ver todos los taggers disponibles
+dolma list
+
+# Taggers clave disponibles:
+# gopher_quality_v1          → reglas de calidad de Gopher (longitud, símbolos, etc.)
+# gopher_repetition_v1       → detección de repeticiones n-gram
+# c4_quality_v1              → reglas del dataset C4 (puntuación terminal, etc.)
+# ft_lang_id_en_doc_v2       → detección de idioma con fastText
+# jigsaw_hatespeech_v2       → contenido de odio (clasificador Jigsaw)
+# pii_presidio_v1            → detección de PII con Presidio
+
+# Aplicar taggers sobre el corpus (anota atributos, no filtra todavía)
+dolma tag \
+  --taggers gopher_quality_v1 c4_quality_v1 ft_lang_id_en_doc_v2 \
+  --documents "data/raw/*.jsonl.gz" \
+  --work_dir data/work/ \
+  --processes 16</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — filtrar con los atributos de Dolma</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from dolma.core.data_types import Document
+from dolma.taggers.gopher import GopherQualityTagger
+from dolma.taggers.language import FastTextLanguageTagger
+
+# Los taggers anotan atributos en cada documento
+gopher = GopherQualityTagger()
+lang_tagger = FastTextLanguageTagger(model_path="lid.176.bin")
+
+def should_keep(doc: dict) -> bool:
+    text = doc["text"]
+    # Filtro de idioma
+    lang_pred = lang_tagger.predict(text)
+    if lang_pred.label not in ("es", "pt") or lang_pred.score < 0.65:
+        return False
+    # Filtros Gopher
+    preds = gopher.predict(text)
+    attrs = {p.label: p.score for p in preds}
+    if attrs.get("gopher_word_count", 0) < 50:
+        return False
+    if attrs.get("gopher_symbol_to_word_ratio", 1.0) > 0.1:
+        return False
+    return True
+
+filtered = [doc for doc in corpus if should_keep(doc)]</code></pre>
+    </div>
+  </div>
+
+  <!-- 9. NeMo Curator (NVIDIA) -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-brand-nvidia"></i>9. NeMo Curator — filtrado acelerado con GPU</h2>
+    <p>NeMo Curator de NVIDIA acelera el pipeline de filtrado usando <strong>RAPIDS/cuDF</strong> en GPU. La deduplicación fuzzy es ~16× más rápida que la alternativa en CPU. Útil para corpus de decenas de TB donde Datatrove en CPU es demasiado lento.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install nemo-curator[all]
+
+# Requiere RAPIDS (cuDF) para aceleración GPU
+# En cluster con GPUs NVIDIA A100/H100</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — pipeline NeMo Curator</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import nemo_curator as nc
+from nemo_curator.datasets import DocumentDataset
+from nemo_curator.filters import (
+    FastTextLangId,
+    FastTextQualityFilter,
+    WordCountFilter,
+    NonAlphaNumericFilter,
+    RepeatedLinesByCharFilter,
+)
+from nemo_curator.utils.distributed_utils import get_client
+
+# Inicializar cluster (CPU o GPU)
+client = get_client(cluster_type="gpu", n_workers=4)   # GPU
+# client = get_client(cluster_type="cpu", n_workers=16) # CPU
+
+# Cargar dataset (soporta múltiples formatos)
+dataset = DocumentDataset.read_json("data/raw/", add_filename=True)
+
+# Definir pipeline de filtros
+pipeline = nc.Sequential([
+    # 1. Idioma
+    nc.ScoreFilter(
+        FastTextLangId("lid.176.bin"),
+        text_field="text",
+        score_field="language",
+        score_type=str,
+    ),
+
+    # 2. Longitud mínima
+    nc.ScoreFilter(
+        WordCountFilter(min_words=50),
+        text_field="text",
+        score_field="word_count",
+    ),
+
+    # 3. Ratio alfanumérico
+    nc.ScoreFilter(
+        NonAlphaNumericFilter(max_non_alpha_numeric_ratio=0.25),
+        text_field="text",
+        score_field="non_alpha",
+    ),
+
+    # 4. Líneas repetidas
+    nc.ScoreFilter(
+        RepeatedLinesByCharFilter(max_repeated_lines_ratio=0.70),
+        text_field="text",
+        score_field="repeated_lines",
+    ),
+
+    # 5. Clasificador de calidad fastText
+    nc.ScoreFilter(
+        FastTextQualityFilter("fasttext_oh_eli5.bin", label="hq", threshold=0.018),
+        text_field="text",
+        score_field="quality_score",
+    ),
+])
+
+# Ejecutar
+filtered = pipeline(dataset)
+filtered.to_json("data/filtered/", write_to_filename=True)</code></pre>
+    </div>
+
+    <div class="tip"><strong>GPU vs CPU:</strong> Para deduplicación fuzzy de 1T+ tokens, NeMo Curator en GPU es 10-16× más rápido que datasketch en CPU. Para el filtrado de texto puro, la diferencia es menor (~2-4×). La ventaja real es la deduplicación.</div>
+  </div>
+
   <div class="sources">
     <div class="sources-title">Fuentes</div>
     <div class="source-list">
@@ -368,6 +571,10 @@ executor.run()</code></pre>
       <a class="source-link" href="https://fasttext.cc/docs/en/language-identification.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>fastText LID</a>
       <a class="source-link" href="https://github.com/kheafield/kenlm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>KenLM</a>
       <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Datatrove (HuggingFace)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2306.01116" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>RefinedWeb (Penedo et al., 2023)</a>
+      <a class="source-link" href="https://github.com/NVIDIA/NeMo-Curator" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>NeMo Curator (NVIDIA)</a>
+      <a class="source-link" href="https://github.com/allenai/dolma" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Dolma Toolkit (AllenAI)</a>
+      <a class="source-link" href="https://github.com/mlfoundations/dclm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>DCLM (GitHub)</a>
     </div>
   </div>
 </main>

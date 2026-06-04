@@ -289,11 +289,121 @@ def anonymize_corpus(input_file: str, output_file: str, workers: int = 16):
     <div class="warning"><strong>Limitación importante:</strong> Presidio + spaCy no detecta el 100% del PII. Especialmente nombres propios en contextos inusuales o documentos de baja calidad pueden escapar. Valida siempre muestreando manualmente 200-500 documentos post-procesados y ajusta los thresholds según el caso de uso.</div>
   </div>
 
+  <!-- 5. eu-pii-safeguard -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-shield-check"></i>5. eu-pii-safeguard — NER multilingüe para PII</h2>
+    <p><a href="https://huggingface.co/tabularisai/eu-pii-safeguard" target="_blank" rel="noopener">tabularisai/eu-pii-safeguard</a> es XLM-RoBERTa-large fine-tuned para detección de PII en los 26 idiomas oficiales de la UE, incluyendo <strong>español y portugués</strong>. Detecta 42 tipos de entidades (nombre, email, IBAN, condición médica, contraseña, etc.) con F1 global de 97%. Es más preciso que Presidio+spaCy para nombres propios en contextos ambiguos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — detección con pipeline HuggingFace</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import pipeline
+
+# Pipeline de token classification (NER)
+pii_detector = pipeline(
+    "token-classification",
+    model="tabularisai/eu-pii-safeguard",
+    aggregation_strategy="simple",   # une subwords en entidades completas
+    device=0,                        # GPU 0; -1 para CPU
+)
+
+text = "Contacta a Ana García en ana.garcia@empresa.cl o al +56 9 8765 4321. Su RUT es 12.345.678-9."
+
+entities = pii_detector(text)
+for e in entities:
+    print(f"{e['entity_group']:20s} [{e['score']:.2f}]  →  '{e['word']}'")
+
+# Output esperado:
+# PERSON               [0.99]  →  'Ana García'
+# EMAIL_ADDRESS        [0.98]  →  'ana.garcia@empresa.cl'
+# PHONE_NUMBER         [0.97]  →  '+56 9 8765 4321'</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — anonimizar reemplazando entidades detectadas</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import pipeline
+
+pii_detector = pipeline(
+    "token-classification",
+    model="tabularisai/eu-pii-safeguard",
+    aggregation_strategy="simple",
+    device=0,
+)
+
+# Etiquetas → token de reemplazo
+REPLACE_MAP = {
+    "PERSON":         "&lt;PERSONA&gt;",
+    "EMAIL_ADDRESS":  "&lt;EMAIL&gt;",
+    "PHONE_NUMBER":   "&lt;TELEFONO&gt;",
+    "IP_ADDRESS":     "&lt;IP&gt;",
+    "IBAN":           "&lt;IBAN&gt;",
+    "CREDIT_CARD":    "&lt;TARJETA&gt;",
+    "NATIONAL_ID":    "&lt;ID_FISCAL&gt;",
+    "TAX_ID":         "&lt;ID_FISCAL&gt;",
+    "PASSWORD":       "&lt;CONTRASENA&gt;",
+    "MEDICAL_CONDITION": "&lt;SALUD&gt;",
+}
+
+def anonymize_with_xlmr(text: str, threshold: float = 0.85) -> str:
+    """Reemplaza PII detectado por eu-pii-safeguard."""
+    entities = pii_detector(text)
+    # Ordenar de derecha a izquierda para no alterar los offsets
+    entities = sorted(entities, key=lambda e: e["start"], reverse=True)
+    for ent in entities:
+        if ent["score"] < threshold:
+            continue
+        label = ent["entity_group"]
+        replacement = REPLACE_MAP.get(label, f"&lt;{label}&gt;")
+        text = text[: ent["start"]] + replacement + text[ent["end"] :]
+    return text
+
+
+# Combinar con Presidio para cobertura máxima:
+# 1. Aplicar eu-pii-safeguard (mejor en nombres propios)
+# 2. Aplicar Presidio sobre el resultado (mejor en regex: emails, IPs, RUT)
+def full_anonymization(text: str) -> str:
+    text = anonymize_with_xlmr(text)           # NER neuronal
+    text = anonymize_with_presidio(text)        # Regex + patrones Latam
+    return text</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — procesar corpus con batching eficiente</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import pipeline
+from torch.utils.data import DataLoader
+
+pii_detector = pipeline(
+    "token-classification",
+    model="tabularisai/eu-pii-safeguard",
+    aggregation_strategy="simple",
+    device=0,
+    batch_size=32,        # batching en GPU para mayor throughput
+)
+
+def anonymize_corpus_xlmr(docs: list[dict]) -> list[dict]:
+    texts = [d["text"] for d in docs]
+    # El pipeline acepta listas directamente
+    all_entities = pii_detector(texts, truncation=True, max_length=256)
+    result = []
+    for doc, entities in zip(docs, all_entities):
+        text = doc["text"]
+        for ent in sorted(entities, key=lambda e: e["start"], reverse=True):
+            if ent["score"] >= 0.85:
+                label = ent["entity_group"]
+                replacement = REPLACE_MAP.get(label, f"&lt;{label}&gt;")
+                text = text[: ent["start"]] + replacement + text[ent["end"] :]
+        result.append({**doc, "text": text})
+    return result</code></pre>
+    </div>
+
+    <div class="tip"><strong>eu-pii-safeguard vs Presidio+spaCy:</strong> El modelo neuronal gana en nombres propios en contexto ("la paciente María López") y entidades financieras complejas (IBAN, números de cuenta). Presidio+spaCy gana en formatos estructurados (regex) como RUT, emails, IPs. Para cobertura máxima, aplica ambos en secuencia.</div>
+  </div>
+
   <div class="sources">
     <div class="sources-title">Fuentes</div>
     <div class="source-list">
       <a class="source-link" href="https://microsoft.github.io/presidio/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Microsoft Presidio Docs</a>
       <a class="source-link" href="https://spacy.io/models/es" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>spaCy Modelos es/pt</a>
+      <a class="source-link" href="https://huggingface.co/tabularisai/eu-pii-safeguard" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>eu-pii-safeguard (HuggingFace)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2402.00159" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Dolma §3.3 PII Scrubbing (Soldaini et al., 2024)</a>
     </div>
   </div>
