@@ -211,6 +211,8 @@
   .badge-train    { background: #E6F1FB; color: #0C447C; }
   .badge-deploy   { background: #FAEEDA; color: #633806; }
   .badge-debug    { background: #FAECE7; color: #712B13; }
+  .c-curso   .card-icon { background: #FFF3CD; color: #7B4F00; }
+  .badge-curso    { background: #FFF3CD; color: #7B4F00; }
 
   @media (prefers-color-scheme: dark) {
     .c-roadmap .card-icon { background: #26215C; color: #AFA9EC; }
@@ -225,6 +227,8 @@
     .badge-train    { background: #042C53; color: #B5D4F4; }
     .badge-deploy   { background: #412402; color: #FAC775; }
     .badge-debug    { background: #4A1B0C; color: #F5C4B3; }
+    .c-curso .card-icon { background: #412402; color: #FAC775; }
+    .badge-curso    { background: #412402; color: #FAC775; }
   }
 
   /* Roadmap card (big) */
@@ -411,6 +415,33 @@
         <div class="card-desc">Levantar un servidor vLLM con PagedAttention, hacer requests con la API OpenAI-compatible y monitorear throughput.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
+  <!-- Cursos externos -->
+  <div class="section-label">Cursos externos</div>
+  <div class="grid grid-2">
+    <a class="card c-curso" href="https://cs336.stanford.edu/" target="_blank" rel="noopener">
+      <div class="card-icon"><i class="ti ti-school" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Stanford CS336 — Language Model Systems
+          <span class="card-badge badge-curso">Avanzado</span>
+        </div>
+        <div class="card-desc">Curso universitario sobre construcción de LLMs desde cero: tokenizadores, implementación del Transformer, pretraining, RLHF e inferencia eficiente. Con assignments en código.</div>
+      </div>
+      <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-curso" href="https://huggingface.co/learn/llm-course/en/chapter1/1" target="_blank" rel="noopener">
+      <div class="card-icon"><i class="ti ti-book-2" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          HuggingFace LLM Course
+          <span class="card-badge badge-curso">Core</span>
+        </div>
+        <div class="card-desc">Curso práctico del ecosistema HuggingFace: transformers, fine-tuning, datasets y deployment. Punto de entrada ideal para el stack del proyecto.</div>
+      </div>
+      <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
     </a>
   </div>
 
