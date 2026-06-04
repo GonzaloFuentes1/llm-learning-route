@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anonimización de PII — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  .warning { background:rgba(186,117,23,0.07); border-left:3px solid #BA7517; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } .warning { background:rgba(250,199,117,0.07); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <h1 class="guide-title">Anonimización y PII</h1>
+    <p class="guide-desc">Detectar y reemplazar información de identificación personal (PII) en corpus de texto antes de entrenamiento. Cubre Microsoft Presidio con soporte para español/portugués y formatos latinoamericanos.</p>
+  </div>
+
+  <!-- 1. Qué es PII -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-shield"></i>1. Tipos de PII relevantes para Latam</h2>
+    <p>Los modelos que aprenden de texto con PII pueden "memorizar" y reproducir datos personales. La detección y remoción es un requisito legal (LGPD en Brasil, Ley 19.628 en Chile) y una buena práctica de seguridad.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">text — categorías de PII</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-text">PII universal:
+  - Nombres de personas (PERSON)
+  - Emails (EMAIL_ADDRESS)
+  - Números de teléfono (PHONE_NUMBER)
+  - Direcciones IP (IP_ADDRESS)
+  - Fechas de nacimiento (DATE_TIME + contexto)
+  - Números de tarjeta de crédito (CREDIT_CARD)
+  - URLs personales
+
+PII específica de Latam:
+  - RUT (Chile):        12.345.678-9
+  - CUIT/CUIL (Arg):   20-12345678-9
+  - CPF (Brasil):       123.456.789-00
+  - DNI (España/Arg):   12345678A
+  - Cédula (Colombia):  1.234.567.890
+  - Pasaportes</code></pre>
+    </div>
+  </div>
+
+  <!-- 2. Presidio setup -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-eye-off"></i>2. Pipeline con Microsoft Presidio</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install presidio-analyzer presidio-anonymizer spacy
+python -m spacy download es_core_news_lg    # NER en español
+python -m spacy download pt_core_news_lg    # NER en portugués</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — presidio_pipeline.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from presidio_analyzer import AnalyzerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
+from presidio_anonymizer import AnonymizerEngine
+from presidio_anonymizer.entities import OperatorConfig
+
+# Configurar motor NLP con spaCy español
+configuration = {
+    "nlp_engine_name": "spacy",
+    "models": [
+        {"lang_code": "es", "model_name": "es_core_news_lg"},
+        {"lang_code": "pt", "model_name": "pt_core_news_lg"},
+    ],
+}
+provider = NlpEngineProvider(nlp_configuration=configuration)
+nlp_engine = provider.create_engine()
+
+analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["es", "pt"])
+anonymizer = AnonymizerEngine()
+
+# Operadores: reemplazar con tokens genéricos
+operators = {
+    "PERSON":        OperatorConfig("replace", {"new_value": "&lt;PERSONA&gt;"}),
+    "EMAIL_ADDRESS": OperatorConfig("replace", {"new_value": "&lt;EMAIL&gt;"}),
+    "PHONE_NUMBER":  OperatorConfig("replace", {"new_value": "&lt;TELEFONO&gt;"}),
+    "IP_ADDRESS":    OperatorConfig("replace", {"new_value": "&lt;IP&gt;"}),
+    "CREDIT_CARD":   OperatorConfig("replace", {"new_value": "&lt;TARJETA&gt;"}),
+    "URL":           OperatorConfig("replace", {"new_value": "&lt;URL&gt;"}),
+    "LOCATION":      OperatorConfig("keep"),  # mantener ciudades (útil para Latam)
+}
+
+
+def anonymize_text(text: str, lang: str = "es") -> str:
+    """Anonimiza PII en un texto. Retorna el texto con tokens de reemplazo."""
+    results = analyzer.analyze(text=text, language=lang)
+    if not results:
+        return text
+    anonymized = anonymizer.anonymize(
+        text=text,
+        analyzer_results=results,
+        operators=operators,
+    )
+    return anonymized.text
+
+
+# Ejemplo
+texto = "El Dr. Juan García (juan.garcia@hospital.cl, +56 9 1234 5678) vive en Santiago."
+print(anonymize_text(texto))
+# Output: "El Dr. &lt;PERSONA&gt; (&lt;EMAIL&gt;, &lt;TELEFONO&gt;) vive en Santiago."</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Reconocedores custom para Latam -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-code"></i>3. Reconocedores custom para formatos latinoamericanos</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — recognizers_latam.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+from presidio_analyzer import PatternRecognizer, Pattern
+
+
+# RUT chileno: 12.345.678-9 o 12345678-9
+rut_pattern = Pattern(
+    name="rut_pattern",
+    regex=r"\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b",
+    score=0.85,
+)
+rut_recognizer = PatternRecognizer(
+    supported_entity="RUT_CL",
+    patterns=[rut_pattern],
+    context=["rut", "run", "cédula", "documento"],
+)
+
+# CUIT/CUIL argentino: 20-12345678-9
+cuit_pattern = Pattern(
+    name="cuit_pattern",
+    regex=r"\b(20|23|24|27|30|33|34)-\d{8}-[0-9]\b",
+    score=0.85,
+)
+cuit_recognizer = PatternRecognizer(
+    supported_entity="CUIT_AR",
+    patterns=[cuit_pattern],
+    context=["cuit", "cuil", "afip"],
+)
+
+# CPF brasileño: 123.456.789-00
+cpf_pattern = Pattern(
+    name="cpf_pattern",
+    regex=r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b",
+    score=0.80,
+)
+cpf_recognizer = PatternRecognizer(
+    supported_entity="CPF_BR",
+    patterns=[cpf_pattern],
+    context=["cpf", "cadastro"],
+)
+
+
+# Agregar reconocedores al analyzer
+def build_latam_analyzer():
+    from presidio_analyzer import AnalyzerEngine
+    from presidio_analyzer.nlp_engine import NlpEngineProvider
+
+    provider = NlpEngineProvider(nlp_configuration={
+        "nlp_engine_name": "spacy",
+        "models": [{"lang_code": "es", "model_name": "es_core_news_lg"}],
+    })
+    engine = provider.create_engine()
+    analyzer = AnalyzerEngine(nlp_engine=engine, supported_languages=["es"])
+
+    # Registrar reconocedores custom
+    analyzer.registry.add_recognizer(rut_recognizer)
+    analyzer.registry.add_recognizer(cuit_recognizer)
+    analyzer.registry.add_recognizer(cpf_recognizer)
+
+    return analyzer</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Procesar corpus a escala -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-maximize"></i>4. Procesar corpus a escala</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — anonimizar_corpus.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+from multiprocessing import Pool
+from pathlib import Path
+from presidio_anonymizer import AnonymizerEngine
+from presidio_anonymizer.entities import OperatorConfig
+
+anonymizer = AnonymizerEngine()
+analyzer = None  # se inicializa en cada worker
+
+def init_worker():
+    global analyzer
+    analyzer = build_latam_analyzer()  # función del paso anterior
+
+def process_document(doc: dict) -> dict:
+    lang = doc.get("lang", "es")
+    try:
+        results = analyzer.analyze(text=doc["text"], language=lang)
+        if results:
+            anon = anonymizer.anonymize(
+                text=doc["text"],
+                analyzer_results=results,
+                operators={
+                    "PERSON": OperatorConfig("replace", {"new_value": "&lt;PERSONA&gt;"}),
+                    "EMAIL_ADDRESS": OperatorConfig("replace", {"new_value": "&lt;EMAIL&gt;"}),
+                    "PHONE_NUMBER": OperatorConfig("replace", {"new_value": "&lt;TELEFONO&gt;"}),
+                    "IP_ADDRESS": OperatorConfig("replace", {"new_value": "&lt;IP&gt;"}),
+                    "RUT_CL": OperatorConfig("replace", {"new_value": "&lt;ID_FISCAL&gt;"}),
+                    "CUIT_AR": OperatorConfig("replace", {"new_value": "&lt;ID_FISCAL&gt;"}),
+                    "CPF_BR": OperatorConfig("replace", {"new_value": "&lt;ID_FISCAL&gt;"}),
+                },
+            )
+            return {**doc, "text": anon.text, "pii_detected": len(results)}
+    except Exception:
+        pass
+    return {**doc, "pii_detected": 0}
+
+
+def anonymize_corpus(input_file: str, output_file: str, workers: int = 16):
+    docs = [json.loads(line) for line in open(input_file)]
+
+    with Pool(workers, initializer=init_worker) as pool:
+        processed = pool.map(process_document, docs)
+
+    docs_with_pii = sum(1 for d in processed if d.get("pii_detected", 0) > 0)
+    print(f"Documentos con PII: {docs_with_pii:,} / {len(docs):,} ({docs_with_pii/len(docs):.1%})")
+
+    with open(output_file, "w") as f:
+        for doc in processed:
+            f.write(json.dumps(doc, ensure_ascii=False) + "\n")</code></pre>
+    </div>
+
+    <div class="warning"><strong>Limitación importante:</strong> Presidio + spaCy no detecta el 100% del PII. Especialmente nombres propios en contextos inusuales o documentos de baja calidad pueden escapar. Valida siempre muestreando manualmente 200-500 documentos post-procesados y ajusta los thresholds según el caso de uso.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link" href="https://microsoft.github.io/presidio/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Microsoft Presidio Docs</a>
+      <a class="source-link" href="https://spacy.io/models/es" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>spaCy Modelos es/pt</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2402.00159" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Dolma §3.3 PII Scrubbing (Soldaini et al., 2024)</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Código de Entrenamiento — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Entrenamiento</div>
+    <h1 class="guide-title">Código de Entrenamiento</h1>
+    <p class="guide-desc">Loop de pretraining con HuggingFace Accelerate y DeepSpeed ZeRO. Cubre configuración multi-GPU, gradient accumulation, precisión mixta bf16, checkpointing y cómo interpretar la loss curve.</p>
+  </div>
+
+  <!-- 1. Setup accelerate -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-settings"></i>1. Configurar Accelerate</h2>
+    <p>Accelerate abstrae la complejidad de multi-GPU, DeepSpeed y FSDP. Una sola línea de config determina cómo se distribuye el entrenamiento.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install accelerate deepspeed
+
+# Generar config interactivamente (responde las preguntas)
+accelerate config --config_file configs/deepspeed_zero2.yaml
+
+# O crear el archivo directamente:</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml — configs/deepspeed_zero2.yaml</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml">compute_environment: LOCAL_MACHINE
+distributed_type: DEEPSPEED
+deepspeed_config:
+  deepspeed_multinode_launcher: standard
+  gradient_accumulation_steps: 4
+  gradient_clipping: 1.0
+  offload_optimizer_device: none
+  offload_param_device: none
+  zero3_init_flag: false
+  zero_stage: 2
+machine_rank: 0
+main_training_function: main
+mixed_precision: bf16
+num_machines: 1
+num_processes: 4          # = número de GPUs
+use_cpu: false</code></pre>
+    </div>
+  </div>
+
+  <!-- 2. Training loop -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-refresh"></i>2. Training loop básico</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — train.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import math
+import torch
+from torch.utils.data import DataLoader
+from transformers import AutoModelForCausalLM, AutoTokenizer, get_cosine_schedule_with_warmup
+from accelerate import Accelerator
+import wandb
+
+
+def main():
+    accelerator = Accelerator(
+        gradient_accumulation_steps=4,
+        mixed_precision="bf16",
+        log_with="wandb",
+    )
+
+    # Inicializar W&B solo en el proceso principal
+    if accelerator.is_main_process:
+        wandb.init(project="latamgpt", name="pretraining-v1")
+
+    # Cargar modelo y tokenizador
+    model = AutoModelForCausalLM.from_pretrained(
+        "meta-llama/Llama-2-7b-hf",
+        torch_dtype=torch.bfloat16,
+        attn_implementation="flash_attention_2",  # requiere flash-attn
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+
+    # Optimizer con weight decay selectivo (no aplicar a bias y layernorm)
+    decay_params = [p for n, p in model.named_parameters() if "bias" not in n and "norm" not in n]
+    no_decay_params = [p for n, p in model.named_parameters() if "bias" in n or "norm" in n]
+
+    optimizer = torch.optim.AdamW(
+        [{"params": decay_params, "weight_decay": 0.1},
+         {"params": no_decay_params, "weight_decay": 0.0}],
+        lr=3e-4,
+        betas=(0.9, 0.95),
+        eps=1e-8,
+    )
+
+    # Dataloader (tu dataset tokenizado)
+    train_dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+
+    # LR scheduler: warmup + cosine decay
+    num_training_steps = len(train_dataloader) * NUM_EPOCHS
+    num_warmup_steps = int(0.01 * num_training_steps)  # 1% de warmup
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps)
+
+    # Preparar para distribución (Accelerate maneja DDP / DeepSpeed)
+    model, optimizer, train_dataloader, scheduler = accelerator.prepare(
+        model, optimizer, train_dataloader, scheduler
+    )
+
+    global_step = 0
+    model.train()
+
+    for epoch in range(NUM_EPOCHS):
+        for step, batch in enumerate(train_dataloader):
+            with accelerator.accumulate(model):  # gradient accumulation
+                input_ids = batch["input_ids"]
+                labels = batch["labels"]
+
+                outputs = model(input_ids=input_ids, labels=labels)
+                loss = outputs.loss
+
+                accelerator.backward(loss)
+
+                # Gradient clipping (solo aplica al paso real, no acumulación)
+                if accelerator.sync_gradients:
+                    grad_norm = accelerator.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+
+            # Logging
+            if global_step % 10 == 0 and accelerator.is_main_process:
+                wandb.log({
+                    "train/loss": loss.item(),
+                    "train/perplexity": math.exp(loss.item()),
+                    "train/lr": scheduler.get_last_lr()[0],
+                    "train/grad_norm": grad_norm.item() if accelerator.sync_gradients else None,
+                    "train/step": global_step,
+                })
+
+            # Checkpoint cada 1000 pasos
+            if global_step % 1000 == 0 and global_step > 0:
+                if accelerator.is_main_process:
+                    unwrapped = accelerator.unwrap_model(model)
+                    unwrapped.save_pretrained(f"checkpoints/step_{global_step}")
+                    tokenizer.save_pretrained(f"checkpoints/step_{global_step}")
+
+            global_step += 1
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Lanzar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-player-play"></i>3. Lanzar el entrenamiento</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Con Accelerate (recomendado)
+accelerate launch \
+  --config_file configs/deepspeed_zero2.yaml \
+  --num_processes 4 \
+  train.py
+
+# Con torchrun (equivalente manual)
+torchrun --nproc_per_node=4 train.py
+
+# Multi-nodo (2 nodos x 4 GPUs = 8 GPUs)
+# En nodo 0:
+accelerate launch \
+  --config_file configs/deepspeed_zero2.yaml \
+  --num_processes 8 \
+  --num_machines 2 \
+  --machine_rank 0 \
+  --main_process_ip 10.0.0.1 \
+  --main_process_port 29500 \
+  train.py</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Checkpointing y reanudar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-device-floppy"></i>4. Checkpointing y reanudar entrenamiento</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — guardar y cargar checkpoint</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Guardar checkpoint completo (modelo + optimizer + scheduler)
+accelerator.save_state(output_dir=f"checkpoints/step_{global_step}")
+
+# Guardar solo el modelo (para inferencia)
+unwrapped = accelerator.unwrap_model(model)
+unwrapped.save_pretrained("checkpoints/final_model")
+
+# ─────────────────────────────────────────
+# Reanudar desde checkpoint
+accelerator.load_state("checkpoints/step_5000")
+
+# O cargar modelo desde HF format
+from transformers import AutoModelForCausalLM
+model = AutoModelForCausalLM.from_pretrained("checkpoints/step_5000")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Loss curve -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-line"></i>5. Interpretar la loss curve</h2>
+    <p>La forma de la loss curve durante pretraining es una señal diagnóstica crítica. Aquí lo que esperar:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">text — fases típicas del training</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-text">Fase 1 — Warmup (primeros ~500 steps):
+  Loss: baja rápidamente de ~12-14 a ~3-5
+  LR: sube linealmente hasta el peak (ej: 3e-4)
+  Acción: normal, no intervenir
+
+Fase 2 — Descenso estable (bulk del training):
+  Loss: baja gradualmente, ~0.001-0.01 por 1000 steps
+  LR: decae con cosine schedule
+  Gradient norm: estable, tipicamente 0.5-2.0
+  Acción: monitorear, hacer checkpoints
+
+Fase 3 — Loss spike (señal de alerta):
+  Loss: sube bruscamente +0.3 o más en pocos steps
+  Grad norm: puede subir a 10-100x lo normal
+  Causas: batch con texto corrupto, LR muy alto, overflow en bf16
+  Acción: ver debugging.html
+
+Fase 4 — Cooldown (últimos ~5-10% del training):
+  Loss: baja más rápido al reducir LR al mínimo
+  Acción: no interrumpir, es cuando el modelo "consolida"</code></pre>
+    </div>
+
+    <div class="tip"><strong>Perplexity como métrica:</strong> <code>PPL = exp(loss)</code>. Un buen modelo de lenguaje en español alcanza PPL ≈ 8-15 en el set de validación. PPL > 50 sugiere problemas en los datos o configuración.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link" href="https://huggingface.co/docs/accelerate" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Accelerate Docs (HuggingFace)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DeepSpeed ZeRO (Rajbhandari et al., 2020)</a>
+      <a class="source-link" href="https://github.com/allenai/OLMo" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>OLMo Training Code (AllenAI)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LLaMA 3 Tech Report (Meta, 2024)</a>
+      <a class="source-link" href="https://deepspeed.readthedocs.io/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>DeepSpeed Docs</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

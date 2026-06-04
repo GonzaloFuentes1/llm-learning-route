@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelos BERT es/pt — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Entrenamiento</div>
+    <h1 class="guide-title">Modelos BERT para es/pt</h1>
+    <p class="guide-desc">Fine-tuning de modelos encoder (BETO, BERTimbau, RoBERTa-BNE) para tareas discriminativas en español y portugués: clasificación de texto y reconocimiento de entidades nombradas (NER).</p>
+  </div>
+
+  <!-- 1. Cuándo usar BERT -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-help-circle"></i>1. ¿Cuándo usar BERT vs un LLM causal?</h2>
+    <p>Los modelos encoder como BERT son <strong>mucho más baratos y rápidos</strong> para tareas discriminativas. No uses un LLM de 7B para clasificar sentimientos si un BERT de 110M parámetros lo hace igual de bien.</p>
+
+    <table class="model-table">
+      <thead><tr><th>Tarea</th><th>Recomendación</th><th>Razón</th></tr></thead>
+      <tbody>
+        <tr><td>Clasificación de texto</td><td>BERT / RoBERTa</td><td>Más rápido, más barato, preciso</td></tr>
+        <tr><td>NER (entidades)</td><td>BERT / RoBERTa</td><td>Token-level, bidireccional</td></tr>
+        <tr><td>QA extractiva</td><td>BERT / RoBERTa</td><td>Span extraction eficiente</td></tr>
+        <tr><td>Generación de texto</td><td>LLM causal (GPT/LLaMA)</td><td>Requiere modelo autoregresivo</td></tr>
+        <tr><td>Chat / instrucciones</td><td>LLM causal (instruct)</td><td>Capacidad generativa necesaria</td></tr>
+        <tr><td>Filtrado de calidad</td><td>fastText o BERT pequeño</td><td>Velocidad para TB de datos</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2. Modelos disponibles -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-list"></i>2. Modelos disponibles para es/pt</h2>
+
+    <table class="model-table">
+      <thead><tr><th>Modelo</th><th>Idioma</th><th>HuggingFace ID</th></tr></thead>
+      <tbody>
+        <tr><td>BETO</td><td>Español</td><td>dccuchile/bert-base-spanish-wwm-cased</td></tr>
+        <tr><td>RoBERTa-BNE</td><td>Español</td><td>PlanTL-GOB-ES/roberta-base-bne</td></tr>
+        <tr><td>BERTimbau base</td><td>Portugués</td><td>neuralmind/bert-base-portuguese-cased</td></tr>
+        <tr><td>BERTimbau large</td><td>Portugués</td><td>neuralmind/bert-large-portuguese-cased</td></tr>
+        <tr><td>XLM-R large</td><td>Multilingüe (100 idiomas)</td><td>FacebookAI/xlm-roberta-large</td></tr>
+        <tr><td>mBERT</td><td>Multilingüe (104 idiomas)</td><td>google-bert/bert-base-multilingual-cased</td></tr>
+      </tbody>
+    </table>
+
+    <div class="tip"><strong>¿Cuál elegir?</strong> Para español: RoBERTa-BNE suele superar a BETO en la mayoría de benchmarks modernos. Para portugués: BERTimbau-large. Para proyectos que requieren ambos idiomas: XLM-R large.</div>
+  </div>
+
+  <!-- 3. Clasificación de texto -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-tags"></i>3. Fine-tuning para clasificación</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — clasificacion.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+    DataCollatorWithPadding,
+)
+import evaluate
+import numpy as np
+
+MODEL_NAME = "PlanTL-GOB-ES/roberta-base-bne"
+LABELS = ["negativo", "neutro", "positivo"]
+
+# Cargar datos y tokenizador
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+dataset = load_dataset("json", data_files={"train": "data/train.jsonl", "validation": "data/val.jsonl"})
+
+def tokenize(examples):
+    return tokenizer(examples["text"], truncation=True, max_length=512)
+
+tokenized = dataset.map(tokenize, batched=True)
+
+# Modelo
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_NAME,
+    num_labels=len(LABELS),
+    id2label={i: l for i, l in enumerate(LABELS)},
+    label2id={l: i for i, l in enumerate(LABELS)},
+)
+
+# Métricas
+accuracy = evaluate.load("accuracy")
+f1 = evaluate.load("f1")
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = np.argmax(logits, axis=-1)
+    return {
+        "accuracy": accuracy.compute(predictions=preds, references=labels)["accuracy"],
+        "f1_macro": f1.compute(predictions=preds, references=labels, average="macro")["f1"],
+    }
+
+# Training
+args = TrainingArguments(
+    output_dir="models/clasificador-sentimiento",
+    learning_rate=2e-5,
+    per_device_train_batch_size=32,
+    per_device_eval_batch_size=64,
+    num_train_epochs=3,
+    weight_decay=0.01,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+    metric_for_best_model="f1_macro",
+    report_to="wandb",
+)
+
+trainer = Trainer(
+    model=model,
+    args=args,
+    train_dataset=tokenized["train"],
+    eval_dataset=tokenized["validation"],
+    tokenizer=tokenizer,
+    data_collator=DataCollatorWithPadding(tokenizer),
+    compute_metrics=compute_metrics,
+)
+
+trainer.train()
+trainer.save_model("models/clasificador-sentimiento/best")</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. NER -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-highlight"></i>4. Fine-tuning para NER</h2>
+    <p>NER es token-level classification. El desafío principal es alinear las etiquetas (por palabra) con los subwords del tokenizador.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — ner.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, Trainer, DataCollatorForTokenClassification
+from datasets import load_dataset
+import evaluate
+import numpy as np
+
+MODEL_NAME = "dccuchile/bert-base-spanish-wwm-cased"
+LABEL_LIST = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
+label2id = {l: i for i, l in enumerate(LABEL_LIST)}
+id2label = {i: l for i, l in enumerate(LABEL_LIST)}
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+seqeval = evaluate.load("seqeval")
+
+
+def tokenize_and_align_labels(examples):
+    """Alinea etiquetas NER con subwords del tokenizador."""
+    tokenized_inputs = tokenizer(
+        examples["tokens"],
+        truncation=True,
+        is_split_into_words=True,  # importante para NER
+    )
+    labels = []
+    for i, label in enumerate(examples["ner_tags"]):
+        word_ids = tokenized_inputs.word_ids(batch_index=i)
+        previous_word_idx = None
+        label_ids = []
+        for word_idx in word_ids:
+            if word_idx is None:
+                label_ids.append(-100)  # tokens especiales [CLS], [SEP], padding
+            elif word_idx != previous_word_idx:
+                label_ids.append(label[word_idx])  # primer subword → etiqueta real
+            else:
+                label_ids.append(-100)  # subwords subsecuentes → ignorar en loss
+            previous_word_idx = word_idx
+        labels.append(label_ids)
+    tokenized_inputs["labels"] = labels
+    return tokenized_inputs
+
+
+def compute_metrics(p):
+    predictions, labels = p
+    predictions = np.argmax(predictions, axis=2)
+    true_preds = [[id2label[p] for (p, l) in zip(pred, label) if l != -100]
+                  for pred, label in zip(predictions, labels)]
+    true_labels = [[id2label[l] for (p, l) in zip(pred, label) if l != -100]
+                   for pred, label in zip(predictions, labels)]
+    results = seqeval.compute(predictions=true_preds, references=true_labels)
+    return {"f1": results["overall_f1"], "precision": results["overall_precision"],
+            "recall": results["overall_recall"]}
+
+
+# Cargar dataset NER (formato CoNLL)
+dataset = load_dataset("json", data_files={"train": "data/ner_train.jsonl", "validation": "data/ner_val.jsonl"})
+tokenized_dataset = dataset.map(tokenize_and_align_labels, batched=True)
+
+model = AutoModelForTokenClassification.from_pretrained(
+    MODEL_NAME, num_labels=len(LABEL_LIST), id2label=id2label, label2id=label2id
+)
+
+trainer = Trainer(
+    model=model,
+    args=TrainingArguments(output_dir="models/ner-es", learning_rate=2e-5, num_train_epochs=5,
+                           per_device_train_batch_size=16, evaluation_strategy="epoch"),
+    train_dataset=tokenized_dataset["train"],
+    eval_dataset=tokenized_dataset["validation"],
+    tokenizer=tokenizer,
+    data_collator=DataCollatorForTokenClassification(tokenizer),
+    compute_metrics=compute_metrics,
+)
+trainer.train()</code></pre>
+    </div>
+
+    <div class="tip"><strong>Sobre la alineación de etiquetas:</strong> En NER con BIO tagging, solo el <em>primer subword</em> de cada palabra recibe la etiqueta real. Los subwords subsecuentes reciben <code>-100</code> para que el loss los ignore. Esto es crítico: sin esta alineación correcta, el modelo no converge bien.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2010.04871" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BETO (Cañete et al., 2020)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2005.04249" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BERTimbau (Souza et al., 2020)</a>
+      <a class="source-link" href="https://huggingface.co/docs/transformers/tasks/token_classification" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF Token Classification Guide</a>
+      <a class="source-link" href="https://github.com/chakki-works/seqeval" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>seqeval</a>
+      <a class="source-link" href="https://huggingface.co/PlanTL-GOB-ES/roberta-base-bne" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>RoBERTa-BNE</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

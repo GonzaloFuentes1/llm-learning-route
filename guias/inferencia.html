@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serving con vLLM — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Deployment</div>
+    <h1 class="guide-title">Serving con vLLM</h1>
+    <p class="guide-desc">Cómo levantar un servidor de inferencia de alto rendimiento con vLLM: instalación, lanzamiento, requests con la API OpenAI-compatible y monitoreo de throughput.</p>
+  </div>
+
+  <!-- 1. Por qué vLLM -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bolt"></i>1. Por qué vLLM es más rápido</h2>
+    <p>La generación autoregresiva naive mantiene el KV-cache completo en VRAM para cada request. Con muchos requests concurrentes, la memoria se fragmenta y la GPU queda subutilizada. vLLM resuelve esto con <strong>PagedAttention</strong>:</p>
+    <ul style="font-size:14px; color:var(--text2); padding-left:20px; line-height:2;">
+      <li>Gestiona el KV-cache como páginas de memoria virtual (similar a la memoria virtual del SO)</li>
+      <li>Elimina la fragmentación: múltiples requests comparten páginas cuando tienen el mismo prefijo</li>
+      <li>Continuous batching: procesa tokens de distintos requests en paralelo, sin esperar que uno termine</li>
+      <li>Resultado: 2-24x más throughput que HuggingFace naive <code>generate()</code></li>
+    </ul>
+  </div>
+
+  <!-- 2. Instalación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package"></i>2. Instalación</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Requiere CUDA 12.1+ y GPU con compute capability >= 7.0 (Volta+)
+pip install vllm
+
+# Verificar instalación
+python -c "from vllm import LLM; print('vLLM OK')"
+
+# Con soporte para Flash Attention (recomendado para H100/A100)
+pip install vllm --extra-index-url https://download.pytorch.org/whl/cu121</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Lanzar servidor -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-bolt"></i>3. Lanzar el servidor</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — servidor básico (1 GPU)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">python -m vllm.entrypoints.openai.api_server \
+  --model /path/to/latamgpt-7b \
+  --max-model-len 4096 \
+  --gpu-memory-utilization 0.90 \
+  --port 8000</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — servidor con tensor parallelism (2+ GPUs)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">python -m vllm.entrypoints.openai.api_server \
+  --model /path/to/latamgpt-70b \
+  --tensor-parallel-size 4 \       # distribuir entre 4 GPUs
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.90 \
+  --dtype bfloat16 \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --served-model-name latamgpt</code></pre>
+    </div>
+
+    <div class="tip"><strong>Parámetros clave:</strong>
+      <br>• <code>--max-model-len</code>: longitud máxima de contexto (prompt + generación). Reducirlo aumenta el throughput.
+      <br>• <code>--gpu-memory-utilization</code>: fracción de VRAM para el KV-cache. 0.90 es un buen default.
+      <br>• <code>--tensor-parallel-size</code>: para modelos que no caben en 1 GPU.</div>
+  </div>
+
+  <!-- 4. Requests -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-api"></i>4. Hacer requests</h2>
+    <p>vLLM expone una API compatible con OpenAI, por lo que puedes usar cualquier cliente OpenAI.</p>
+
+    <div class="sub-title">Con curl</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Completions (modelo base)
+curl http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "latamgpt",
+    "prompt": "El procesamiento del lenguaje natural en Latinoamérica",
+    "max_tokens": 200,
+    "temperature": 0.7,
+    "top_p": 0.9
+  }'
+
+# Chat completions (modelo instruct)
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "latamgpt",
+    "messages": [{"role": "user", "content": "Explica qué es el fine-tuning"}],
+    "max_tokens": 300,
+    "temperature": 0.8
+  }'</code></pre>
+    </div>
+
+    <div class="sub-title">Con Python (cliente OpenAI)</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — cliente.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8000/v1",
+    api_key="token-no-necesario",  # vLLM no requiere API key por defecto
+)
+
+# Completions
+response = client.completions.create(
+    model="latamgpt",
+    prompt="Los modelos de lenguaje para español deben",
+    max_tokens=150,
+    temperature=0.7,
+    top_p=0.95,
+    stop=["\n\n"],
+)
+print(response.choices[0].text)
+
+# Chat (con streaming)
+stream = client.chat.completions.create(
+    model="latamgpt",
+    messages=[
+        {"role": "system", "content": "Eres un asistente en español."},
+        {"role": "user", "content": "¿Qué es GRPO?"},
+    ],
+    max_tokens=300,
+    stream=True,
+)
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Monitorear -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-activity"></i>5. Monitorear throughput y GPU</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Ver métricas del servidor vLLM (en otra terminal)
+curl http://localhost:8000/metrics
+
+# Monitorear GPU mientras el servidor está corriendo
+watch -n 2 nvidia-smi
+
+# Benchmark simple con ab (Apache Bench)
+ab -n 100 -c 10 -p payload.json -T application/json \
+   http://localhost:8000/v1/completions</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — benchmark_throughput.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import asyncio
+import time
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(base_url="http://localhost:8000/v1", api_key="none")
+
+async def single_request(prompt: str) -> dict:
+    start = time.perf_counter()
+    resp = await client.completions.create(
+        model="latamgpt", prompt=prompt, max_tokens=100
+    )
+    elapsed = time.perf_counter() - start
+    tokens = resp.usage.completion_tokens
+    return {"tokens": tokens, "latency_s": elapsed, "tps": tokens / elapsed}
+
+
+async def benchmark(prompts: list[str], concurrency: int = 10):
+    results = await asyncio.gather(*[single_request(p) for p in prompts[:concurrency]])
+    avg_tps = sum(r["tps"] for r in results) / len(results)
+    avg_lat = sum(r["latency_s"] for r in results) / len(results)
+    total_tokens = sum(r["tokens"] for r in results)
+    print(f"Concurrency={concurrency} | Avg TPS={avg_tps:.1f} | Avg latency={avg_lat:.2f}s | Total tokens={total_tokens}")
+
+
+prompts = ["La inteligencia artificial en Latam"] * 50
+asyncio.run(benchmark(prompts, concurrency=10))</code></pre>
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>vLLM / PagedAttention (Kwon et al., 2023)</a>
+      <a class="source-link" href="https://docs.vllm.ai/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>vLLM Docs</a>
+      <a class="source-link" href="https://github.com/vllm-project/vllm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>vLLM (GitHub)</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Filtrado de Calidad — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <h1 class="guide-title">Filtrado de Calidad de Datos</h1>
+    <p class="guide-desc">Pipeline completo para filtrar documentos de baja calidad de un corpus web: reglas heurísticas, clasificador de idioma fastText, clasificador de calidad fastText y filtro de perplejidad KenLM.</p>
+  </div>
+
+  <!-- 1. Por qué filtrar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-info-circle"></i>1. Por qué el filtrado importa</h2>
+    <p>DCLM (2024) demostró experimentalmente que la calidad del pipeline de datos supera a la arquitectura del modelo: un modelo más pequeño entrenado con datos bien filtrados supera a uno más grande con datos crudos. El filtrado es posiblemente el componente con mayor ROI en el pipeline.</p>
+    <div class="tip"><strong>Flujo típico:</strong> corpus crudo → filtro de idioma → reglas Gopher/C4 → clasificador de calidad → filtro de perplejidad → corpus limpio para training</div>
+  </div>
+
+  <!-- 2. Reglas Gopher/C4 -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-ruler"></i>2. Reglas heurísticas (Gopher / C4)</h2>
+    <p>Filtros rápidos basados en estadísticas del texto. Eliminan spam, listas de palabras, contenido autogenerado y páginas rotas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — reglas_heuristicas.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+import unicodedata
+
+
+def passes_gopher_rules(text: str) -> bool:
+    """
+    Reglas inspiradas en el paper de Gopher (DeepMind, 2022).
+    Returns True si el documento pasa el filtro.
+    """
+    words = text.split()
+    n_words = len(words)
+    n_chars = len(text)
+
+    # 1. Longitud mínima y máxima
+    if not (50 <= n_words <= 100_000):
+        return False
+
+    # 2. Ratio de caracteres alfabéticos
+    alpha_chars = sum(1 for c in text if c.isalpha())
+    if alpha_chars / n_chars < 0.70:
+        return False
+
+    # 3. Palabras promedio no demasiado largas (spam de SEO)
+    avg_word_len = sum(len(w) for w in words) / n_words
+    if not (3 <= avg_word_len <= 10):
+        return False
+
+    # 4. No más del 10% de líneas terminan con "..."
+    lines = text.split("\n")
+    ellipsis_lines = sum(1 for l in lines if l.rstrip().endswith("..."))
+    if len(lines) > 0 and ellipsis_lines / len(lines) > 0.10:
+        return False
+
+    # 5. No más del 30% de líneas son duplicadas (listas repetitivas)
+    non_empty_lines = [l for l in lines if l.strip()]
+    if len(non_empty_lines) > 5:
+        unique_ratio = len(set(non_empty_lines)) / len(non_empty_lines)
+        if unique_ratio < 0.70:
+            return False
+
+    # 6. Ratio de símbolos (filtrar código o contenido técnico irrelevante)
+    symbol_ratio = sum(1 for c in text if c in "{}[]<>|#@") / n_chars
+    if symbol_ratio > 0.05:
+        return False
+
+    return True
+
+
+# Aplicar a dataset
+def filter_corpus(input_path: str, output_path: str):
+    kept, removed = 0, 0
+    with open(input_path) as fin, open(output_path, "w") as fout:
+        for line in fin:
+            import json
+            doc = json.loads(line)
+            if passes_gopher_rules(doc["text"]):
+                fout.write(line)
+                kept += 1
+            else:
+                removed += 1
+    print(f"Conservados: {kept:,} ({kept/(kept+removed):.1%}) | Eliminados: {removed:,}")</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Clasificador de idioma -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-language"></i>3. Clasificador de idioma con fastText</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install fasttext-wheel
+
+# Descargar el modelo de identificación de idioma (lid.176.bin, 126MB)
+wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — deteccion_idioma.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import fasttext
+
+lid_model = fasttext.load_model("lid.176.bin")
+
+def detect_language(text: str, threshold: float = 0.65) -> tuple[str, float]:
+    """Detecta el idioma de un texto. Retorna (lang_code, confidence)."""
+    # fastText requiere texto sin saltos de línea
+    clean = text.replace("\n", " ").strip()[:500]  # solo primeros 500 chars
+    predictions = lid_model.predict(clean, k=1)
+    lang = predictions[0][0].replace("__label__", "")
+    confidence = predictions[1][0]
+    return lang, confidence
+
+
+def is_spanish_or_portuguese(text: str, threshold: float = 0.65) -> bool:
+    lang, conf = detect_language(text)
+    return lang in ("es", "pt") and conf >= threshold
+
+
+# Filtrar corpus por idioma
+def filter_by_language(docs: list[dict], target_langs=("es", "pt"), threshold=0.65):
+    return [
+        doc for doc in docs
+        if detect_language(doc["text"])[0] in target_langs
+        and detect_language(doc["text"])[1] >= threshold
+    ]</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Clasificador de calidad fastText -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-star"></i>4. Clasificador de calidad fastText</h2>
+    <p>Entrenamos un clasificador binario: Wikipedia/textos de calidad como clase positiva vs. web crawl crudo como clase negativa. Permite filtrar documentos que "se parecen a" texto de referencia.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — entrenar_clasificador_calidad.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import fasttext
+from pathlib import Path
+
+# Preparar datos de entrenamiento en formato fastText
+# Positivos: Wikipedia en español/portugués
+# Negativos: muestra del web crawl crudo
+
+def prepare_training_file(
+    positives: list[str],   # textos de Wikipedia
+    negatives: list[str],   # textos de web crawl
+    output_path: str,
+    max_chars: int = 300,
+):
+    with open(output_path, "w") as f:
+        for text in positives:
+            clean = text.replace("\n", " ")[:max_chars]
+            f.write(f"__label__quality {clean}\n")
+        for text in negatives:
+            clean = text.replace("\n", " ")[:max_chars]
+            f.write(f"__label__low_quality {clean}\n")
+
+
+# Entrenar el modelo
+def train_quality_classifier(train_file: str, val_file: str) -> fasttext.FastText._FastText:
+    model = fasttext.train_supervised(
+        input=train_file,
+        epoch=3,
+        lr=0.1,
+        wordNgrams=2,        # bigramas para mejor contexto
+        dim=256,
+        loss="hs",           # hierarchical softmax (más rápido)
+        thread=16,
+    )
+    result = model.test(val_file)
+    print(f"N={result[0]:,}, P@1={result[1]:.3f}, R@1={result[2]:.3f}")
+    return model
+
+
+# Usar el clasificador
+def score_document(model, text: str) -> float:
+    """Retorna probabilidad de que el documento sea de alta calidad."""
+    clean = text.replace("\n", " ")[:300]
+    pred = model.predict(clean, k=2)
+    labels, probs = pred
+    quality_idx = labels.index("__label__quality")
+    return probs[quality_idx]
+
+
+# Filtrar corpus
+model = fasttext.load_model("quality_classifier_es.bin")
+HIGH_QUALITY_THRESHOLD = 0.5
+
+filtered = [doc for doc in corpus if score_document(model, doc["text"]) >= HIGH_QUALITY_THRESHOLD]
+print(f"Conservados: {len(filtered):,} / {len(corpus):,} ({len(filtered)/len(corpus):.1%})")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Filtro de perplejidad KenLM -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-calculator"></i>5. Filtro de perplejidad con KenLM</h2>
+    <p>Documentos con perplejidad muy alta contienen texto incoherente o generado automáticamente. Un modelo de lenguaje de n-gramas entrenado en Wikipedia permite detectarlos eficientemente.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — instalar KenLM</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install kenlm
+
+# Descargar modelo KenLM en español (5-gramas, entrenado en Wikipedia)
+# Se puede entrenar propio o usar uno pre-entrenado de CCNet:
+wget https://dl.fbaipublicfiles.com/cc_net/lm/es.arpa.bin</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — filtro_perplejidad.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import kenlm
+import math
+
+model = kenlm.Model("es.arpa.bin")
+
+def compute_perplexity(text: str, model: kenlm.Model) -> float:
+    """Calcula la perplejidad de un texto con el modelo KenLM."""
+    words = text.lower().split()
+    if len(words) < 10:
+        return float("inf")
+
+    log_prob = model.score(text.lower())  # log base 10
+    n_words = len(list(model.full_scores(text.lower())))
+    return 10 ** (-log_prob / n_words)
+
+
+# Calibrar umbrales en tu corpus
+# Típicamente: PPL < 100 → texto limpio, PPL > 500 → spam/incoherente
+def filter_by_perplexity(
+    docs: list[dict],
+    min_ppl: float = 10,
+    max_ppl: float = 500,
+) -> list[dict]:
+    filtered = []
+    for doc in docs:
+        ppl = compute_perplexity(doc["text"], model)
+        if min_ppl <= ppl <= max_ppl:
+            filtered.append({**doc, "perplexity": ppl})
+    return filtered</code></pre>
+    </div>
+  </div>
+
+  <!-- 6. Pipeline Datatrove -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-git-merge"></i>6. Pipeline completo con Datatrove</h2>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — pipeline_filtrado.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datatrove.executor import LocalPipelineExecutor
+from datatrove.pipeline.readers import JsonlReader
+from datatrove.pipeline.writers import JsonlWriter
+from datatrove.pipeline.filters import (
+    GopherQualityFilter,
+    GopherRepetitionFilter,
+    LanguageFilter,
+    C4QualityFilter,
+)
+from datatrove.pipeline.dedup import MinhashDedupSignature
+
+executor = LocalPipelineExecutor(
+    pipeline=[
+        JsonlReader(data_folder="data/raw/", glob_pattern="**/*.jsonl"),
+
+        # 1. Filtro de idioma (conservar es y pt)
+        LanguageFilter(languages=["es", "pt"], language_threshold=0.65),
+
+        # 2. Reglas Gopher de calidad básica
+        GopherQualityFilter(
+            min_doc_words=50,
+            max_doc_words=100_000,
+            min_avg_word_length=3,
+            max_avg_word_length=10,
+            max_symbol_word_ratio=0.1,
+        ),
+
+        # 3. Filtro de repetición
+        GopherRepetitionFilter(
+            max_duplicated_5_grams_char_fraction=0.15,
+            max_top_ngram_character_fraction=0.20,
+        ),
+
+        # 4. Filtros C4 adicionales
+        C4QualityFilter(
+            filter_no_terminal_punct=True,
+            min_num_sentences=3,
+        ),
+
+        # Guardar corpus filtrado
+        JsonlWriter(output_folder="data/filtered/"),
+    ],
+    tasks=64,
+    workers=16,
+    logging_dir="logs/filtering/",
+)
+
+executor.run()</code></pre>
+    </div>
+    <div class="tip"><strong>Orden importa:</strong> Poner los filtros más baratos primero (longitud, idioma) elimina documentos antes de aplicar filtros costosos (perplejidad, clasificadores ML). Esto reduce el tiempo total de procesamiento.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2112.11446" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Gopher (Rae et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.11794" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DCLM (Li et al., 2024)</a>
+      <a class="source-link" href="https://fasttext.cc/docs/en/language-identification.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>fastText LID</a>
+      <a class="source-link" href="https://github.com/kheafield/kenlm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>KenLM</a>
+      <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Datatrove (HuggingFace)</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

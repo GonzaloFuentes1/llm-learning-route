@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LatamGPT — Ruta de Aprendizaje</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #ffffff;
+    --bg2:      #f7f6f2;
+    --bg3:      #f1f0eb;
+    --text:     #1a1a18;
+    --text2:    #5f5e5a;
+    --text3:    #888780;
+    --border:   rgba(0,0,0,0.10);
+    --border2:  rgba(0,0,0,0.18);
+    --radius:   10px;
+    --radius-sm:6px;
+    --accent:   #3C3489;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:    #1c1c1a;
+      --bg2:   #242422;
+      --bg3:   #2c2c2a;
+      --text:  #e8e6df;
+      --text2: #9c9a92;
+      --text3: #6a6860;
+      --border:rgba(255,255,255,0.09);
+      --border2:rgba(255,255,255,0.16);
+      --accent:#AFA9EC;
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg2);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  .site-header {
+    background: var(--bg);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 56px;
+  }
+  .logo {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-pill {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 99px;
+    background: #EEEDFE;
+    color: #3C3489;
+    letter-spacing: 0.02em;
+  }
+  @media (prefers-color-scheme: dark) {
+    .logo-pill { background: #3C3489; color: #CECBF6; }
+  }
+  .header-spacer { flex: 1; }
+  .search-wrap {
+    position: relative;
+  }
+  .search-wrap i {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 15px;
+    color: var(--text3);
+    pointer-events: none;
+  }
+  #search {
+    background: var(--bg2);
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 7px 12px 7px 32px;
+    font-size: 13px;
+    color: var(--text);
+    width: 220px;
+    outline: none;
+  }
+  #search:focus { border-color: var(--accent); }
+  #search::placeholder { color: var(--text3); }
+  .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn {
+    font-size: 12px;
+    padding: 4px 11px;
+    border-radius: 99px;
+    border: 0.5px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { background: var(--bg3); color: var(--text); }
+  .filter-btn.active { background: var(--accent); color: #fff; border-color: transparent; }
+  @media (prefers-color-scheme: dark) { .filter-btn.active { color: #1c1c1a; } }
+
+  /* ── Layout ── */
+  .page { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+
+  .intro {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .intro-text h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .intro-text p { font-size: 13px; color: var(--text2); }
+  .stats { display: flex; gap: 20px; flex-shrink: 0; flex-wrap: wrap; }
+  .stat { text-align: center; }
+  .stat-n { font-size: 22px; font-weight: 600; color: var(--accent); }
+  .stat-l { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+  /* ── Sections ── */
+  .section { margin-bottom: 16px; }
+  .sec-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    user-select: none;
+    border: 0.5px solid;
+    transition: opacity 0.15s;
+  }
+  .sec-header:hover { opacity: 0.85; }
+  .sec-icon { font-size: 18px; }
+  .sec-title { font-size: 15px; font-weight: 500; flex: 1; }
+  .sec-pill {
+    font-size: 11px; font-weight: 500;
+    padding: 2px 8px; border-radius: 99px;
+  }
+  .sec-chevron { font-size: 14px; transition: transform 0.2s; color: var(--text3); }
+  .sec-header.open .sec-chevron { transform: rotate(180deg); }
+  .sec-body { display: none; padding-top: 6px; }
+  .sec-body.open { display: block; }
+
+  /* Section color themes */
+  .s-datos  { border-color: #9FE1CB; background: rgba(29,158,117,0.06); }
+  .s-datos .sec-title  { color: #085041; }
+  .s-datos .sec-pill   { background: #9FE1CB; color: #04342C; }
+  .s-pre    { border-color: #85B7EB; background: rgba(55,138,221,0.06); }
+  .s-pre .sec-title    { color: #0C447C; }
+  .s-pre .sec-pill     { background: #B5D4F4; color: #042C53; }
+  .s-post   { border-color: #AFA9EC; background: rgba(83,74,183,0.06); }
+  .s-post .sec-title   { color: #3C3489; }
+  .s-post .sec-pill    { background: #CECBF6; color: #26215C; }
+  .s-synth  { border-color: #FAC775; background: rgba(186,117,23,0.06); }
+  .s-synth .sec-title  { color: #633806; }
+  .s-synth .sec-pill   { background: #FAC775; color: #412402; }
+  .s-bench  { border-color: #ED93B1; background: rgba(212,83,126,0.06); }
+  .s-bench .sec-title  { color: #72243E; }
+  .s-bench .sec-pill   { background: #F4C0D1; color: #4B1528; }
+  .s-models { border-color: #97C459; background: rgba(99,153,34,0.06); }
+  .s-models .sec-title { color: #27500A; }
+  .s-models .sec-pill  { background: #C0DD97; color: #173404; }
+
+  @media (prefers-color-scheme: dark) {
+    .s-datos  { border-color: #085041; background: rgba(8,80,65,0.15); }
+    .s-datos .sec-title { color: #9FE1CB; }
+    .s-datos .sec-pill  { background: #085041; color: #9FE1CB; }
+    .s-pre    { border-color: #0C447C; background: rgba(12,68,124,0.15); }
+    .s-pre .sec-title   { color: #B5D4F4; }
+    .s-pre .sec-pill    { background: #0C447C; color: #B5D4F4; }
+    .s-post   { border-color: #3C3489; background: rgba(60,52,137,0.15); }
+    .s-post .sec-title  { color: #AFA9EC; }
+    .s-post .sec-pill   { background: #3C3489; color: #CECBF6; }
+    .s-synth  { border-color: #633806; background: rgba(99,56,6,0.15); }
+    .s-synth .sec-title { color: #FAC775; }
+    .s-synth .sec-pill  { background: #633806; color: #FAC775; }
+    .s-bench  { border-color: #72243E; background: rgba(114,36,62,0.15); }
+    .s-bench .sec-title { color: #F4C0D1; }
+    .s-bench .sec-pill  { background: #72243E; color: #F4C0D1; }
+    .s-models { border-color: #27500A; background: rgba(39,80,10,0.15); }
+    .s-models .sec-title { color: #C0DD97; }
+    .s-models .sec-pill  { background: #27500A; color: #C0DD97; }
+  }
+
+  /* ── Track label ── */
+  .track-lbl {
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--text3); padding: 10px 4px 4px;
+  }
+
+  /* ── Cards ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+  .card {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    transition: border-color 0.15s;
+  }
+  .card:hover { border-color: var(--border2); }
+  .card.hidden { display: none; }
+
+  .card-top { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 6px; }
+  .level-badge {
+    font-size: 10px; font-weight: 500;
+    padding: 2px 6px; border-radius: 4px;
+    white-space: nowrap; flex-shrink: 0; margin-top: 2px;
+  }
+  .lv-basic    { background: #E1F5EE; color: #085041; }
+  .lv-core     { background: #E6F1FB; color: #0C447C; }
+  .lv-advanced { background: #EEEDFE; color: #3C3489; }
+  .lv-sota     { background: #FAEEDA; color: #633806; }
+  .lv-latam    { background: #FAECE7; color: #712B13; }
+  .lv-sat      { background: #FCEBEB; color: #791F1F; }
+  @media (prefers-color-scheme: dark) {
+    .lv-basic    { background:#04342C; color:#9FE1CB; }
+    .lv-core     { background:#042C53; color:#B5D4F4; }
+    .lv-advanced { background:#26215C; color:#AFA9EC; }
+    .lv-sota     { background:#412402; color:#FAC775; }
+    .lv-latam    { background:#4A1B0C; color:#F5C4B3; }
+    .lv-sat      { background:#501313; color:#F7C1C1; }
+  }
+
+  .card-title { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; }
+  .card-desc  { font-size: 12px; color: var(--text2); line-height: 1.5; margin-bottom: 8px; }
+  .tags       { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .tag {
+    font-size: 10px; padding: 1px 6px;
+    border-radius: 4px; background: var(--bg3);
+    border: 0.5px solid var(--border); color: var(--text3);
+  }
+  .links { display: flex; flex-wrap: wrap; gap: 5px; }
+  .plink, .rlink {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 11px; padding: 2px 7px; border-radius: 4px;
+    background: var(--bg);
+    border: 0.5px solid var(--border2);
+    text-decoration: none; transition: border-color 0.1s;
+  }
+  .plink { color: #185FA5; }
+  .rlink { color: var(--text2); }
+  .plink:hover, .rlink:hover { border-color: var(--accent); }
+  @media (prefers-color-scheme: dark) { .plink { color: #85B7EB; } }
+
+  .no-results {
+    text-align: center; padding: 40px 20px;
+    color: var(--text3); font-size: 14px; display: none;
+  }
+  .no-results i { font-size: 32px; display: block; margin-bottom: 8px; }
+
+  footer {
+    text-align: center; padding: 20px;
+    font-size: 12px; color: var(--text3);
+    border-top: 0.5px solid var(--border);
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="#">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Ruta de aprendizaje</span>
+    </a>
+    <div class="header-spacer"></div>
+    <div class="search-wrap">
+      <i class="ti ti-search" aria-hidden="true"></i>
+      <input type="text" id="search" placeholder="Buscar tema o paper…" autocomplete="off">
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="intro">
+    <div class="intro-text">
+      <h1>De fundamentos a SOTA 2026</h1>
+      <p>Recursos curados para ingenieros y practicantes que se suman al proyecto. Papers con links directos a arxiv.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-n">6</div><div class="stat-l">secciones</div></div>
+      <div class="stat"><div class="stat-n">81</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">110+</div><div class="stat-l">papers</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px;" id="filters">
+    <button class="filter-btn active" data-level="all">Todos los niveles</button>
+    <button class="filter-btn" data-level="basic">Básico</button>
+    <button class="filter-btn" data-level="core">Core</button>
+    <button class="filter-btn" data-level="advanced">Avanzado</button>
+    <button class="filter-btn" data-level="sota">SOTA 2026</button>
+    <button class="filter-btn" data-level="latam">LatamGPT</button>
+  </div>
+
+  <div id="no-results" class="no-results">
+    <i class="ti ti-search-off" aria-hidden="true"></i>
+    Sin resultados para esa búsqueda.
+  </div>
+
+  <div id="sections-root"></div>
+
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · Actualizado junio 2026
+</footer>
+
+<script>
+const SECTIONS = [
+  {
+    id:"datos", cls:"s-datos", icon:"ti-database", title:"Datos",
+    pill:"4 niveles · 14 temas",
+    tracks:[
+      { label:"Básico", items:[
+        { level:"basic", title:"Fundamentos de texto y tokenización",
+          desc:"Unicode, encodings, BPE vs WordPiece vs Unigram. Por qué el vocabulario importa en Latam.",
+          tags:["BPE","tokenizers","SentencePiece"],
+          papers:[{l:"SentencePiece (Kudo & Richardson, 2018)",u:"https://arxiv.org/abs/1808.06226"},{l:"BPE (Sennrich et al., 2016)",u:"https://arxiv.org/abs/1508.07909"}],
+          res:[{l:"HF tokenizers docs",u:"https://huggingface.co/docs/tokenizers"}]},
+        { level:"basic", title:"Fuentes de datos para LLMs",
+          desc:"CommonCrawl, Wikipedia, mC4, OSCAR, CulturaX. Sesgos geográficos y de idioma.",
+          tags:["mC4","OSCAR","CulturaX"],
+          papers:[{l:"OSCAR/CC-100 (Wenzek et al., 2020)",u:"https://arxiv.org/abs/1911.00359"},{l:"CulturaX (Nguyen et al., 2023)",u:"https://arxiv.org/abs/2309.09400"},{l:"Dolma (Soldaini et al., 2024)",u:"https://arxiv.org/abs/2402.00159"}],res:[]},
+        { level:"basic", title:"Web scraping y pipelines de extracción",
+          desc:"Scrapy, Playwright, trafilatura. Ética del scraping para datos latinoamericanos.",
+          tags:["scraping","trafilatura","CCNet"],
+          papers:[{l:"CCNet (Wenzek et al., 2020)",u:"https://arxiv.org/abs/1911.00359"}],
+          res:[{l:"trafilatura",u:"https://github.com/adbar/trafilatura"}]},
+        { level:"basic", title:"The Pile y EleutherAI datasets",
+          desc:"El dataset de 825GB que democratizó el pretraining open. Combina 22 fuentes (GitHub, PubMed, libros, webs) con metodología transparente y reproducible.",
+          tags:["The Pile","EleutherAI","825GB","22 fuentes","open data"],
+          papers:[{l:"The Pile (Gao et al., 2020)",u:"https://arxiv.org/abs/2101.00027"},{l:"Pythia (Biderman et al., 2023)",u:"https://arxiv.org/abs/2304.01373"}],
+          res:[{l:"EleutherAI/the-pile",u:"https://github.com/EleutherAI/the-pile"}]},
+      ]},
+      { label:"Core", items:[
+        { level:"core", title:"Deduplicación a gran escala",
+          desc:"MinHash, SimHash, exact dedup. Impacto medible en calidad del modelo.",
+          tags:["MinHash","near-dedup","SemDeDup"],
+          papers:[{l:"Dedup matters (Lee et al., 2022)",u:"https://arxiv.org/abs/2107.06499"},{l:"SemDeDup (Abbas et al., 2023)",u:"https://arxiv.org/abs/2303.09540"}],
+          res:[{l:"datasketch",u:"https://github.com/ekzhu/datasketch"}]},
+        { level:"core", title:"Filtrado de calidad y toxicidad",
+          desc:"Gopher rules, C4 heuristics, clasificadores fastText, filtros multilingüe.",
+          tags:["Gopher rules","C4","fastText"],
+          papers:[{l:"Gopher (Rae et al., 2022)",u:"https://arxiv.org/abs/2112.11446"},{l:"C4/T5 (Raffel et al., 2020)",u:"https://arxiv.org/abs/1910.10683"}],res:[]},
+        { level:"core", title:"Data mixing y domain weighting",
+          desc:"Cómo balancear fuentes (web, código, académico, es/pt/en). DoReMi, RegMix.",
+          tags:["DoReMi","RegMix","domain mixing"],
+          papers:[{l:"DoReMi (Xie et al., 2023)",u:"https://arxiv.org/abs/2305.10429"},{l:"RegMix (Liu et al., 2024)",u:"https://arxiv.org/abs/2407.01492"}],res:[]},
+        { level:"core", title:"RedPajama-V1 y V2",
+          desc:"Reproducción abierta de los datos de LLaMA (V1, 1.2T tokens) y 30T tokens con señales de calidad automáticas en V2. Pipeline y código completamente disponibles y documentados.",
+          tags:["RedPajama","Together AI","30T tokens","quality signals","open pipeline"],
+          papers:[{l:"RedPajama-V2 (Weber et al., 2024)",u:"https://arxiv.org/abs/2402.12303"}],
+          res:[{l:"RedPajama (Together AI)",u:"https://github.com/togethercomputer/RedPajama-Data"}]},
+      ]},
+      { label:"Avanzado", items:[
+        { level:"advanced", title:"Datatrove y pipelines industriales",
+          desc:"Arquitectura de Datatrove (HuggingFace). Paralelización con SLURM/Ray para TB de datos.",
+          tags:["datatrove","Ray","SLURM"],
+          papers:[{l:"FineWeb (Penedo et al., 2024)",u:"https://arxiv.org/abs/2406.17557"}],
+          res:[{l:"datatrove (GitHub)",u:"https://github.com/huggingface/datatrove"}]},
+        { level:"advanced", title:"Contaminación y data governance",
+          desc:"Detección de test set leakage, watermarking, licencias CC-BY. Relevante para LatamGPT.",
+          tags:["leakage","watermark","licencias"],
+          papers:[{l:"Detecting contamination (Golchin & Surdeanu, 2023)",u:"https://arxiv.org/abs/2310.16789"},{l:"Data Provenance Initiative (Longpre et al., 2023)",u:"https://arxiv.org/abs/2310.16787"}],res:[]},
+      ]},
+      { label:"SOTA 2026", items:[
+        { level:"sota", title:"FineWeb y DCLM",
+          desc:"Los pipelines de datos más fuertes de 2024. DCLM demostró que los datos superan a la arquitectura.",
+          tags:["FineWeb","DCLM","model-based filtering"],
+          papers:[{l:"FineWeb (Penedo et al., 2024)",u:"https://arxiv.org/abs/2406.17557"},{l:"DCLM (Li et al., 2024)",u:"https://arxiv.org/abs/2406.11794"}],res:[]},
+        { level:"sota", title:"Multi-epoch training y data scheduling",
+          desc:"Token repetition budget, cooldown stages. Receta de LLaMA 3.",
+          tags:["token budget","multi-epoch","cooldown"],
+          papers:[{l:"Scaling Data-Constrained LLMs (Muennighoff et al., 2023)",u:"https://arxiv.org/abs/2305.16264"},{l:"LLaMA 3 (Dubey et al., 2024)",u:"https://arxiv.org/abs/2407.21783"}],res:[]},
+        { level:"sota", title:"Datos para Latam: retos específicos",
+          desc:"Escasez de datos es/pt de alta calidad. Contaminación en Trueque. Soberanía de datos.",
+          tags:["es/pt","soberanía","Latam"],
+          papers:[{l:"CulturaX (Nguyen et al., 2023)",u:"https://arxiv.org/abs/2309.09400"},{l:"LatamQA (EACL 2026)",u:"https://arxiv.org/abs/2406.07228"}],
+          res:[{l:"LatamGPT (HF)",u:"https://huggingface.co/latamgpt"}]},
+      ]},
+    ]
+  },
+  {
+    id:"pretrain", cls:"s-pre", icon:"ti-brain", title:"Pretraining",
+    pill:"4 niveles · 14 temas",
+    tracks:[
+      { label:"Básico", items:[
+        { level:"basic", title:"Arquitectura Transformer",
+          desc:"Atención multi-cabeza, FFN, layer norm, embeddings posicionales. Implementar desde cero.",
+          tags:["attention","PyTorch","positional encoding"],
+          papers:[{l:"Attention is All You Need (Vaswani et al., 2017)",u:"https://arxiv.org/abs/1706.03762"}],
+          res:[{l:"nanoGPT",u:"https://github.com/karpathy/nanoGPT"},{l:"The Illustrated Transformer",u:"https://jalammar.github.io/illustrated-transformer/"}]},
+        { level:"basic", title:"Causal language modeling",
+          desc:"Objetivo next-token prediction, cross-entropy loss, perplexidad como métrica de pretraining.",
+          tags:["CLM","perplexity","autoregressive"],
+          papers:[{l:"GPT-2 (Radford et al., 2019)",u:"https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf"},{l:"GPT-3 (Brown et al., 2020)",u:"https://arxiv.org/abs/2005.14165"}],res:[]},
+        { level:"basic", title:"Tokenización avanzada y vocabulario",
+          desc:"Fertilidad en español. Tradeoffs BPE vs Unigram para Latam. Vocabulario multilingüe.",
+          tags:["fertility","multilingüe","BPE"],
+          papers:[{l:"SentencePiece (Kudo & Richardson, 2018)",u:"https://arxiv.org/abs/1808.06226"},{l:"Fertility analysis (Rust et al., 2021)",u:"https://arxiv.org/abs/2012.15613"}],res:[]},
+      ]},
+      { label:"Core", items:[
+        { level:"core", title:"Scaling Laws",
+          desc:"Chinchilla-optimal compute. Kaplan vs Chinchilla. Cómo aplicar con presupuesto limitado.",
+          tags:["Chinchilla","Kaplan","compute-optimal"],
+          papers:[{l:"Kaplan et al. (2020)",u:"https://arxiv.org/abs/2001.08361"},{l:"Chinchilla (Hoffmann et al., 2022)",u:"https://arxiv.org/abs/2203.15556"},{l:"Beyond Chinchilla (Sardana et al., 2023)",u:"https://arxiv.org/abs/2401.00448"}],res:[]},
+        { level:"core", title:"Optimización y estabilidad",
+          desc:"AdamW, gradient clipping, LR schedules (cosine, WSD). Loss spikes y recovery.",
+          tags:["AdamW","WSD","loss spikes"],
+          papers:[{l:"AdamW (Loshchilov & Hutter, 2019)",u:"https://arxiv.org/abs/1711.05101"},{l:"MiniCPM/WSD schedule (Hu et al., 2024)",u:"https://arxiv.org/abs/2404.06395"}],res:[]},
+        { level:"core", title:"Paralelismo: DP, TP y PP",
+          desc:"DDP, FSDP, Megatron-LM, pipeline parallelism. Escalar a múltiples nodos.",
+          tags:["FSDP","Megatron","DeepSpeed"],
+          papers:[{l:"Megatron-LM (Shoeybi et al., 2019)",u:"https://arxiv.org/abs/1909.08053"},{l:"DeepSpeed ZeRO (Rajbhandari et al., 2020)",u:"https://arxiv.org/abs/1910.02054"}],
+          res:[{l:"Megatron-LM",u:"https://github.com/NVIDIA/Megatron-LM"}]},
+        { level:"core", title:"FlashAttention 1, 2 y 3",
+          desc:"IO-aware exact attention. Tiling en SRAM para evitar accesos a HBM lentos. FA-2 es el estándar de facto para pretraining eficiente. FA-3 optimiza para hardware H100.",
+          tags:["FlashAttention","IO-aware","SRAM","HBM","Triton","eficiencia"],
+          papers:[{l:"FlashAttention (Dao et al., 2022)",u:"https://arxiv.org/abs/2205.14135"},{l:"FlashAttention-2 (Dao, 2023)",u:"https://arxiv.org/abs/2307.08691"},{l:"FlashAttention-3 (Shah et al., 2024)",u:"https://arxiv.org/abs/2407.08608"}],
+          res:[{l:"flash-attention (Dao-AILab)",u:"https://github.com/Dao-AILab/flash-attention"}]},
+      ]},
+      { label:"Avanzado", items:[
+        { level:"advanced", title:"Arquitecturas modernas: GQA, MoE, RoPE",
+          desc:"Grouped-query attention, Mixture of Experts estilo DeepSeek-V3, RoPE y variantes.",
+          tags:["GQA","MoE","RoPE"],
+          papers:[{l:"GQA (Ainslie et al., 2023)",u:"https://arxiv.org/abs/2305.13245"},{l:"RoPE (Su et al., 2021)",u:"https://arxiv.org/abs/2104.09864"}],res:[]},
+        { level:"advanced", title:"Long context pretraining",
+          desc:"RoPE scaling, YaRN, LongRoPE. Ventanas de 128k+ tokens.",
+          tags:["YaRN","LongRoPE","ring attention"],
+          papers:[{l:"YaRN (Peng et al., 2023)",u:"https://arxiv.org/abs/2309.00071"},{l:"LongRoPE (Ding et al., 2024)",u:"https://arxiv.org/abs/2402.13753"}],res:[]},
+        { level:"advanced", title:"Continual pretraining y domain adaptation",
+          desc:"Adaptar modelo base a español/Latam sin olvidar inglés. Mixture ratios.",
+          tags:["domain adapt","continual PT","forgetting"],
+          papers:[{l:"Don't Stop Pretraining (Gururangan et al., 2020)",u:"https://arxiv.org/abs/2004.10964"}],res:[]},
+        { level:"advanced", title:"ALiBi y espacio de encodings posicionales",
+          desc:"Attention with Linear Biases: permite extrapolación a contextos más largos que los vistos en entrenamiento sin reentrenar. Alternativa a RoPE con diferente tradeoff velocidad/extrapolación.",
+          tags:["ALiBi","positional bias","extrapolación","long context","sin PE"],
+          papers:[{l:"ALiBi / Train Short, Test Long (Press et al., 2022)",u:"https://arxiv.org/abs/2108.12409"}],res:[]},
+      ]},
+      { label:"SOTA 2026", items:[
+        { level:"sota", title:"MuP y hyperparameter transfer",
+          desc:"Maximal Update Parametrization. Encontrar LR/batch en modelo pequeño y transferir.",
+          tags:["μP","μTransfer","HP transfer"],
+          papers:[{l:"μP (Yang et al., 2022)",u:"https://arxiv.org/abs/2203.03466"}],
+          res:[{l:"mup (GitHub)",u:"https://github.com/microsoft/mup"}]},
+        { level:"sota", title:"Multi-token prediction (MTP)",
+          desc:"Predecir múltiples tokens a la vez. Mejora velocidad de inferencia.",
+          tags:["MTP","DeepSeek","speculative decoding"],
+          papers:[{l:"MTP Meta (Gloeckle et al., 2024)",u:"https://arxiv.org/abs/2404.19737"},{l:"DeepSeek-V3 (DeepSeek-AI, 2024)",u:"https://arxiv.org/abs/2412.19437"}],res:[]},
+        { level:"sota", title:"Evaluación durante pretraining",
+          desc:"Checkpointing estratégico, eval continuo con lm-evaluation-harness.",
+          tags:["lm-eval","Pythia","checkpointing"],
+          papers:[{l:"Pythia (Biderman et al., 2023)",u:"https://arxiv.org/abs/2304.01373"}],
+          res:[{l:"lm-evaluation-harness",u:"https://github.com/EleutherAI/lm-evaluation-harness"}]},
+      ]},
+    ]
+  },
+  {
+    id:"posttraining", cls:"s-post", icon:"ti-adjustments", title:"Post-training",
+    pill:"4 niveles · 14 temas",
+    tracks:[
+      { label:"Básico", items:[
+        { level:"basic", title:"SFT: Supervised Fine-Tuning",
+          desc:"ChatML, LLaMA templates, datasets de instrucción, overfitting en SFT.",
+          tags:["SFT","ChatML","instrucción"],
+          papers:[{l:"Self-Instruct (Wang et al., 2023)",u:"https://arxiv.org/abs/2212.10560"},{l:"LIMA (Zhou et al., 2023)",u:"https://arxiv.org/abs/2305.11206"}],
+          res:[{l:"Open-Instruct (AllenAI)",u:"https://github.com/allenai/open-instruct"}]},
+        { level:"basic", title:"PEFT: LoRA y QLoRA",
+          desc:"Low-rank adapters, rank selection. QLoRA para hardware limitado.",
+          tags:["LoRA","QLoRA","PEFT"],
+          papers:[{l:"LoRA (Hu et al., 2022)",u:"https://arxiv.org/abs/2106.09685"},{l:"QLoRA (Dettmers et al., 2023)",u:"https://arxiv.org/abs/2305.14314"}],
+          res:[{l:"PEFT (HuggingFace)",u:"https://github.com/huggingface/peft"}]},
+        { level:"basic", title:"Evaluación de modelos instrucción",
+          desc:"MT-Bench, AlpacaEval, Open LLM Leaderboard, MMLU.",
+          tags:["MT-Bench","AlpacaEval","leaderboard"],
+          papers:[{l:"MT-Bench / LLM-as-Judge (Zheng et al., 2023)",u:"https://arxiv.org/abs/2306.05685"}],
+          res:[{l:"Open LLM Leaderboard",u:"https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard"}]},
+      ]},
+      { label:"Core", items:[
+        { level:"core", title:"RLHF: Reward Models y PPO",
+          desc:"SFT → RM → PPO. Bradley-Terry, reward hacking, KL divergence.",
+          tags:["PPO","RM","InstructGPT"],
+          papers:[{l:"InstructGPT (Ouyang et al., 2022)",u:"https://arxiv.org/abs/2203.02155"},{l:"Constitutional AI (Bai et al., 2022)",u:"https://arxiv.org/abs/2212.08073"}],res:[]},
+        { level:"core", title:"DPO y variantes",
+          desc:"Direct Preference Optimization. IPO corrige overfit. SimPO sin reward model.",
+          tags:["DPO","IPO","SimPO","ORPO"],
+          papers:[{l:"DPO (Rafailov et al., 2023)",u:"https://arxiv.org/abs/2305.18290"},{l:"IPO (Azar et al., 2024)",u:"https://arxiv.org/abs/2310.12036"},{l:"SimPO (Meng et al., 2024)",u:"https://arxiv.org/abs/2405.14734"}],res:[]},
+        { level:"core", title:"Safety y alignment básico",
+          desc:"Constitutional AI, red teaming, jailbreak patterns.",
+          tags:["CAI","red team","safety"],
+          papers:[{l:"Red Teaming LLMs (Ganguli et al., 2022)",u:"https://arxiv.org/abs/2209.07858"}],res:[]},
+        { level:"core", title:"Constitutional AI (CAI)",
+          desc:"Técnica de Anthropic para alinear modelos con principios explícitos sin etiquetadores humanos: SL-CAI (supervisado con feedback del propio modelo) + RL-CAI (RLAIF). Base del safety training de Claude.",
+          tags:["CAI","RLAIF","Anthropic","principios","self-critique","RLHF sin humanos"],
+          papers:[{l:"Constitutional AI (Bai et al., 2022)",u:"https://arxiv.org/abs/2212.08073"},{l:"RLAIF vs RLHF (Lee et al., 2023)",u:"https://arxiv.org/abs/2309.00267"}],res:[]},
+      ]},
+      { label:"Avanzado", items:[
+        { level:"advanced", title:"GRPO y RL para razonamiento",
+          desc:"Group Relative Policy Optimization. CoT emergente vía RL. DeepSeek-R1.",
+          tags:["GRPO","DeepSeek-R1","RLVR"],
+          papers:[{l:"GRPO/DeepSeekMath (Shao et al., 2024)",u:"https://arxiv.org/abs/2402.03300"},{l:"DeepSeek-R1 (2025)",u:"https://arxiv.org/abs/2501.12948"},{l:"DAPO (Yu et al., 2025)",u:"https://arxiv.org/abs/2503.14476"}],
+          res:[{l:"verl (GitHub)",u:"https://github.com/volcengine/verl"}]},
+        { level:"advanced", title:"LLM-as-a-Judge",
+          desc:"Diseño de rúbricas, sesgos del juez, multi-LLM judging.",
+          tags:["rubrics","judge bias","multi-LLM"],
+          papers:[{l:"MT-Bench (Zheng et al., 2023)",u:"https://arxiv.org/abs/2306.05685"},{l:"JudgeBench (Tan et al., 2024)",u:"https://arxiv.org/abs/2410.12784"}],
+          res:[{l:"Distilabel",u:"https://github.com/argilla-io/distilabel"}]},
+        { level:"advanced", title:"Merge de modelos y model soups",
+          desc:"SLERP, TIES-merging, DARE. Combinar checkpoints SFT y RLHF.",
+          tags:["TIES","DARE","mergekit"],
+          papers:[{l:"Model Soups (Wortsman et al., 2022)",u:"https://arxiv.org/abs/2203.05482"},{l:"TIES-Merging (Yadav et al., 2023)",u:"https://arxiv.org/abs/2306.01708"}],
+          res:[{l:"mergekit",u:"https://github.com/arcee-ai/mergekit"}]},
+        { level:"advanced", title:"Chat templates y format sensitivity",
+          desc:"Impacto del template en benchmark scores. vLLM prefill vs decode.",
+          tags:["chat template","format sensitivity","vLLM"],
+          papers:[{l:"Lessons from the Trenches (Ivison et al., 2023)",u:"https://arxiv.org/abs/2310.13548"}],
+          res:[{l:"vLLM",u:"https://github.com/vllm-project/vllm"}]},
+      ]},
+      { label:"SOTA 2026", items:[
+        { level:"sota", title:"Razonamiento largo: o3, R1, QwQ",
+          desc:"Test-time compute scaling. PRM vs Outcome RM. Verifiable rewards.",
+          tags:["PRM","test-time compute","verifiable"],
+          papers:[{l:"DeepSeek-R1 (2025)",u:"https://arxiv.org/abs/2501.12948"},{l:"Scaling RL Compute (Liu et al., 2025)",u:"https://arxiv.org/abs/2510.13786"},{l:"Let's Verify Step by Step (Lightman et al., 2023)",u:"https://arxiv.org/abs/2305.20050"}],res:[]},
+        { level:"sota", title:"Preference data pipelines industriales",
+          desc:"UltraFeedback, Distilabel. Construir pipelines de preferencias a escala.",
+          tags:["UltraFeedback","Distilabel","Zephyr"],
+          papers:[{l:"UltraFeedback (Cui et al., 2023)",u:"https://arxiv.org/abs/2310.01377"},{l:"Zephyr/DSTO (Tunstall et al., 2023)",u:"https://arxiv.org/abs/2310.16944"}],
+          res:[{l:"Distilabel docs",u:"https://distilabel.argilla.io/"}]},
+        { level:"sota", title:"Benchmarks culturales Latam",
+          desc:"Benchmarks culturalmente válidos para Latam. LLM-as-judge cross-cultural.",
+          tags:["Trueque","LatamQA","cultural eval"],
+          papers:[{l:"LatamQA (EACL 2026)",u:"https://arxiv.org/abs/2406.07228"}],
+          res:[{l:"Trueque (LatamGPT)",u:"https://huggingface.co/latamgpt"}]},
+      ]},
+    ]
+  },
+  {
+    id:"synth", cls:"s-synth", icon:"ti-sparkles", title:"Datos sintéticos",
+    pill:"4 niveles · 12 temas",
+    tracks:[
+      { label:"Básico", items:[
+        { level:"basic", title:"¿Qué son los datos sintéticos?",
+          desc:"Generación LLM-driven, casos de uso (SFT, pretraining, eval). Riesgos de model collapse.",
+          tags:["synthetic","model collapse","LLM-driven"],
+          papers:[{l:"Best Practices Synthetic Data (Liu et al., 2024)",u:"https://arxiv.org/abs/2404.07503"}],res:[]},
+        { level:"basic", title:"Self-Instruct y Alpaca",
+          desc:"Seed tasks → LLM generation → filtrado. Limitaciones y mejoras.",
+          tags:["Self-Instruct","Alpaca","seed"],
+          papers:[{l:"Self-Instruct (Wang et al., 2023)",u:"https://arxiv.org/abs/2212.10560"}],res:[]},
+      ]},
+      { label:"Core", items:[
+        { level:"core", title:"Evol-Instruct y complejidad progresiva",
+          desc:"WizardLM: aumentar complejidad y diversidad de instrucciones iterativamente.",
+          tags:["WizardLM","Evol-Instruct","complexity"],
+          papers:[{l:"WizardLM (Xu et al., 2023)",u:"https://arxiv.org/abs/2304.12244"},{l:"Orca 2 (Mitra et al., 2023)",u:"https://arxiv.org/abs/2311.11045"}],res:[]},
+        { level:"core", title:"Filtrado de calidad en sintéticos",
+          desc:"IFD, deduplicación semántica, DEITA quality scoring.",
+          tags:["IFD","DEITA","semantic dedup"],
+          papers:[{l:"DEITA (Liu et al., 2024)",u:"https://arxiv.org/abs/2312.15685"}],res:[]},
+        { level:"core", title:"Synthetic CoT y reasoning traces",
+          desc:"Cadenas de razonamiento sintéticas. Rejection sampling con ground truth.",
+          tags:["CoT","rejection sampling","STaR"],
+          papers:[{l:"STaR (Zelikman et al., 2022)",u:"https://arxiv.org/abs/2203.14465"},{l:"RFT (Yuan et al., 2023)",u:"https://arxiv.org/abs/2308.01825"}],res:[]},
+      ]},
+      { label:"Avanzado", items:[
+        { level:"advanced", title:"Magpie y generación sin seed",
+          desc:"Extraer instrucciones del propio LLM sin seed. Escalable a millones. ICLR 2025.",
+          tags:["Magpie","seed-free","ICLR 2025"],
+          papers:[{l:"Magpie (Xu et al., 2024 / ICLR 2025)",u:"https://arxiv.org/abs/2406.08464"}],
+          res:[{l:"magpie (GitHub)",u:"https://github.com/magpie-align/magpie"}]},
+        { level:"advanced", title:"Distilación de modelos propietarios",
+          desc:"Legal/ética de destilar GPT-4. Alternativas open: Gemma, LLaMA 3 como teacher.",
+          tags:["distillation","teacher-student","legal"],
+          papers:[{l:"Orca (Mukherjee et al., 2023)",u:"https://arxiv.org/abs/2306.02707"}],res:[]},
+        { level:"advanced", title:"Sintéticos multilingüe para Latam",
+          desc:"Traducción + back-translation, culturally-aware generation, calidad es/pt.",
+          tags:["traducción","back-translation","es/pt"],
+          papers:[{l:"Multilingual alignment (Chen et al., 2023)",u:"https://arxiv.org/abs/2305.14016"}],res:[]},
+      ]},
+      { label:"SOTA 2026", items:[
+        { level:"sota", title:"Cosmopedia y FineWeb-Edu",
+          desc:"Pretraining sintético de alta calidad. Phi-series, textbooks are all you need.",
+          tags:["Cosmopedia","FineWeb-Edu","Phi-4"],
+          papers:[{l:"Phi-1 (Gunasekar et al., 2023)",u:"https://arxiv.org/abs/2306.11644"},{l:"Phi-4 (Abdin et al., 2024)",u:"https://arxiv.org/abs/2412.08905"}],
+          res:[{l:"Cosmopedia (HF)",u:"https://huggingface.co/datasets/HuggingFaceTB/cosmopedia"}]},
+        { level:"sota", title:"Verifiable synthetic data para RL",
+          desc:"Generar problemas verificables (math, código) para GRPO/RLVR.",
+          tags:["RLVR","GRPO","verifiable"],
+          papers:[{l:"DeepSeek-R1 (2025)",u:"https://arxiv.org/abs/2501.12948"}],
+          res:[{l:"open-r1 (HF)",u:"https://github.com/huggingface/open-r1"}]},
+        { level:"sota", title:"Model collapse y soluciones",
+          desc:"Shumailov et al. (Nature 2024). Mixing con datos reales para evitar degradación.",
+          tags:["model collapse","Shumailov","mixing"],
+          papers:[{l:"Model Collapse (Shumailov et al., Nature 2024)",u:"https://arxiv.org/abs/2305.17493"},{l:"Beyond Model Collapse (Gerstgrasser et al., 2024)",u:"https://arxiv.org/abs/2404.01413"}],res:[]},
+        { level:"sota", title:"PersonaHub",
+          desc:"1 billón de personas sintéticas para diversificar datos de instrucción. Cada prompt se genera desde la perspectiva de una persona diferente, evitando la homogeneización del dataset.",
+          tags:["PersonaHub","1B personas","diversidad","ICLR 2025","seed-free"],
+          papers:[{l:"PersonaHub (Chan et al., 2024 / ICLR 2025)",u:"https://arxiv.org/abs/2406.20094"}],
+          res:[{l:"PersonaHub (GitHub)",u:"https://github.com/tencent-ailab/PersonaHub"}]},
+      ]},
+    ]
+  },
+  {
+    id:"bench", cls:"s-bench", icon:"ti-chart-bar", title:"Benchmarks & Evaluación",
+    pill:"5 categorías · 23 benchmarks",
+    tracks:[
+      { label:"Conocimiento general", items:[
+        { level:"sat", title:"MMLU",
+          desc:"57 materias, ~14k preguntas. Estándar histórico, saturado para modelos frontier (>87%). Útil para modelos <7B y ablaciones.",
+          tags:["5-shot","57 materias","saturado"],
+          papers:[{l:"MMLU (Hendrycks et al., 2020)",u:"https://arxiv.org/abs/2009.03300"}],
+          res:[{l:"HF dataset",u:"https://huggingface.co/datasets/cais/mmlu"}]},
+        { level:"core", title:"MMLU-Pro",
+          desc:"Versión mejorada con 10 opciones y más razonamiento. 12k preguntas de nivel graduado. Aún diferenciador en 2025-26.",
+          tags:["10 opciones","graduado","razonamiento"],
+          papers:[{l:"MMLU-Pro (Wang et al., 2024)",u:"https://arxiv.org/abs/2406.01574"}],
+          res:[{l:"HF dataset",u:"https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro"}]},
+        { level:"advanced", title:"GPQA Diamond",
+          desc:"198 preguntas PhD-level (biología, química, física). Expertos sin web: ~34%. Diseñado para ser Google-proof.",
+          tags:["PhD-level","Google-proof","experto"],
+          papers:[{l:"GPQA (Rein et al., 2023)",u:"https://arxiv.org/abs/2311.12022"}],res:[]},
+        { level:"sat", title:"ARC-Challenge y HellaSwag",
+          desc:"Razonamiento de ciencias escolares y sentido común. Saturados (>90%) para modelos grandes.",
+          tags:["commonsense","ciencia","saturado"],
+          papers:[{l:"ARC (Clark et al., 2018)",u:"https://arxiv.org/abs/1803.05457"},{l:"HellaSwag (Zellers et al., 2019)",u:"https://arxiv.org/abs/1905.07830"}],res:[]},
+      ]},
+      { label:"Matemáticas y razonamiento", items:[
+        { level:"sat", title:"GSM8K",
+          desc:"8.5k problemas de matemáticas escolares con CoT. Saturado para frontier (>97%). Util para <10B.",
+          tags:["word problems","CoT","saturado"],
+          papers:[{l:"GSM8K (Cobbe et al., 2021)",u:"https://arxiv.org/abs/2110.14168"}],
+          res:[{l:"HF dataset",u:"https://huggingface.co/datasets/gsm8k"}]},
+        { level:"advanced", title:"MATH",
+          desc:"12.5k problemas de competencia (AMC, AIME). 7 niveles. Aún diferenciador incluso para modelos fuertes.",
+          tags:["olympiad","AMC","AIME"],
+          papers:[{l:"MATH (Hendrycks et al., 2021)",u:"https://arxiv.org/abs/2103.03874"}],res:[]},
+        { level:"sota", title:"AIME 2024/2025",
+          desc:"30 preguntas de olimpiada matemática. El benchmark favorito para medir razonamiento de modelos SOTA (o3, R1, Gemini).",
+          tags:["olimpiada","sin opciones","frontier"],
+          papers:[{l:"DeepSeek-R1 lo usa como eval",u:"https://arxiv.org/abs/2501.12948"}],
+          res:[{l:"AIME dataset (HF)",u:"https://huggingface.co/datasets/Maxwell-Jia/AIME_1983_2024"}]},
+        { level:"sota", title:"BIG-Bench Hard (BBH)",
+          desc:"23 tareas donde modelos pre-2022 no superaban human baseline. Razonamiento puro sin atajos de memorización. Diferenciador para modelos frontier en 2025-26.",
+          tags:["BBH","reasoning","anti-saturado","23 tareas","frontier"],
+          papers:[{l:"Challenging BIG-Bench Tasks (Suzgun et al., 2022)",u:"https://arxiv.org/abs/2210.09261"}],
+          res:[{l:"BIG-Bench Hard (HF)",u:"https://huggingface.co/datasets/maveriq/bigbenchhard"}]},
+      ]},
+      { label:"Código", items:[
+        { level:"sat", title:"HumanEval y MBPP",
+          desc:"HumanEval: 164 funciones Python. MBPP: 374 problemas básicos. Saturados para frontier. Útiles para modelos finos.",
+          tags:["Python","pass@k","unit tests","saturado"],
+          papers:[{l:"HumanEval/Codex (Chen et al., 2021)",u:"https://arxiv.org/abs/2107.03374"},{l:"MBPP (Austin et al., 2021)",u:"https://arxiv.org/abs/2108.07732"}],res:[]},
+        { level:"advanced", title:"SWE-bench Verified",
+          desc:"Resolver issues reales de GitHub. Pasó de 4.4% en 2023 a >71% en 2024 con agentes.",
+          tags:["agentes","GitHub issues","real-world"],
+          papers:[{l:"SWE-bench (Jimenez et al., 2024)",u:"https://arxiv.org/abs/2310.06770"}],
+          res:[{l:"SWE-bench leaderboard",u:"https://www.swebench.com/"}]},
+        { level:"sota", title:"LiveCodeBench",
+          desc:"Problemas de LeetCode/Codeforces/AtCoder recopilados en tiempo real. Anti-contaminación por diseño.",
+          tags:["anti-contamination","live","competitivo"],
+          papers:[{l:"LiveCodeBench (Jain et al., 2024)",u:"https://arxiv.org/abs/2403.07974"}],
+          res:[{l:"LiveCodeBench site",u:"https://livecodebench.github.io/"}]},
+      ]},
+      { label:"Chat e instrucción", items:[
+        { level:"core", title:"MT-Bench y LLM-as-a-Judge",
+          desc:"80 preguntas multi-turno. GPT-4 como juez. Paper fundacional de la evaluación LLM-as-judge.",
+          tags:["multi-turn","GPT-4 judge","8 categorías"],
+          papers:[{l:"MT-Bench (Zheng et al., 2023)",u:"https://arxiv.org/abs/2306.05685"}],
+          res:[{l:"FastChat eval",u:"https://github.com/lm-sys/FastChat/tree/main/fastchat/llm_judge"}]},
+        { level:"advanced", title:"Chatbot Arena / LMSYS",
+          desc:"Evaluación humana blind por pairwise comparison. ELO con >1M votos. El ground truth más confiable.",
+          tags:["human eval","ELO","pairwise"],
+          papers:[{l:"Chatbot Arena (Chiang et al., 2024)",u:"https://arxiv.org/abs/2403.04132"}],
+          res:[{l:"Chatbot Arena",u:"https://chat.lmsys.org/"}]},
+        { level:"advanced", title:"AlpacaEval 2.0 y MixEval",
+          desc:"AlpacaEval: win rate con length-control. MixEval: 0.96 correlación con Arena ELO al 6% del costo.",
+          tags:["win rate","length-control","Arena corr."],
+          papers:[{l:"AlpacaEval 2.0 (Dubois et al., 2024)",u:"https://arxiv.org/abs/2404.04475"},{l:"MixEval (Ni et al., 2024)",u:"https://arxiv.org/abs/2406.06565"}],
+          res:[{l:"MixEval leaderboard",u:"https://mixeval.github.io/"}]},
+        { level:"advanced", title:"TruthfulQA",
+          desc:"817 preguntas donde modelos más grandes tienden a ser MÁS incorrectos por imitar creencias humanas falsas. Mide honestidad vs imitación. Fenómeno contraintuitivo de anti-scaling.",
+          tags:["alucinaciones","honestidad","anti-scaling","safety","imitation"],
+          papers:[{l:"TruthfulQA (Lin et al., 2021)",u:"https://arxiv.org/abs/2109.07958"}],
+          res:[{l:"TruthfulQA (HF)",u:"https://huggingface.co/datasets/truthfulqa/truthful_qa"}]},
+      ]},
+      { label:"Multilingüe y Latam", items:[
+        { level:"latam", title:"Trueque Benchmark",
+          desc:"500 preguntas culturales sobre 20 países latinoamericanos. Diseñado por CENIA. Evalúa conocimiento cultural que MMLU no captura.",
+          tags:["cultura","20 países","500 preguntas","CENIA"],
+          papers:[],
+          res:[{l:"LatamGPT (HuggingFace)",u:"https://huggingface.co/latamgpt"}]},
+        { level:"latam", title:"LatamQA (EACL 2026)",
+          desc:"Benchmark QA para español latinoamericano. Importante para diagnósticos de chat template.",
+          tags:["español","QA","EACL 2026"],
+          papers:[{l:"LatamQA (EACL 2026)",u:"https://arxiv.org/abs/2406.07228"}],res:[]},
+        { level:"latam", title:"MGSM — Matemáticas multilingüe",
+          desc:"GSM8K traducido a 11 idiomas incluido español. Mide si el razonamiento matemático se mantiene en Latam. Expone brechas idiomáticas en modelos que parecen buenos en inglés.",
+          tags:["multilingual","matemáticas","español","GSM8K","11 idiomas"],
+          papers:[{l:"LMs are Multilingual CoT Reasoners (Shi et al., 2022)",u:"https://arxiv.org/abs/2210.03057"}],
+          res:[{l:"MGSM (HF)",u:"https://huggingface.co/datasets/juletxara/mgsm"}]},
+        { level:"advanced", title:"Global-MMLU",
+          desc:"MMLU traducido a 42+ idiomas incluido español y portugués. Detectar brechas de representación.",
+          tags:["multilingüe","42 idiomas","es/pt"],
+          papers:[{l:"Global-MMLU (Singh et al., 2024)",u:"https://arxiv.org/abs/2412.03304"}],
+          res:[{l:"Global-MMLU (HF)",u:"https://huggingface.co/datasets/CohereForAI/Global-MMLU"}]},
+        { level:"advanced", title:"IberBench / IberLEF",
+          desc:"Suite de evaluación para lenguas ibéricas (es, pt, ca, gl). NLU, NER, sentiment.",
+          tags:["ibérico","NLU","NER","es/pt"],
+          papers:[{l:"IberBench (García-Ferrero et al., 2025)",u:"https://arxiv.org/abs/2504.17897"}],res:[]},
+        { level:"sota", title:"Pitfalls: contaminación y prompt sensitivity",
+          desc:"El formato del prompt mueve scores ±10pp. Cómo detectar contaminación. Crítico para resultados reproducibles.",
+          tags:["contamination","prompt sensitivity","reproducibility"],
+          papers:[{l:"Contamination detection (Golchin & Surdeanu, 2023)",u:"https://arxiv.org/abs/2310.16789"},{l:"NLP eval in trouble (Sainz et al., 2023)",u:"https://arxiv.org/abs/2310.18018"},{l:"MMLU prompt sensitivity (Gema et al., 2024)",u:"https://arxiv.org/abs/2402.07765"}],
+          res:[{l:"lm-evaluation-harness",u:"https://github.com/EleutherAI/lm-evaluation-harness"}]},
+      ]},
+    ]
+  },
+  {
+    id:"models", cls:"s-models", icon:"ti-robot", title:"Modelos de referencia",
+    pill:"5 familias · 21 modelos",
+    tracks:[
+      { label:"Modelos base fundacionales", items:[
+        { level:"basic", title:"GPT-2 y GPT-3 (OpenAI)",
+          desc:"Los trabajos que establecieron el paradigma de LLMs. GPT-3 demostró in-context learning emergente a escala.",
+          tags:["GPT-3","ICL","few-shot","175B"],
+          papers:[{l:"GPT-2 (Radford et al., 2019)",u:"https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf"},{l:"GPT-3 (Brown et al., 2020)",u:"https://arxiv.org/abs/2005.14165"}],res:[]},
+        { level:"core", title:"Gopher y Chinchilla (DeepMind)",
+          desc:"Gopher: análisis de calidad de datos y scaling. Chinchilla: redefine el balance óptimo tokens/parámetros.",
+          tags:["Gopher","Chinchilla","scaling","280B"],
+          papers:[{l:"Gopher (Rae et al., 2022)",u:"https://arxiv.org/abs/2112.11446"},{l:"Chinchilla (Hoffmann et al., 2022)",u:"https://arxiv.org/abs/2203.15556"}],res:[]},
+        { level:"core", title:"PaLM y PaLM 2 (Google)",
+          desc:"PaLM: 540B, chain-of-thought emergente. PaLM 2: mejor multilingüismo y razonamiento.",
+          tags:["PaLM","CoT emergente","540B","multilingüe"],
+          papers:[{l:"PaLM (Chowdhery et al., 2022)",u:"https://arxiv.org/abs/2204.02311"},{l:"PaLM 2 (Anil et al., 2023)",u:"https://arxiv.org/abs/2305.10403"}],res:[]},
+      ]},
+      { label:"Familia LLaMA / OLMo (open-weight)", items:[
+        { level:"core", title:"LLaMA 1 y 2 (Meta)",
+          desc:"LLaMA: modelos open-weight con Chinchilla-optimal data. LLaMA-2: con chat y RLHF incluido.",
+          tags:["open-weight","7B-65B","RLHF","chat"],
+          papers:[{l:"LLaMA (Touvron et al., 2023)",u:"https://arxiv.org/abs/2302.13971"},{l:"LLaMA 2 (Touvron et al., 2023)",u:"https://arxiv.org/abs/2307.09288"}],res:[]},
+        { level:"advanced", title:"LLaMA 3 y LLaMA 3.1 (Meta)",
+          desc:"15T+ tokens de entrenamiento, GQA, ventanas de 128k, pipeline SFT+RS+DPO. LLaMA 3.1 405B es SOTA open.",
+          tags:["15T tokens","GQA","128k ctx","DPO"],
+          papers:[{l:"LLaMA 3 (Dubey et al., 2024)",u:"https://arxiv.org/abs/2407.21783"}],res:[]},
+        { level:"core", title:"OLMo (AllenAI)",
+          desc:"El modelo más transparente: datos, código, checkpoints y logs de entrenamiento completamente abiertos. Referencia para reproducibilidad.",
+          tags:["fully open","Dolma","reproducible","AllenAI"],
+          papers:[{l:"OLMo (Groeneveld et al., 2024)",u:"https://arxiv.org/abs/2402.00838"},{l:"OLMo 2 (2024)",u:"https://arxiv.org/abs/2501.00656"}],
+          res:[{l:"OLMo (GitHub)",u:"https://github.com/allenai/OLMo"}]},
+        { level:"advanced", title:"Tülu / OpenInstruct (AllenAI)",
+          desc:"Suite de post-training de AllenAI: SFT, DPO, RLVR. Tülu 3 es la receta de post-training open más completa disponible.",
+          tags:["SFT","DPO","RLVR","open post-training"],
+          papers:[{l:"Tülu 3 (Lambert et al., 2024)",u:"https://arxiv.org/abs/2411.15124"},{l:"Tülu 2 (Ivison et al., 2023)",u:"https://arxiv.org/abs/2311.10702"}],
+          res:[{l:"Open-Instruct",u:"https://github.com/allenai/open-instruct"}]},
+      ]},
+      { label:"DeepSeek (DeepSeek-AI)", items:[
+        { level:"advanced", title:"DeepSeek-V2 y V3",
+          desc:"V2: MoE eficiente con MLA (Multi-head Latent Attention). V3: 671B MoE, SOTA en pretraining, MTP, FP8.",
+          tags:["MoE","MLA","671B","FP8","MTP"],
+          papers:[{l:"DeepSeek-V2 (Liu et al., 2024)",u:"https://arxiv.org/abs/2405.04434"},{l:"DeepSeek-V3 (DeepSeek-AI, 2024)",u:"https://arxiv.org/abs/2412.19437"}],res:[]},
+        { level:"sota", title:"DeepSeek-R1",
+          desc:"Primer modelo open que iguala a o1 en razonamiento. Entrenado puramente con RL (GRPO), sin SFT inicial. Revolucionó el post-training.",
+          tags:["GRPO","reasoning","RL puro","SOTA 2025"],
+          papers:[{l:"DeepSeek-R1 (DeepSeek-AI, 2025)",u:"https://arxiv.org/abs/2501.12948"}],res:[]},
+        { level:"sota", title:"DeepSeek-Coder y DeepSeek-Math",
+          desc:"Modelos especializados que introdujeron GRPO para razonamiento matemático y de código. Base de R1.",
+          tags:["código","matemáticas","GRPO origen"],
+          papers:[{l:"DeepSeek-Coder (Guo et al., 2024)",u:"https://arxiv.org/abs/2401.14196"},{l:"DeepSeekMath (Shao et al., 2024)",u:"https://arxiv.org/abs/2402.03300"}],res:[]},
+      ]},
+      { label:"Qwen (Alibaba) y otros", items:[
+        { level:"advanced", title:"Qwen 2 y Qwen 2.5",
+          desc:"Familia completa 0.5B-72B. Fuerte en código, matemáticas y multilingüismo. Qwen2.5 72B es top open-weight.",
+          tags:["0.5B-72B","multilingüe","código","matemáticas"],
+          papers:[{l:"Qwen2 (Yang et al., 2024)",u:"https://arxiv.org/abs/2407.10671"},{l:"Qwen2.5 Technical Report (2024)",u:"https://arxiv.org/abs/2412.15115"}],res:[]},
+        { level:"sota", title:"QwQ y Qwen3 (razonamiento)",
+          desc:"QwQ-32B: modelo de razonamiento largo estilo R1. Qwen3 (2025): MoE y modelos densos con thinking modes.",
+          tags:["QwQ","thinking mode","razonamiento","Qwen3"],
+          papers:[{l:"Qwen3 Technical Report (2025)",u:"https://arxiv.org/abs/2505.09388"}],res:[]},
+        { level:"advanced", title:"Mistral, Mixtral y Gemma",
+          desc:"Mistral 7B: eficiencia con sliding window attention. Mixtral 8x7B: MoE accesible. Gemma 2: RLHF de Google open-weight.",
+          tags:["sliding window","MoE","Gemma","eficiencia"],
+          papers:[{l:"Mistral 7B (Jiang et al., 2023)",u:"https://arxiv.org/abs/2310.06825"},{l:"Mixtral (Jiang et al., 2024)",u:"https://arxiv.org/abs/2401.04088"},{l:"Gemma 2 (Team et al., 2024)",u:"https://arxiv.org/abs/2408.00118"}],res:[]},
+        { level:"advanced", title:"Phi-3 y Phi-4 (Microsoft)",
+          desc:"Modelos pequeños (3.8B-14B) entrenados con datos sintéticos de alta calidad. Demostraron que la calidad del dato > cantidad.",
+          tags:["small model","datos sintéticos","3.8B","calidad > cantidad"],
+          papers:[{l:"Phi-3 (Abdin et al., 2024)",u:"https://arxiv.org/abs/2404.14219"},{l:"Phi-4 (Abdin et al., 2024)",u:"https://arxiv.org/abs/2412.08905"}],res:[]},
+        { level:"advanced", title:"Command R y Aya (Cohere)",
+          desc:"Command R: RAG y tool use. Aya: modelo explícitamente multilingüe con 101 idiomas. Referencia para enfoque Latam.",
+          tags:["RAG","101 idiomas","Aya","multilingüe"],
+          papers:[{l:"Aya (Üstün et al., 2024)",u:"https://arxiv.org/abs/2402.07827"}],res:[]},
+      ]},
+      { label:"Multilingüe / Español", items:[
+        { level:"core", title:"BLOOM (BigScience, 2022)",
+          desc:"176B parámetros entrenado en 46 idiomas incluido español y portugués con el corpus ROOTS. Primer gran LLM open multilingüe. Referencia obligada para entender tradeoffs de modelos multilingüe.",
+          tags:["176B","multilingüe","ROOTS","46 idiomas","es/pt","BigScience"],
+          papers:[{l:"BLOOM (BigScience Workshop, 2022)",u:"https://arxiv.org/abs/2211.05100"}],
+          res:[{l:"BLOOM (HuggingFace)",u:"https://huggingface.co/bigscience/bloom"}]},
+        { level:"core", title:"XLM-R (Meta, 2020)",
+          desc:"RoBERTa multilingüe entrenado en 100 idiomas con 2.5TB de CommonCrawl. Baseline dominante en NLP para español y portugués. Punto de comparación estándar para cualquier encoder multilingüe.",
+          tags:["XLM-R","100 idiomas","encoder","es/pt","baseline","RoBERTa"],
+          papers:[{l:"XLM-R (Conneau et al., 2020)",u:"https://arxiv.org/abs/1911.02116"}],
+          res:[{l:"xlm-roberta-large (HF)",u:"https://huggingface.co/FacebookAI/xlm-roberta-large"}]},
+        { level:"latam", title:"Salamandra y Aguila (BSC-LTC)",
+          desc:"LLMs en español del Barcelona Supercomputing Center. Aguila-7B y Salamandra son los modelos open de mayor calidad para español. Directamente comparables con LatamGPT en benchmarks ibéricos.",
+          tags:["español","BSC","Salamandra","Aguila","open-weight","ibérico"],
+          papers:[{l:"Aguila (Pàmies et al., 2023)",u:"https://arxiv.org/abs/2311.10963"}],
+          res:[{l:"BSC-LTC (HuggingFace)",u:"https://huggingface.co/BSC-LTC"}]},
+      ]},
+    ]
+  },
+];
+
+const levelLabel = { basic:"Básico", core:"Core", advanced:"Avanzado", sota:"SOTA 2026", latam:"LatamGPT", sat:"Saturado" };
+let activeLevel = "all";
+
+function buildCard(item) {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.dataset.level = item.level;
+  el.dataset.text = (item.title + " " + item.desc + " " + (item.tags||[]).join(" ") + " " + (item.papers||[]).map(p=>p.l).join(" ")).toLowerCase();
+
+  const badgeCls = "lv-" + item.level;
+  const badgeTxt = levelLabel[item.level] || item.level;
+
+  let linksHtml = "";
+  (item.papers||[]).forEach(p => {
+    linksHtml += `<a class="plink" href="${p.u}" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>${p.l}</a>`;
+  });
+  (item.res||[]).forEach(r => {
+    linksHtml += `<a class="rlink" href="${r.u}" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>${r.l}</a>`;
+  });
+
+  el.innerHTML = `
+    <div class="card-top">
+      <span class="level-badge ${badgeCls}">${badgeTxt}</span>
+      <span class="card-title">${item.title}</span>
+    </div>
+    <div class="card-desc">${item.desc}</div>
+    ${item.tags?.length ? `<div class="tags">${item.tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div>` : ""}
+    ${linksHtml ? `<div class="links">${linksHtml}</div>` : ""}
+  `;
+  return el;
+}
+
+function buildSection(sec) {
+  const wrap = document.createElement("div");
+  wrap.className = "section";
+  wrap.dataset.id = sec.id;
+
+  const hdr = document.createElement("div");
+  hdr.className = `sec-header ${sec.cls}`;
+  hdr.innerHTML = `<i class="ti ${sec.icon} sec-icon" aria-hidden="true"></i><span class="sec-title">${sec.title}</span><span class="sec-pill">${sec.pill}</span><i class="ti ti-chevron-down sec-chevron"></i>`;
+
+  const body = document.createElement("div");
+  body.className = "sec-body";
+
+  sec.tracks.forEach(track => {
+    const lbl = document.createElement("div");
+    lbl.className = "track-lbl";
+    lbl.textContent = track.label;
+    body.appendChild(lbl);
+
+    const grid = document.createElement("div");
+    grid.className = "cards-grid";
+    track.items.forEach(item => grid.appendChild(buildCard(item)));
+    body.appendChild(grid);
+  });
+
+  hdr.onclick = () => {
+    const open = body.classList.toggle("open");
+    hdr.classList.toggle("open", open);
+  };
+
+  wrap.appendChild(hdr);
+  wrap.appendChild(body);
+  return wrap;
+}
+
+const root = document.getElementById("sections-root");
+SECTIONS.forEach(sec => root.appendChild(buildSection(sec)));
+
+function applyFilters() {
+  const q = document.getElementById("search").value.toLowerCase().trim();
+  const noRes = document.getElementById("no-results");
+  let anyVisible = false;
+
+  document.querySelectorAll(".card").forEach(card => {
+    const levelMatch = activeLevel === "all" || card.dataset.level === activeLevel;
+    const textMatch = !q || card.dataset.text.includes(q);
+    const show = levelMatch && textMatch;
+    card.classList.toggle("hidden", !show);
+    if (show) anyVisible = true;
+  });
+
+  document.querySelectorAll(".section").forEach(sec => {
+    const hasVisible = [...sec.querySelectorAll(".card")].some(c => !c.classList.contains("hidden"));
+    sec.style.display = hasVisible ? "" : "none";
+    if (hasVisible && (q || activeLevel !== "all")) {
+      sec.querySelector(".sec-body").classList.add("open");
+      sec.querySelector(".sec-header").classList.add("open");
+    }
+  });
+
+  noRes.style.display = anyVisible ? "none" : "block";
+}
+
+document.getElementById("search").addEventListener("input", applyFilters);
+
+document.getElementById("filters").addEventListener("click", e => {
+  const btn = e.target.closest(".filter-btn");
+  if (!btn) return;
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  activeLevel = btn.dataset.level;
+  applyFilters();
+});
+</script>
+</body>
+</html>

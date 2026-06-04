@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sequence Packing — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <h1 class="guide-title">Sequence Packing</h1>
+    <p class="guide-desc">Técnica para eliminar el padding en batches de pretraining: combinar múltiples documentos en una sola secuencia de longitud fija. Puede recuperar 30-50% de tokens que de otra forma serían desperdiciados.</p>
+  </div>
+
+  <!-- 1. El problema -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-alert-triangle"></i>1. El problema: padding ineficiente</h2>
+    <p>En pretraining, los documentos tienen longitudes variadas. Para formar batches, el estándar es truncar al máximo y <strong>rellenar con tokens de padding</strong> los documentos más cortos. Esto desperdicia compute:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">ejemplo sin packing</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-text">max_seq_len = 2048
+
+Doc A: [tok1, tok2, ..., tok120,  PAD, PAD, ..., PAD]  ← 120 tokens útiles, 1928 padding
+Doc B: [tok1, ..., tok2048]                              ← 2048 tokens útiles (raro)
+Doc C: [tok1, ..., tok350,  PAD, ..., PAD]              ← 350 tokens útiles, 1698 padding
+
+Eficiencia real: (120 + 2048 + 350) / (3 * 2048) = 40.5%
+→ 59.5% del compute se gasta en tokens de padding inútiles</code></pre>
+    </div>
+    <p>Con packing: combinamos A + C en una sola secuencia de 2048 tokens (120 + 350 + algo más), eliminando casi todo el padding.</p>
+  </div>
+
+  <!-- 2. Greedy bin-packing -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-box"></i>2. Greedy bin-packing</h2>
+    <p>El algoritmo más simple: para cada secuencia en construcción, agregar documentos hasta que no quepan más. Separar documentos con el token EOS.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — packing.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from typing import Iterator
+import numpy as np
+
+
+def greedy_pack(
+    token_sequences: list[list[int]],
+    max_seq_len: int,
+    eos_token_id: int,
+) -> Iterator[list[int]]:
+    """
+    Combina secuencias de tokens en bloques de max_seq_len.
+    Cada documento termina con eos_token_id.
+    Descarta el exceso si un doc no cabe (trunca al máximo permitido).
+    """
+    current: list[int] = []
+
+    for seq in token_sequences:
+        # Agregar EOS al final del documento
+        seq_with_eos = seq + [eos_token_id]
+
+        # Si el doc solo no cabe en una secuencia, truncar
+        if len(seq_with_eos) > max_seq_len:
+            seq_with_eos = seq_with_eos[:max_seq_len]
+
+        # Si no cabe en el bloque actual, emitir el bloque y empezar uno nuevo
+        if len(current) + len(seq_with_eos) > max_seq_len:
+            if current:
+                # Rellenar el resto con padding (solo si es necesario)
+                padded = current + [0] * (max_seq_len - len(current))
+                yield padded
+            current = seq_with_eos
+        else:
+            current.extend(seq_with_eos)
+
+    # Emitir el último bloque si tiene contenido
+    if current:
+        padded = current + [0] * (max_seq_len - len(current))
+        yield padded
+
+
+# Uso:
+all_token_sequences = [...]  # lista de listas de token IDs
+packed = list(greedy_pack(all_token_sequences, max_seq_len=2048, eos_token_id=2))</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Attention mask por documento -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-eye-off"></i>3. Attention mask por documento</h2>
+    <p>Sin una máscara adecuada, los tokens de un documento ven los tokens del documento anterior en la misma secuencia, lo que introduce <em>cross-document attention leakage</em>. Para evitarlo, necesitas una máscara de bloque diagonal.</p>
+    <p>Flash Attention 2+ soporta nativamente secuencias con múltiples documentos usando el parámetro <code>cu_seqlens</code> (cumulative sequence lengths), que es la forma más eficiente.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — attention mask por documento</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+
+
+def build_document_attention_mask(
+    doc_lengths: list[int],
+    max_seq_len: int,
+    dtype=torch.bool,
+) -> torch.Tensor:
+    """
+    Crea una máscara de atención causal que bloquea el cross-document attention.
+    Returns: (max_seq_len, max_seq_len) bool mask. True = permitir atención.
+    """
+    mask = torch.zeros(max_seq_len, max_seq_len, dtype=dtype)
+    start = 0
+    for length in doc_lengths:
+        end = start + length
+        # Atención causal dentro del documento (triangulo inferior)
+        for i in range(start, min(end, max_seq_len)):
+            for j in range(start, min(i + 1, max_seq_len)):
+                mask[i, j] = True
+        start = end
+        if start >= max_seq_len:
+            break
+    return mask
+
+
+# Para FlashAttention-2: usar cu_seqlens directamente
+def get_cu_seqlens(doc_lengths: list[int]) -> torch.Tensor:
+    """Cumulative sequence lengths para flash_attn_varlen_func."""
+    cumsum = [0]
+    for l in doc_lengths:
+        cumsum.append(cumsum[-1] + l)
+    return torch.tensor(cumsum, dtype=torch.int32)</code></pre>
+    </div>
+
+    <div class="tip"><strong>En la práctica:</strong> La mayoría de frameworks modernos (OLMo, LLaMA) implementan esto internamente. Si usas Flash Attention con el argumento <code>cu_seqlens</code>, el modelo maneja automáticamente el bloqueo entre documentos sin necesidad de construir la máscara explícitamente.</div>
+  </div>
+
+  <!-- 4. HuggingFace DataCollator -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-packages"></i>4. Integración con HuggingFace</html>
+    <p>Si usas el ecosistema HuggingFace, la forma más simple es pre-procesar tu dataset con packing antes del entrenamiento:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — dataset con packing</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import Dataset
+from transformers import AutoTokenizer, DataCollatorForLanguageModeling
+import numpy as np
+
+
+def pack_dataset(
+    examples: dict,
+    tokenizer,
+    max_seq_len: int = 2048,
+) -> dict:
+    """Función de map para empacar un dataset de HuggingFace."""
+    all_tokens = []
+    for text in examples["text"]:
+        tokens = tokenizer(text, add_special_tokens=False)["input_ids"]
+        tokens.append(tokenizer.eos_token_id)
+        all_tokens.extend(tokens)
+
+    packed_input_ids = []
+    packed_labels = []
+    for i in range(0, len(all_tokens) - max_seq_len + 1, max_seq_len):
+        chunk = all_tokens[i : i + max_seq_len]
+        if len(chunk) == max_seq_len:
+            packed_input_ids.append(chunk)
+            packed_labels.append(chunk)  # CLM: labels = input_ids
+
+    return {"input_ids": packed_input_ids, "labels": packed_labels}
+
+
+# Usar en el pipeline de training
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+raw_dataset = Dataset.from_json("data/raw/es_sample.jsonl")
+
+packed = raw_dataset.map(
+    lambda examples: pack_dataset(examples, tokenizer, max_seq_len=2048),
+    batched=True,
+    batch_size=1000,
+    remove_columns=raw_dataset.column_names,
+    num_proc=16,
+)
+
+collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+print(f"Sequences packed: {len(packed):,}")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Comparativa -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-bar"></i>5. Comparativa de eficiencia</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — medir eficiencia</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+
+def measure_packing_efficiency(doc_lengths: list[int], max_seq_len: int) -> dict:
+    """Compara tokens útiles con vs sin packing."""
+    # Sin packing: cada doc se trunca/rellena a max_seq_len
+    total_tokens_without = len(doc_lengths) * max_seq_len
+    useful_tokens = sum(min(l, max_seq_len) for l in doc_lengths)
+    efficiency_without = useful_tokens / total_tokens_without
+
+    # Con packing: cuántas secuencias llenas obtenemos
+    total_tokens_raw = sum(min(l + 1, max_seq_len) for l in doc_lengths)  # +1 para EOS
+    n_sequences = total_tokens_raw // max_seq_len
+    total_tokens_with = n_sequences * max_seq_len
+    efficiency_with = (total_tokens_raw - (total_tokens_with - total_tokens_raw % max_seq_len)) / total_tokens_with
+
+    return {
+        "sin_packing": f"{efficiency_without:.1%}",
+        "con_packing": f"{min(efficiency_with, 1.0):.1%}",
+        "mejora": f"{min(efficiency_with, 1.0) / efficiency_without:.1f}x",
+    }
+
+# Simular distribución típica de documentos web en español
+rng = np.random.default_rng(42)
+doc_lengths = rng.integers(50, 5000, size=100_000).tolist()
+
+resultado = measure_packing_efficiency(doc_lengths, max_seq_len=2048)
+print(f"Sin packing: {resultado['sin_packing']}")
+print(f"Con packing: {resultado['con_packing']}")
+print(f"Mejora:      {resultado['mejora']}")</code></pre>
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2307.08691" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FlashAttention-2 (Dao, 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FineWeb (Penedo et al., 2024)</a>
+      <a class="source-link" href="https://huggingface.co/docs/transformers/main_classes/data_collator" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF DataCollator Docs</a>
+      <a class="source-link" href="https://github.com/Dao-AILab/flash-attention" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>flash-attention (varlen)</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

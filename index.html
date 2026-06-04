@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LatamGPT — Engineering Hub</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #ffffff;
+    --bg2:      #f7f6f2;
+    --bg3:      #f1f0eb;
+    --text:     #1a1a18;
+    --text2:    #5f5e5a;
+    --text3:    #888780;
+    --border:   rgba(0,0,0,0.10);
+    --border2:  rgba(0,0,0,0.18);
+    --radius:   10px;
+    --radius-sm:6px;
+    --accent:   #3C3489;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:    #1c1c1a;
+      --bg2:   #242422;
+      --bg3:   #2c2c2a;
+      --text:  #e8e6df;
+      --text2: #9c9a92;
+      --text3: #6a6860;
+      --border:rgba(255,255,255,0.09);
+      --border2:rgba(255,255,255,0.16);
+      --accent:#AFA9EC;
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg2);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .site-header {
+    background: var(--bg);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 56px;
+  }
+  .logo {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-pill {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 99px;
+    background: #EEEDFE;
+    color: #3C3489;
+    letter-spacing: 0.02em;
+  }
+  @media (prefers-color-scheme: dark) {
+    .logo-pill { background: #3C3489; color: #CECBF6; }
+  }
+  .header-spacer { flex: 1; }
+  .header-link {
+    font-size: 13px;
+    color: var(--text2);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border2);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .header-link:hover { background: var(--bg3); color: var(--text); }
+
+  .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  .hero {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px 36px;
+    margin-bottom: 32px;
+    display: flex;
+    align-items: flex-start;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .hero-text { flex: 1; min-width: 280px; }
+  .hero-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .hero-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    line-height: 1.3;
+  }
+  .hero-desc {
+    font-size: 14px;
+    color: var(--text2);
+    max-width: 540px;
+    line-height: 1.7;
+  }
+  .hero-stats {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+  }
+  .hstat { text-align: center; }
+  .hstat-n { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .hstat-l { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 12px;
+    padding: 0 2px;
+  }
+
+  .grid { display: grid; gap: 10px; margin-bottom: 28px; }
+  .grid-1 { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+  .card {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .card:hover { border-color: var(--border2); box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+
+  .card-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .card-content { flex: 1; min-width: 0; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .card-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+  .card-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .card-arrow {
+    font-size: 14px;
+    color: var(--text3);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* Card color themes */
+  .c-roadmap .card-icon { background: #EEEDFE; color: #3C3489; }
+  .c-infra   .card-icon { background: #E1F5EE; color: #085041; }
+  .c-datos   .card-icon { background: #E1F5EE; color: #085041; }
+  .c-train   .card-icon { background: #E6F1FB; color: #0C447C; }
+  .c-deploy  .card-icon { background: #FAEEDA; color: #633806; }
+  .c-debug   .card-icon { background: #FAECE7; color: #712B13; }
+
+  .badge-roadmap  { background: #EEEDFE; color: #3C3489; }
+  .badge-infra    { background: #E1F5EE; color: #085041; }
+  .badge-datos    { background: #E1F5EE; color: #085041; }
+  .badge-train    { background: #E6F1FB; color: #0C447C; }
+  .badge-deploy   { background: #FAEEDA; color: #633806; }
+  .badge-debug    { background: #FAECE7; color: #712B13; }
+
+  @media (prefers-color-scheme: dark) {
+    .c-roadmap .card-icon { background: #26215C; color: #AFA9EC; }
+    .c-infra   .card-icon { background: #04342C; color: #9FE1CB; }
+    .c-datos   .card-icon { background: #04342C; color: #9FE1CB; }
+    .c-train   .card-icon { background: #042C53; color: #B5D4F4; }
+    .c-deploy  .card-icon { background: #412402; color: #FAC775; }
+    .c-debug   .card-icon { background: #4A1B0C; color: #F5C4B3; }
+    .badge-roadmap  { background: #26215C; color: #AFA9EC; }
+    .badge-infra    { background: #04342C; color: #9FE1CB; }
+    .badge-datos    { background: #04342C; color: #9FE1CB; }
+    .badge-train    { background: #042C53; color: #B5D4F4; }
+    .badge-deploy   { background: #412402; color: #FAC775; }
+    .badge-debug    { background: #4A1B0C; color: #F5C4B3; }
+  }
+
+  /* Roadmap card (big) */
+  .card-roadmap {
+    padding: 24px 28px;
+  }
+  .card-roadmap .card-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+    border-radius: 10px;
+  }
+  .card-roadmap .card-title { font-size: 16px; }
+  .card-roadmap .card-desc { font-size: 13px; }
+
+  footer {
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+    color: var(--text3);
+    border-top: 0.5px solid var(--border);
+    margin-top: 40px;
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="header-link" href="latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i>
+      Roadmap
+    </a>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="hero">
+    <div class="hero-text">
+      <div class="hero-eyebrow">CENIA · LatamGPT</div>
+      <h1 class="hero-title">Portal de ingeniería<br>para Latam LLMs</h1>
+      <p class="hero-desc">
+        Recursos para ingenieros y practicantes que se suman al proyecto LatamGPT.
+        Encontrarás la ruta de aprendizaje teórica y guías prácticas con código
+        sobre el stack completo: desde datos hasta deployment.
+      </p>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hstat-n">6</div><div class="hstat-l">áreas temáticas</div></div>
+      <div class="hstat"><div class="hstat-n">81</div><div class="hstat-l">temas en roadmap</div></div>
+      <div class="hstat"><div class="hstat-n">10</div><div class="hstat-l">guías con código</div></div>
+    </div>
+  </div>
+
+  <!-- Ruta de Aprendizaje -->
+  <div class="section-label">Ruta de Aprendizaje</div>
+  <div class="grid grid-1" style="margin-bottom: 28px;">
+    <a class="card card-roadmap c-roadmap" href="latamgpt-roadmap.html">
+      <div class="card-icon"><i class="ti ti-map-2" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          LatamGPT — Ruta de aprendizaje
+          <span class="card-badge badge-roadmap">81 temas · 110+ papers</span>
+        </div>
+        <div class="card-desc">
+          Roadmap interactivo de fundamentos a SOTA 2026. 6 secciones: Datos, Pretraining, Post-training,
+          Datos Sintéticos, Benchmarks y Modelos de Referencia. Con búsqueda y filtros por nivel.
+        </div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
+  <!-- Infraestructura -->
+  <div class="section-label">Infraestructura & MLOps</div>
+  <div class="grid grid-2">
+    <a class="card c-infra" href="guias/cluster.html">
+      <div class="card-icon"><i class="ti ti-server" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Uso del Cluster HPC
+          <span class="card-badge badge-infra">Básico</span>
+        </div>
+        <div class="card-desc">SSH, llaves públicas, VS Code Remote, rsync, htop, nvtop, nvidia-smi, CUDA_VISIBLE_DEVICES, tmux, SLURM y Git en el cluster.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-infra" href="guias/mlops.html">
+      <div class="card-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          MLOps: W&amp;B + SLURM
+          <span class="card-badge badge-infra">Core</span>
+        </div>
+        <div class="card-desc">Experiment tracking con Weights &amp; Biases, logging de métricas y artefactos, scripts SLURM para jobs de entrenamiento y array jobs.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
+  <!-- Datos -->
+  <div class="section-label">Datos</div>
+  <div class="grid grid-3">
+    <a class="card c-datos" href="guias/tokenizacion-cloud.html">
+      <div class="card-icon"><i class="ti ti-binary" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Tokenización en Cloud</div>
+        <div class="card-desc">Pipeline Datatrove, tokenización paralela a escala de TB, verificar cobertura del vocabulario en es/pt.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-datos" href="guias/filtrado.html">
+      <div class="card-icon"><i class="ti ti-filter" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Filtrado de Calidad</div>
+        <div class="card-desc">Clasificadores fastText, filtro de perplejidad KenLM, reglas Gopher/C4 y pipeline completo con Datatrove.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-datos" href="guias/anonimizacion.html">
+      <div class="card-icon"><i class="ti ti-shield-lock" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Anonimización de PII</div>
+        <div class="card-desc">Remoción de datos personales con Presidio y spaCy: nombres, emails, RUT/CUIT, teléfonos e IPs en es/pt.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-datos" href="guias/packing.html">
+      <div class="card-icon"><i class="ti ti-box" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Sequence Packing</div>
+        <div class="card-desc">Eliminar padding (~30-50% de tokens desperdiciados). Greedy bin-packing e integración con HuggingFace DataCollator.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
+  <!-- Entrenamiento -->
+  <div class="section-label">Entrenamiento & Modelos</div>
+  <div class="grid grid-3">
+    <a class="card c-train" href="guias/entrenamiento.html">
+      <div class="card-icon"><i class="ti ti-brain" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Código de Entrenamiento</div>
+        <div class="card-desc">Loop de pretraining con accelerate, DeepSpeed ZeRO, gradient accumulation, bf16, checkpointing y cómo interpretar la loss curve.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-train" href="guias/bert.html">
+      <div class="card-icon"><i class="ti ti-topology-star-3" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Modelos BERT es/pt</div>
+        <div class="card-desc">Fine-tuning de BETO, BERTimbau y RoBERTa-BNE para clasificación de texto y NER en español/portugués.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-debug" href="guias/debugging.html">
+      <div class="card-icon"><i class="ti ti-bug" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Debugging de Entrenamiento</div>
+        <div class="card-desc">Loss spikes, gradient norms, OOM errors, NaN en gradientes y memory profiling con torch.profiler.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
+  <!-- Deployment -->
+  <div class="section-label">Deployment</div>
+  <div class="grid grid-2">
+    <a class="card c-deploy" href="guias/inferencia.html">
+      <div class="card-icon"><i class="ti ti-server-bolt" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Serving con vLLM
+          <span class="card-badge badge-deploy">Básico</span>
+        </div>
+        <div class="card-desc">Levantar un servidor vLLM con PagedAttention, hacer requests con la API OpenAI-compatible y monitorear throughput.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · Actualizado junio 2026
+</footer>
+
+</body>
+</html>

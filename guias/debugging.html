@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Debugging de Entrenamiento — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  .warning { background:rgba(186,117,23,0.07); border-left:3px solid #BA7517; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } .warning { background:rgba(250,199,117,0.07); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Entrenamiento</div>
+    <h1 class="guide-title">Debugging de Entrenamiento</h1>
+    <p class="guide-desc">Diagnóstico y resolución de los problemas más comunes en pretraining y fine-tuning: loss spikes, gradient norms, NaN/Inf, OOM errors y memory profiling con torch.profiler.</p>
+  </div>
+
+  <!-- 1. Loggear métricas clave -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-line"></i>1. Loggear las métricas correctas desde el inicio</h2>
+    <p>El 80% de los problemas de training se detectan simplemente teniendo las métricas correctas en W&B. Agrega esto a tu loop antes de lanzar cualquier run largo:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — métricas de diagnóstico</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+import wandb
+import math
+
+
+def log_training_step(
+    accelerator, model, loss, optimizer, scheduler, global_step, log_every=10
+):
+    if global_step % log_every != 0:
+        return
+
+    # Gradient norm total
+    total_norm = 0.0
+    for p in model.parameters():
+        if p.grad is not None:
+            total_norm += p.grad.data.norm(2).item() ** 2
+    total_norm = total_norm ** 0.5
+
+    # Detectar NaN/Inf en gradientes
+    has_nan_grad = any(
+        p.grad is not None and torch.isnan(p.grad).any()
+        for p in model.parameters()
+    )
+    has_inf_grad = any(
+        p.grad is not None and torch.isinf(p.grad).any()
+        for p in model.parameters()
+    )
+
+    if accelerator.is_main_process:
+        wandb.log({
+            "train/loss": loss.item(),
+            "train/perplexity": min(math.exp(loss.item()), 1e6),
+            "train/grad_norm": total_norm,
+            "train/lr": scheduler.get_last_lr()[0],
+            "debug/nan_grad": int(has_nan_grad),
+            "debug/inf_grad": int(has_inf_grad),
+        }, step=global_step)
+
+        # Alerta en consola si hay problema
+        if has_nan_grad or has_inf_grad:
+            print(f"⚠️  Step {global_step}: {'NaN' if has_nan_grad else 'Inf'} en gradientes!")
+        if total_norm > 10.0:
+            print(f"⚠️  Step {global_step}: Gradient norm alta ({total_norm:.2f})")</code></pre>
+    </div>
+  </div>
+
+  <!-- 2. Loss spikes -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-trending-up"></i>2. Loss spikes</h2>
+    <p>Una subida brusca de la loss (>0.3 en pocos steps) interrumpe el training. Las causas más comunes:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">text — diagnóstico de loss spikes</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-text">Causa 1: Bad batch (datos corruptos)
+  Síntoma: loss sube bruscamente y luego vuelve a la normalidad
+  Diagnóstico: el spike dura 1-5 steps
+  Solución: revisar el batch en el step que generó el spike;
+            agregar filtros de calidad más agresivos al dataset
+
+Causa 2: Learning rate muy alto
+  Síntoma: spikes frecuentes o loss que no converge
+  Diagnóstico: spikes al inicio del training o tras cambio de LR
+  Solución: reducir LR a 1/3 o usar un warmup más largo
+
+Causa 3: Overflow numérico en bf16
+  Síntoma: gradients nan/inf reportados en debug/nan_grad
+  Diagnóstico: aparece junto con grad_norm -> inf
+  Solución: reducir max_grad_norm, verificar que usas bf16 (no fp16)
+            bf16 tiene mayor rango que fp16 para LLMs
+
+Causa 4: Gradient clipping insuficiente
+  Síntoma: grad_norm sube a 50-100x lo normal justo antes del spike
+  Solución: reducir max_norm de 1.0 a 0.5 o incluso 0.3</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — recovery tras loss spike</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">SPIKE_THRESHOLD = 0.5   # subida de loss que consideramos spike
+prev_loss = None
+
+for step, batch in enumerate(train_dataloader):
+    with accelerator.accumulate(model):
+        outputs = model(**batch)
+        loss = outputs.loss
+        accelerator.backward(loss)
+
+        if accelerator.sync_gradients:
+            grad_norm = accelerator.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+            # Detectar spike y saltar el step
+            if prev_loss is not None and (loss.item() - prev_loss) > SPIKE_THRESHOLD:
+                print(f"⚠️  Loss spike en step {global_step}: {prev_loss:.3f} → {loss.item():.3f}")
+                optimizer.zero_grad()  # descartar gradientes malos
+                continue              # no actualizar pesos
+
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+        prev_loss = loss.item()</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. NaN/Inf -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-math-x-divide"></i>3. NaN e Inf en gradientes</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — detectar y localizar NaN</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+
+
+# Activar detección automática de NaN/Inf (lento, solo para debugging)
+torch.autograd.set_detect_anomaly(True)
+# IMPORTANTE: desactivar después de debuggear, impacto severo en performance
+
+
+def find_nan_parameters(model) -> list[str]:
+    """Encuentra capas con NaN en sus pesos o gradientes."""
+    bad_params = []
+    for name, param in model.named_parameters():
+        if param.data is not None and torch.isnan(param.data).any():
+            bad_params.append(f"WEIGHT_NaN: {name}")
+        if param.grad is not None and torch.isnan(param.grad).any():
+            bad_params.append(f"GRAD_NaN: {name}")
+    return bad_params
+
+
+def check_batch_for_nan(batch: dict) -> bool:
+    """Detecta NaN en el batch de entrada."""
+    for key, tensor in batch.items():
+        if isinstance(tensor, torch.Tensor) and torch.isnan(tensor).any():
+            print(f"NaN en batch[{key}]")
+            return True
+    return False
+
+
+# Causas comunes:
+# 1. Datos con caracteres especiales → ID de token inválidos
+# 2. fp16 (no bf16) con valores muy grandes → overflow
+# 3. LayerNorm / embedding con varianzas explosivas al inicio
+# Solución general: verificar datos, usar bf16 en vez de fp16</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. OOM errors -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database-off"></i>4. OOM errors (Out of Memory)</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">text — leer el stack trace de CUDA OOM</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-text">torch.cuda.OutOfMemoryError: CUDA out of memory.
+Tried to allocate 2.50 GiB (GPU 0; 79.20 GiB total capacity;
+67.35 GiB already allocated; 1.98 GiB free; 73.18 GiB reserved in total)
+
+Cómo leer esto:
+  "already allocated" = lo que el modelo + optimizador + KV cache usan
+  "reserved" = lo que PyTorch reservó (puede ser mayor que "allocated")
+  "free" = VRAM disponible para nueva asignación
+
+Estrategias de reducción de memoria (en orden de impacto):
+  1. Reducir batch_size (más gradient_accumulation_steps para compensar)
+  2. Habilitar gradient checkpointing:
+       model.gradient_checkpointing_enable()
+     → intercambia memoria por recompute en backward pass
+  3. Usar DeepSpeed ZeRO-2 o ZeRO-3 (distribuye optimizer states)
+  4. Usar bf16 (si no lo estás usando)
+  5. Reducir max_seq_len
+  6. Usar LoRA / QLoRA para fine-tuning</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — gradient checkpointing + memory tracking</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+
+# Habilitar gradient checkpointing (recomendado para modelos grandes)
+model.gradient_checkpointing_enable()
+
+# Ver uso de memoria GPU antes y después de cargar el modelo
+def print_gpu_memory(label: str = ""):
+    allocated = torch.cuda.memory_allocated() / 1e9
+    reserved = torch.cuda.memory_reserved() / 1e9
+    max_alloc = torch.cuda.max_memory_allocated() / 1e9
+    print(f"[{label}] Allocated: {allocated:.1f}GB | Reserved: {reserved:.1f}GB | Peak: {max_alloc:.1f}GB")
+
+print_gpu_memory("before model load")
+model = load_model(...)
+print_gpu_memory("after model load")
+
+# Limpiar caché entre evaluaciones
+torch.cuda.empty_cache()</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Memory profiling -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-microscope"></i>5. Memory profiling con torch.profiler</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — profiling de un step de training</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from torch.profiler import profile, record_function, ProfilerActivity
+
+
+def profile_training_step(model, batch, optimizer):
+    """Perfila un step para identificar cuellos de botella de memoria."""
+    with profile(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        profile_memory=True,
+        record_shapes=True,
+        with_stack=False,
+    ) as prof:
+        with record_function("forward"):
+            outputs = model(**batch)
+            loss = outputs.loss
+
+        with record_function("backward"):
+            loss.backward()
+
+        with record_function("optimizer_step"):
+            optimizer.step()
+            optimizer.zero_grad()
+
+    # Mostrar las operaciones que más memoria consumen
+    print(prof.key_averages().table(
+        sort_by="self_cuda_memory_usage",
+        row_limit=15,
+    ))
+
+    # Guardar para visualizar en TensorBoard o Chrome Tracing
+    prof.export_chrome_trace("profiling_trace.json")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Interpretar el profiler:</strong> Busca operaciones con <code>self_cuda_memory_usage</code> alto que no sean el modelo ni el optimizer. Los activations grandes en capas de atención son normales; tensores temporales inusuales pueden indicar operaciones ineficientes o memory leaks.</div>
+  </div>
+
+  <!-- 6. Checklist -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-checklist"></i>6. Checklist antes de lanzar un run largo</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">text — pre-launch checklist</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-text">□ Run de 100 steps en datos reales (no toy data) sin errores
+□ Loss curve baja en los primeros 50 steps (confirma que el modelo aprende)
+□ Gradient norm estable (< 2.0) durante warmup
+□ No hay NaN/Inf en debug/nan_grad ni debug/inf_grad
+□ GPU utilization > 90% (revisar con nvidia-smi)
+□ DataLoader no es el cuello de botella (GPU no espera datos)
+□ Checkpoint de prueba guardado y cargado correctamente
+□ W&B run inicializado y recibiendo métricas
+□ Script SLURM con logs activados y notificación por email
+□ Suficiente espacio en disco para checkpoints (estimar: 4 x tamaño_modelo)</code></pre>
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link" href="https://pytorch.org/docs/stable/profiler.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>torch.profiler Docs</a>
+      <a class="source-link" href="https://www.deepspeed.ai/docs/config-json/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>DeepSpeed Debugging Guide</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2304.01373" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Pythia — análisis de checkpoints (Biderman et al., 2023)</a>
+      <a class="source-link" href="https://pytorch.org/docs/stable/notes/cuda.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>PyTorch CUDA Semantics</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

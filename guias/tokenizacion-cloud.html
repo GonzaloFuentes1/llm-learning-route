@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tokenización en Cloud — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <h1 class="guide-title">Tokenización en Cloud</h1>
+    <p class="guide-desc">Convertir un corpus de texto crudo en archivos de token IDs listos para entrenamiento, a escala de cientos de miles de millones de tokens. Usando Datatrove (HuggingFace) con paralelismo en cluster.</p>
+  </div>
+
+  <!-- 1. Por qué a escala -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-info-circle"></i>1. El problema de escala</h2>
+    <p>Un corpus típico para pretraining tiene entre 100B y 15T tokens. Tokenizar secuencialmente con un solo proceso tardaría días. La solución es distribuir el trabajo: cada worker tokeniza un subconjunto de archivos en paralelo.</p>
+    <p>FineWeb (2024) tokeniznó ~15T tokens usando Datatrove con cientos de workers en paralelo. El resultado son archivos <code>.ds</code> (DatasetDocument Sequence), memory-mapped, que se pueden leer directamente durante el entrenamiento sin cargar todo a RAM.</p>
+    <div class="tip"><strong>Flujo típico:</strong> texto crudo (JSONL) → DocumentTokenizer → archivos <code>.ds</code> → DataLoader durante training.</div>
+  </div>
+
+  <!-- 2. Instalar Datatrove -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package"></i>2. Setup</h2>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install datatrove[io]     # para I/O local
+pip install datatrove[s3]     # para S3/GCS
+pip install transformers      # para el tokenizador HuggingFace</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Pipeline Datatrove -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-binary"></i>3. Pipeline de tokenización con Datatrove</h2>
+    <p>Datatrove usa un modelo de pipeline: defines una lista de pasos y un executor que los corre en paralelo sobre tus datos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — tokenize.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datatrove.executor import LocalPipelineExecutor, SlurmPipelineExecutor
+from datatrove.pipeline.readers import JsonlReader
+from datatrove.pipeline.tokens import DocumentTokenizer
+
+
+def get_pipeline(input_folder: str, output_folder: str, tokenizer_name: str):
+    return [
+        JsonlReader(
+            data_folder=input_folder,
+            text_key="text",           # campo de texto en el JSONL
+            id_key="id",
+            glob_pattern="*.jsonl",
+        ),
+        DocumentTokenizer(
+            output_folder=output_folder,
+            tokenizer_name_or_path=tokenizer_name,
+            eos_token="&lt;/s&gt;",
+            max_tokens_per_file=1_000_000_000,  # 1B tokens por archivo .ds
+        ),
+    ]
+
+
+if __name__ == "__main__":
+    executor = LocalPipelineExecutor(
+        pipeline=get_pipeline(
+            input_folder="data/raw/es/",
+            output_folder="data/tokens/es/",
+            tokenizer_name="meta-llama/Llama-2-7b-hf",
+        ),
+        tasks=64,    # número de shards/tareas
+        workers=16,  # procesos en paralelo (ajustar a CPUs disponibles)
+        logging_dir="logs/tokenization/",
+    )
+    executor.run()</code></pre>
+    </div>
+
+    <div class="tip"><strong>tasks vs workers:</strong> <code>tasks</code> divide los datos en N partes; <code>workers</code> define cuántas corren en paralelo. Con <code>tasks=64, workers=16</code>, se procesan 16 shards simultáneamente hasta completar las 64.</div>
+  </div>
+
+  <!-- 4. Lanzar en SLURM -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-list-check"></i>4. Lanzar en SLURM con SlurmPipelineExecutor</h2>
+    <p>Para escalar a cientos de nodos, reemplaza <code>LocalPipelineExecutor</code> por <code>SlurmPipelineExecutor</code>. Datatrove genera y envía los jobs automáticamente.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — tokenize_slurm.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datatrove.executor import SlurmPipelineExecutor
+from datatrove.pipeline.readers import JsonlReader
+from datatrove.pipeline.tokens import DocumentTokenizer
+
+executor = SlurmPipelineExecutor(
+    pipeline=[
+        JsonlReader(
+            data_folder="/data/raw/",
+            text_key="text",
+            glob_pattern="**/*.jsonl",
+        ),
+        DocumentTokenizer(
+            output_folder="/data/tokens/",
+            tokenizer_name_or_path="meta-llama/Llama-2-7b-hf",
+            eos_token="&lt;/s&gt;",
+            max_tokens_per_file=2_000_000_000,
+        ),
+    ],
+    tasks=512,
+    workers=64,           # workers por job
+    time="04:00:00",      # tiempo límite por job SLURM
+    partition="cpu",
+    cpus_per_task=2,
+    mem_per_cpu_gb=4,
+    logging_dir="logs/slurm_tokenization/",
+    job_name="tokenize_es",
+)
+executor.run()</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Script alternativo con multiprocessing -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-reload"></i>5. Alternativa: tokenización paralela custom</h2>
+    <p>Para mayor control o datasets pequeños (~10B tokens), puedes usar <code>multiprocessing</code> de Python directamente con el tokenizador de HuggingFace.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — tokenize_simple.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import numpy as np
+from pathlib import Path
+from multiprocessing import Pool
+from transformers import AutoTokenizer
+
+TOKENIZER_PATH = "meta-llama/Llama-2-7b-hf"
+INPUT_DIR = Path("data/raw/")
+OUTPUT_DIR = Path("data/tokens/")
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+tokenizer = None  # se inicializa en cada worker
+
+def init_worker():
+    global tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
+
+def tokenize_file(jsonl_path: Path) -> dict:
+    all_ids = []
+    with open(jsonl_path) as f:
+        for line in f:
+            doc = json.loads(line)
+            ids = tokenizer.encode(doc["text"], add_special_tokens=False)
+            ids.append(tokenizer.eos_token_id)
+            all_ids.extend(ids)
+
+    out_path = OUTPUT_DIR / jsonl_path.with_suffix(".npy").name
+    np.save(out_path, np.array(all_ids, dtype=np.uint16))
+    return {"file": str(jsonl_path), "tokens": len(all_ids)}
+
+if __name__ == "__main__":
+    files = list(INPUT_DIR.glob("**/*.jsonl"))
+    print(f"Tokenizando {len(files)} archivos...")
+
+    with Pool(processes=16, initializer=init_worker) as pool:
+        results = pool.map(tokenize_file, files)
+
+    total = sum(r["tokens"] for r in results)
+    print(f"Total: {total:,} tokens ({total/1e9:.2f}B)")</code></pre>
+    </div>
+
+    <div class="tip"><strong>uint16 vs int32:</strong> Si tu vocabulario tiene ≤ 65535 tokens usa <code>uint16</code> (2 bytes/token). Vocabularios más grandes (como los de 128k tokens de LLaMA-3) requieren <code>int32</code> (4 bytes/token).</div>
+  </div>
+
+  <!-- 6. Verificar cobertura -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-checklist"></i>6. Verificar cobertura del vocabulario</h2>
+    <p>La "fertilidad" del tokenizador mide cuántos tokens genera por palabra. Un tokenizador diseñado para inglés puede generar el doble de tokens para texto en español, lo que reduce la eficiencia y el contexto efectivo.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+
+# Textos de prueba en es/pt
+texts_es = [
+    "La tokenización es fundamental para el rendimiento en español.",
+    "Los modelos de lenguaje grande requieren datos de alta calidad.",
+    "El procesamiento del lenguaje natural en latinoamérica es un reto.",
+]
+
+# Medir fertilidad: tokens / palabras
+for text in texts_es:
+    words = len(text.split())
+    tokens = len(tokenizer.encode(text, add_special_tokens=False))
+    fertility = tokens / words
+    print(f"Fertilidad: {fertility:.2f} tokens/palabra  |  '{text[:40]}...'")
+
+# Comparar contra tokenizador nativo es/pt
+from transformers import AutoTokenizer
+tok_es = AutoTokenizer.from_pretrained("dccuchile/bert-base-spanish-wwm-cased")
+# Un tokenizador para español debería tener fertilidad ~1.2-1.5x
+# El tokenizador inglés puede tener 2-3x para texto en español</code></pre>
+    </div>
+
+    <div class="tip"><strong>Regla de oro:</strong> Para un LLM Latam de calidad, la fertilidad en español/portugués debería ser ≤ 1.5x la fertilidad en inglés para el mismo texto. Si es mayor, considera entrenar un tokenizador propio o usar uno multilingüe como el de mGPT o BLOOM.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Datatrove (HuggingFace)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FineWeb (Penedo et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1808.06226" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>SentencePiece (Kudo & Richardson, 2018)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2012.15613" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Fertility Analysis (Rust et al., 2021)</a>
+      <a class="source-link" href="https://huggingface.co/docs/tokenizers" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF Tokenizers Docs</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>
