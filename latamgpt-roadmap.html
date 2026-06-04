@@ -316,8 +316,8 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-n">6</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">81</div><div class="stat-l">temas</div></div>
-      <div class="stat"><div class="stat-n">110+</div><div class="stat-l">papers</div></div>
+      <div class="stat"><div class="stat-n">84</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">120+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
 
@@ -347,7 +347,7 @@
 const SECTIONS = [
   {
     id:"datos", cls:"s-datos", icon:"ti-database", title:"Datos",
-    pill:"4 niveles · 14 temas",
+    pill:"4 niveles · 15 temas",
     tracks:[
       { label:"Básico", items:[
         { level:"basic", title:"Fundamentos de texto y tokenización",
@@ -415,6 +415,10 @@ const SECTIONS = [
           tags:["es/pt","soberanía","Latam"],
           papers:[{l:"CulturaX (Nguyen et al., 2023)",u:"https://arxiv.org/abs/2309.09400"},{l:"LatamQA (EACL 2026)",u:"https://arxiv.org/abs/2406.07228"}],
           res:[{l:"LatamGPT (HF)",u:"https://huggingface.co/latamgpt"}]},
+        { level:"sota", title:"RefinedWeb",
+          desc:"Pipeline de procesamiento agresivo de CommonCrawl del equipo de Falcon. Demuestra que heurísticas bien calibradas + deduplicación masiva superan en calidad a filtros de clasificadores. Base del dataset de Falcon-40B/180B.",
+          tags:["RefinedWeb","FalconLM","CC","heurísticas","calidad vs clasificadores"],
+          papers:[{l:"RefinedWeb (Penedo et al., 2023)",u:"https://arxiv.org/abs/2306.01116"}],res:[]},
       ]},
     ]
   },
@@ -461,7 +465,7 @@ const SECTIONS = [
         { level:"advanced", title:"Arquitecturas modernas: GQA, MoE, RoPE",
           desc:"Grouped-query attention, Mixture of Experts estilo DeepSeek-V3, RoPE y variantes.",
           tags:["GQA","MoE","RoPE"],
-          papers:[{l:"GQA (Ainslie et al., 2023)",u:"https://arxiv.org/abs/2305.13245"},{l:"RoPE (Su et al., 2021)",u:"https://arxiv.org/abs/2104.09864"}],res:[]},
+          papers:[{l:"GQA (Ainslie et al., 2023)",u:"https://arxiv.org/abs/2305.13245"},{l:"RoPE (Su et al., 2021)",u:"https://arxiv.org/abs/2104.09864"},{l:"SwiGLU / GLU Variants (Shazeer, 2020)",u:"https://arxiv.org/abs/2002.05202"},{l:"Switch Transformers (Fedus et al., 2021)",u:"https://arxiv.org/abs/2101.03961"}],res:[]},
         { level:"advanced", title:"Long context pretraining",
           desc:"RoPE scaling, YaRN, LongRoPE. Ventanas de 128k+ tokens.",
           tags:["YaRN","LongRoPE","ring attention"],
@@ -484,7 +488,7 @@ const SECTIONS = [
         { level:"sota", title:"Multi-token prediction (MTP)",
           desc:"Predecir múltiples tokens a la vez. Mejora velocidad de inferencia.",
           tags:["MTP","DeepSeek","speculative decoding"],
-          papers:[{l:"MTP Meta (Gloeckle et al., 2024)",u:"https://arxiv.org/abs/2404.19737"},{l:"DeepSeek-V3 (DeepSeek-AI, 2024)",u:"https://arxiv.org/abs/2412.19437"}],res:[]},
+          papers:[{l:"MTP Meta (Gloeckle et al., 2024)",u:"https://arxiv.org/abs/2404.19737"},{l:"DeepSeek-V3 (DeepSeek-AI, 2024)",u:"https://arxiv.org/abs/2412.19437"},{l:"Speculative Decoding (Leviathan et al., 2023)",u:"https://arxiv.org/abs/2211.17192"},{l:"Assisted Decoding (Chen et al., 2023)",u:"https://arxiv.org/abs/2302.01318"}],res:[]},
         { level:"sota", title:"Evaluación durante pretraining",
           desc:"Checkpointing estratégico, eval continuo con lm-evaluation-harness.",
           tags:["lm-eval","Pythia","checkpointing"],
@@ -640,7 +644,7 @@ const SECTIONS = [
   },
   {
     id:"bench", cls:"s-bench", icon:"ti-chart-bar", title:"Benchmarks & Evaluación",
-    pill:"5 categorías · 23 benchmarks",
+    pill:"5 categorías · 24 benchmarks",
     tracks:[
       { label:"Conocimiento general", items:[
         { level:"sat", title:"MMLU",
@@ -682,6 +686,11 @@ const SECTIONS = [
           tags:["BBH","reasoning","anti-saturado","23 tareas","frontier"],
           papers:[{l:"Challenging BIG-Bench Tasks (Suzgun et al., 2022)",u:"https://arxiv.org/abs/2210.09261"}],
           res:[{l:"BIG-Bench Hard (HF)",u:"https://huggingface.co/datasets/maveriq/bigbenchhard"}]},
+        { level:"sota", title:"Humanity's Last Exam (HLE)",
+          desc:"2500 preguntas de nivel experto en 100+ materias (física, matemáticas, derecho, biología). Los mejores modelos llegan al ~15% en 2025. Diseñado para ser el benchmark post-GPQA: aún no saturado por ningún modelo.",
+          tags:["HLE","expert-level","frontier","2025","no saturado"],
+          papers:[{l:"Humanity's Last Exam (Phan et al., 2025)",u:"https://arxiv.org/abs/2501.14249"}],
+          res:[{l:"HLE leaderboard",u:"https://scale.com/leaderboard/humanity_last_exam"}]},
       ]},
       { label:"Código", items:[
         { level:"sat", title:"HumanEval y MBPP",
@@ -755,7 +764,7 @@ const SECTIONS = [
   },
   {
     id:"models", cls:"s-models", icon:"ti-robot", title:"Modelos de referencia",
-    pill:"5 familias · 21 modelos",
+    pill:"5 familias · 22 modelos",
     tracks:[
       { label:"Modelos base fundacionales", items:[
         { level:"basic", title:"GPT-2 y GPT-3 (OpenAI)",
@@ -822,6 +831,10 @@ const SECTIONS = [
           desc:"Modelos pequeños (3.8B-14B) entrenados con datos sintéticos de alta calidad. Demostraron que la calidad del dato > cantidad.",
           tags:["small model","datos sintéticos","3.8B","calidad > cantidad"],
           papers:[{l:"Phi-3 (Abdin et al., 2024)",u:"https://arxiv.org/abs/2404.14219"},{l:"Phi-4 (Abdin et al., 2024)",u:"https://arxiv.org/abs/2412.08905"}],res:[]},
+        { level:"advanced", title:"Mamba y SSMs",
+          desc:"Arquitecturas alternativas al Transformer basadas en State Space Models con recurrencia selectiva. Mamba-2 logra eficiencia lineal en longitud de contexto. Fundamento de modelos híbridos (Jamba, Zamba). Relevante para contextos largos sin KV-cache cuadrático.",
+          tags:["Mamba","SSM","lineal","recurrente","selectivo","KV-cache"],
+          papers:[{l:"Mamba (Gu & Dao, 2023)",u:"https://arxiv.org/abs/2312.00752"},{l:"Mamba-2 (Dao & Gu, 2024)",u:"https://arxiv.org/abs/2405.21060"}],res:[]},
         { level:"advanced", title:"Command R y Aya (Cohere)",
           desc:"Command R: RAG y tool use. Aya: modelo explícitamente multilingüe con 101 idiomas. Referencia para enfoque Latam.",
           tags:["RAG","101 idiomas","Aya","multilingüe"],
