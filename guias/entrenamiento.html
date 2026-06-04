@@ -469,6 +469,202 @@ python train.py -m training.learning_rate=1e-4,3e-4,1e-3
     <div class="tip"><strong>Reproducibilidad:</strong> Hydra guarda automáticamente el config completo en cada run. En 6 meses puedes reproducir cualquier experimento exactamente con el comando del log de W&B + el <code>.hydra/config.yaml</code> que quedó guardado.</div>
   </div>
 
+  <!-- 8. torchtune -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-adjustments-horizontal"></i>8. torchtune — fine-tuning nativo de Meta</h2>
+    <p>torchtune es la librería oficial de Meta para fine-tuning de LLMs. A diferencia de Lightning o Accelerate, está diseñada específicamente para fine-tuning (full, LoRA, QLoRA) con recetas (<em>recipes</em>) listas para usar sobre modelos como LLaMA, Mistral y Gemma. Usa Hydra internamente para los configs.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — instalar y listar recetas disponibles</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install torchtune
+
+# Ver todas las recetas disponibles
+tune ls
+
+# Recetas principales:
+# full_finetune_single_device       → fine-tuning completo en 1 GPU
+# full_finetune_distributed         → fine-tuning completo multi-GPU (FSDP2)
+# lora_finetune_single_device       → LoRA en 1 GPU
+# lora_finetune_distributed         → LoRA multi-GPU
+# qlora_finetune_single_device      → QLoRA en 1 GPU (4-bit)
+# generate                          → inferencia con modelo fine-tuneado</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — LoRA fine-tuning con receta pre-construida</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Descargar config base para LoRA en LLaMA 3.2 3B
+tune cp llama3_2/3B_lora_single_device ./configs/lora_llama3.yaml
+
+# Editar el YAML con tu dataset y parámetros (vi o VS Code)
+# Luego lanzar:
+tune run lora_finetune_single_device --config configs/lora_llama3.yaml
+
+# Multi-GPU con FSDP2 (4 GPUs):
+tune run --nproc_per_node 4 lora_finetune_distributed --config configs/lora_llama3.yaml</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml — configs/lora_llama3.yaml (extracto clave)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml"># Modelo
+model:
+  _component_: torchtune.models.llama3_2.lora_llama3_2_3b
+  lora_attn_modules: [q_proj, v_proj]
+  apply_lora_to_mlp: false
+  lora_rank: 16
+  lora_alpha: 32
+
+# Tokenizador
+tokenizer:
+  _component_: torchtune.models.llama3_2.llama3_2_tokenizer
+  path: /path/to/tokenizer.model
+
+# Dataset (compatible con HuggingFace datasets)
+dataset:
+  _component_: torchtune.datasets.alpaca_cleaned_dataset
+  # O tu dataset custom:
+  # _component_: torchtune.datasets.chat_dataset
+  # source: json
+  # data_files: data/train.jsonl
+  # conversation_style: llama3
+
+# Training
+optimizer:
+  _component_: torch.optim.AdamW
+  lr: 2e-4
+  weight_decay: 0.01
+
+lr_scheduler:
+  _component_: torchtune.training.lr_schedulers.get_cosine_schedule_with_warmup
+  num_warmup_steps: 100
+
+epochs: 3
+batch_size: 2
+gradient_accumulation_steps: 8
+max_steps_per_epoch: null
+
+# Output
+output_dir: outputs/lora_llama3/
+save_every_n_epochs: 1</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — dataset custom con torchtune</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from torchtune.datasets import chat_dataset
+from torchtune.models.llama3_2 import llama3_2_tokenizer
+
+tokenizer = llama3_2_tokenizer("/path/to/tokenizer.model", max_seq_len=2048)
+
+# Dataset JSONL con formato de conversación
+ds = chat_dataset(
+    tokenizer=tokenizer,
+    source="json",
+    data_files="data/train_es.jsonl",
+    conversation_style="llama3",   # aplica chat template de LLaMA 3
+    split="train",
+)
+
+print(f"Samples: {len(ds):,}")</code></pre>
+    </div>
+
+    <div class="tip"><strong>torchtune vs TRL (HuggingFace):</strong> TRL (<code>SFTTrainer</code>, <code>DPOTrainer</code>) tiene más integraciones y es más flexible para post-training completo (SFT+DPO+RLHF). torchtune tiene recetas más limpias, mejor soporte de cuantización nativa con <code>torchao</code>, y es lo que Meta usa internamente para LLaMA.</div>
+  </div>
+
+  <!-- 9. ROCm — GPUs AMD -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-cpu"></i>9. ROCm — entrenamiento en GPUs AMD</h2>
+    <p>ROCm (Radeon Open Compute) es la plataforma de cómputo de AMD, análoga a CUDA. PyTorch tiene soporte oficial via HIP: el código Python es <strong>idéntico</strong> a CUDA (<code>tensor.cuda()</code>, <code>torch.device("cuda")</code>), HIP traduce las llamadas al runtime AMD. Los modelos MI250X y MI300X son los targets principales para clusters de AMD.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — instalar PyTorch con ROCm</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Verificar versión de ROCm instalada en el cluster
+rocminfo | grep "ROCm"
+# o:
+/opt/rocm/bin/rocminfo | head -5
+
+# Instalar PyTorch con soporte ROCm (ajustar versión según cluster)
+# ROCm 6.2:
+pip install torch torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/rocm6.2
+
+# ROCm 6.1:
+pip install torch torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/rocm6.1
+
+# Verificar que PyTorch ve las GPUs AMD
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+# True
+# AMD Instinct MI250X  (o MI300X)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — variables de entorno importantes para ROCm</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Seleccionar GPUs visibles (equivalente a CUDA_VISIBLE_DEVICES)
+export ROCR_VISIBLE_DEVICES=0,1,2,3
+# o también funciona:
+export HIP_VISIBLE_DEVICES=0,1,2,3
+
+# Para MI250X (gfx90a) — a veces necesario para compatibilidad
+export HSA_OVERRIDE_GFX_VERSION=9.0.0
+
+# Tuning de memoria (equivalente a PYTORCH_CUDA_ALLOC_CONF)
+export PYTORCH_HIP_ALLOC_CONF=garbage_collection_threshold:0.8,max_split_size_mb:512
+
+# Flash Attention en ROCm requiere esta variable
+export FLASH_ATTENTION_TRITON_AMD_ENABLE="TRUE"
+
+# Para evitar errores de comunicación multi-GPU en algunos clusters
+export NCCL_SOCKET_IFNAME=ib0   # ajustar al nombre de interfaz de red del cluster</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — verificar setup y monitorear desde código</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+
+# El API es EXACTAMENTE el mismo que CUDA
+print(f"GPUs disponibles: {torch.cuda.device_count()}")
+print(f"GPU actual: {torch.cuda.get_device_name(0)}")
+print(f"VRAM total: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+
+# Verificar que bf16 está disponible (MI250X+: sí; GPUs más viejas: puede no estar)
+print(f"bf16 soportado: {torch.cuda.is_bf16_supported()}")
+
+# Flash Attention con ROCm (requiere flash-attn compilado para ROCm)
+# pip install flash-attn  puede no funcionar directamente; usar:
+# pip install git+https://github.com/ROCm/flash-attention
+from transformers import AutoModelForCausalLM
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-7b-hf",
+    torch_dtype=torch.bfloat16,
+    attn_implementation="eager",   # usar "eager" si flash-attn no está disponible para ROCm
+    device_map="cuda",
+)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — monitorear GPUs AMD (ampliar lo visto en cluster.html)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Vista básica
+rocm-smi
+
+# Columnas clave:
+# GPU  TEMP  AvgPwr  SCLK    MCLK    Fan  Perf  PwrCap  VRAM%  GPU%
+# 0    52C   280W    1700M   1600M   0%   auto  560W    62%    98%
+
+# Monitoreo continuo (refresca cada 2 segundos)
+watch -n 2 rocm-smi
+
+# Ver solo VRAM
+rocm-smi --showmeminfo vram
+
+# Ver temperatura y potencia
+rocm-smi --showtemp --showpower
+
+# Equivalente a nvidia-smi dmon para logging continuo
+rocm-smi --showuse --showmeminfo vram --csv > gpu_log.csv</code></pre>
+    </div>
+
+    <div class="tip"><strong>Flash Attention en AMD:</strong> Usa <code>flash-attn</code> compilado para ROCm desde <code>github.com/ROCm/flash-attention</code>, no el package de PyPI (que compila solo para NVIDIA). Si no está disponible, <code>attn_implementation="sdpa"</code> usa <code>torch.nn.functional.scaled_dot_product_attention</code> que sí tiene soporte ROCm nativo en PyTorch.</div>
+  </div>
+
   <div class="sources">
     <div class="sources-title">Fuentes</div>
     <div class="source-list">
@@ -478,6 +674,9 @@ python train.py -m training.learning_rate=1e-4,3e-4,1e-3
       <a class="source-link" href="https://hydra.cc/docs/intro/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Hydra Docs (Meta Research)</a>
       <a class="source-link" href="https://github.com/allenai/OLMo" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>OLMo Training Code (AllenAI)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LLaMA 3 Tech Report (Meta, 2024)</a>
+      <a class="source-link" href="https://pytorch.org/torchtune/stable/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>torchtune Docs (Meta)</a>
+      <a class="source-link" href="https://rocm.docs.amd.com/en/latest/" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>ROCm Docs (AMD)</a>
+      <a class="source-link" href="https://github.com/ROCm/flash-attention" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Flash Attention para ROCm</a>
     </div>
   </div>
 </main>
