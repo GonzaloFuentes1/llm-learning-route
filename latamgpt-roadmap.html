@@ -316,7 +316,7 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-n">6</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">84</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">86</div><div class="stat-l">temas</div></div>
       <div class="stat"><div class="stat-n">120+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
@@ -764,7 +764,7 @@ const SECTIONS = [
   },
   {
     id:"models", cls:"s-models", icon:"ti-robot", title:"Modelos de referencia",
-    pill:"5 familias · 22 modelos",
+    pill:"5 familias · 25 modelos",
     tracks:[
       { label:"Modelos base fundacionales", items:[
         { level:"basic", title:"GPT-2 y GPT-3 (OpenAI)",
@@ -819,14 +819,20 @@ const SECTIONS = [
           desc:"Familia completa 0.5B-72B. Fuerte en código, matemáticas y multilingüismo. Qwen2.5 72B es top open-weight.",
           tags:["0.5B-72B","multilingüe","código","matemáticas"],
           papers:[{l:"Qwen2 (Yang et al., 2024)",u:"https://arxiv.org/abs/2407.10671"},{l:"Qwen2.5 Technical Report (2024)",u:"https://arxiv.org/abs/2412.15115"}],res:[]},
-        { level:"sota", title:"QwQ y Qwen3 (razonamiento)",
-          desc:"QwQ-32B: modelo de razonamiento largo estilo R1. Qwen3 (2025): MoE y modelos densos con thinking modes.",
-          tags:["QwQ","thinking mode","razonamiento","Qwen3"],
-          papers:[{l:"Qwen3 Technical Report (2025)",u:"https://arxiv.org/abs/2505.09388"}],res:[]},
+        { level:"sota", title:"QwQ, Qwen3 y Qwen3.5 (razonamiento)",
+          desc:"QwQ-32B: razonamiento largo estilo R1. Qwen3 (2025): MoE y densos con thinking/non-thinking modes. Qwen3.5: versiones iterativas con mejoras en código y razonamiento.",
+          tags:["QwQ","thinking mode","razonamiento","Qwen3","Qwen3.5"],
+          papers:[{l:"Qwen3 Technical Report (2025)",u:"https://arxiv.org/abs/2505.09388"}],
+          res:[{l:"Qwen3.5 (blog)",u:"https://qwen.ai/blog?id=qwen3.5"}]},
         { level:"advanced", title:"Mistral, Mixtral y Gemma",
           desc:"Mistral 7B: eficiencia con sliding window attention. Mixtral 8x7B: MoE accesible. Gemma 2: RLHF de Google open-weight.",
           tags:["sliding window","MoE","Gemma","eficiencia"],
           papers:[{l:"Mistral 7B (Jiang et al., 2023)",u:"https://arxiv.org/abs/2310.06825"},{l:"Mixtral (Jiang et al., 2024)",u:"https://arxiv.org/abs/2401.04088"},{l:"Gemma 2 (Team et al., 2024)",u:"https://arxiv.org/abs/2408.00118"}],res:[]},
+        { level:"sota", title:"Gemma 3 (Google, 2025)",
+          desc:"1B-27B con visión multimodal y contexto de 128K tokens. Gemma3-4B iguala a Gemma2-27B; el de 27B es comparable a Gemini 1.5 Pro. Mayor soporte multilingüe que Gemma 2.",
+          tags:["Gemma 3","multimodal","128K ctx","Google","distilación"],
+          papers:[{l:"Gemma 3 Technical Report (Google, 2025)",u:"https://arxiv.org/abs/2503.19786"}],
+          res:[{l:"Gemma 3 (HuggingFace)",u:"https://huggingface.co/google/gemma-3-27b-it"}]},
         { level:"advanced", title:"Phi-3 y Phi-4 (Microsoft)",
           desc:"Modelos pequeños (3.8B-14B) entrenados con datos sintéticos de alta calidad. Demostraron que la calidad del dato > cantidad.",
           tags:["small model","datos sintéticos","3.8B","calidad > cantidad"],
@@ -835,6 +841,11 @@ const SECTIONS = [
           desc:"Arquitecturas alternativas al Transformer basadas en State Space Models con recurrencia selectiva. Mamba-2 logra eficiencia lineal en longitud de contexto. Fundamento de modelos híbridos (Jamba, Zamba). Relevante para contextos largos sin KV-cache cuadrático.",
           tags:["Mamba","SSM","lineal","recurrente","selectivo","KV-cache"],
           papers:[{l:"Mamba (Gu & Dao, 2023)",u:"https://arxiv.org/abs/2312.00752"},{l:"Mamba-2 (Dao & Gu, 2024)",u:"https://arxiv.org/abs/2405.21060"}],res:[]},
+        { level:"advanced", title:"Falcon (TII, 2023-2024)",
+          desc:"7B, 40B y 180B de Technology Innovation Institute (UAE). Entrenado en 3.5T tokens de RefinedWeb. Falcon-180B superó a PaLM en su lanzamiento. Primer modelo top entrenado íntegramente sobre un pipeline de datos abierto y reproducible.",
+          tags:["Falcon","TII","RefinedWeb","180B","open-data"],
+          papers:[{l:"The Falcon Series (Almazrouei et al., 2023)",u:"https://arxiv.org/abs/2311.16867"}],
+          res:[{l:"tiiuae/falcon-180B (HF)",u:"https://huggingface.co/tiiuae/falcon-180B"}]},
         { level:"advanced", title:"Command R y Aya (Cohere)",
           desc:"Command R: RAG y tool use. Aya: modelo explícitamente multilingüe con 101 idiomas. Referencia para enfoque Latam.",
           tags:["RAG","101 idiomas","Aya","multilingüe"],
