@@ -322,7 +322,7 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-n">7</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">95</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">97</div><div class="stat-l">temas</div></div>
       <div class="stat"><div class="stat-n">130+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
@@ -892,7 +892,7 @@ const SECTIONS = [
   },
   {
     id:"fundamentos", cls:"s-fund", icon:"ti-atom", title:"Fundamentos de ML",
-    pill:"2 tracks · 8 temas",
+    pill:"2 tracks · 10 temas",
     tracks:[
       { label:"Fundamentos teóricos", items:[
         { level:"basic", title:"Gradientes y Backpropagation",
@@ -912,6 +912,16 @@ const SECTIONS = [
             {l:"Understanding Deep Learning Requires Rethinking Generalization (Zhang et al., 2017)",u:"https://arxiv.org/abs/1611.03530"},
             {l:"Reconciling modern ML and the bias-variance trade-off (Belkin et al., 2019)",u:"https://arxiv.org/abs/1812.11118"}
           ],
+          res:[]},
+        { level:"basic", title:"AlexNet y el surgimiento del Deep Learning",
+          desc:"AlexNet (2012) ganó ImageNet con un margen de 10 puntos — el momento en que las redes profundas con GPU reemplazaron a los descriptores manuales. Introdujo ReLU (sin vanishing gradient), dropout como regularizador, y entrenamiento en múltiples GPUs. Base conceptual de toda arquitectura CNN posterior.",
+          tags:["AlexNet","CNN","ReLU","ImageNet","GPU training","dropout"],
+          papers:[{l:"ImageNet Classification with Deep CNNs (Krizhevsky et al., 2012)",u:"https://proceedings.neurips.cc/paper/2012/file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf"}],
+          res:[{l:"The AlexNet moment (blog Weights & Biases)",u:"https://wandb.ai/authors/dl-illustrated/reports/The-AlexNet-Moment--Vmlldzo2MDMxMA"}]},
+        { level:"core", title:"Conexiones residuales (ResNet)",
+          desc:"Las skip connections suman la entrada de un bloque directamente a su salida: y = F(x) + x. Resuelven el problema de degradación: redes de 100+ capas entrenan peor que las de 20 sin residual. El gradiente puede fluir sin atravesar capas no lineales. Fundamento de los bloques de atención en Transformers.",
+          tags:["ResNet","skip connections","degradación","vanishing gradient","residual block"],
+          papers:[{l:"Deep Residual Learning for Image Recognition (He et al., 2015)",u:"https://arxiv.org/abs/1512.03385"}],
           res:[]},
         { level:"core", title:"Regularización: L1, L2, Dropout y Weight Decay",
           desc:"L2 penaliza pesos grandes (=weight decay con SGD). L1 induce sparsidad. Dropout: apagar neuronas aleatoriamente actúa como ensemble de submodelos. Weight decay en Adam NO es equivalente a L2 — AdamW lo corrige desacoplando la penalización del update adaptativo.",
