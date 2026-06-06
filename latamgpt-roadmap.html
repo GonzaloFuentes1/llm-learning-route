@@ -188,6 +188,9 @@
   .s-models { border-color: #97C459; background: rgba(99,153,34,0.06); }
   .s-models .sec-title { color: #27500A; }
   .s-models .sec-pill  { background: #C0DD97; color: #173404; }
+  .s-fund   { border-color: #94A3B8; background: rgba(100,116,139,0.06); }
+  .s-fund .sec-title   { color: #1e293b; }
+  .s-fund .sec-pill    { background: #CBD5E1; color: #1e293b; }
 
   @media (prefers-color-scheme: dark) {
     .s-datos  { border-color: #085041; background: rgba(8,80,65,0.15); }
@@ -208,6 +211,9 @@
     .s-models { border-color: #27500A; background: rgba(39,80,10,0.15); }
     .s-models .sec-title { color: #C0DD97; }
     .s-models .sec-pill  { background: #27500A; color: #C0DD97; }
+    .s-fund   { border-color: #334155; background: rgba(51,65,85,0.15); }
+    .s-fund .sec-title   { color: #94A3B8; }
+    .s-fund .sec-pill    { background: #334155; color: #94A3B8; }
   }
 
   /* ── Track label ── */
@@ -315,9 +321,9 @@
       <p>Recursos curados para ingenieros y practicantes que se suman al proyecto. Papers con links directos a arxiv.</p>
     </div>
     <div class="stats">
-      <div class="stat"><div class="stat-n">6</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">87</div><div class="stat-l">temas</div></div>
-      <div class="stat"><div class="stat-n">120+</div><div class="stat-l">papers</div></div>
+      <div class="stat"><div class="stat-n">7</div><div class="stat-l">secciones</div></div>
+      <div class="stat"><div class="stat-n">95</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">130+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
 
@@ -881,6 +887,65 @@ const SECTIONS = [
           tags:["español","BSC","Salamandra","Aguila","open-weight","ibérico"],
           papers:[{l:"Aguila (Pàmies et al., 2023)",u:"https://arxiv.org/abs/2311.10963"}],
           res:[{l:"BSC-LTC (HuggingFace)",u:"https://huggingface.co/BSC-LTC"}]},
+      ]},
+    ]
+  },
+  {
+    id:"fundamentos", cls:"s-fund", icon:"ti-atom", title:"Fundamentos de ML",
+    pill:"2 tracks · 8 temas",
+    tracks:[
+      { label:"Fundamentos teóricos", items:[
+        { level:"basic", title:"Gradientes y Backpropagation",
+          desc:"Regla de la cadena aplicada a grafos computacionales. Forward pass calcula activaciones; backward pass propaga el gradiente ∂L/∂w capa por capa. Gradiente como dirección de máximo crecimiento de la loss: descender en su negativo actualiza los pesos.",
+          tags:["backprop","gradiente","regla de la cadena","grafo computacional"],
+          papers:[{l:"Learning representations by back-propagating errors (Rumelhart et al., 1986)",u:"https://www.nature.com/articles/323533a0"}],
+          res:[{l:"micrograd (Karpathy)",u:"https://github.com/karpathy/micrograd"}]},
+        { level:"basic", title:"Funciones de loss y descenso de gradiente",
+          desc:"Cross-entropy para clasificación; MSE/Huber para regresión. SGD batch vs. mini-batch vs. stochastic. El learning rate como hiperparámetro crítico: demasiado alto diverge, demasiado bajo converge lento o a mínimos peores.",
+          tags:["cross-entropy","MSE","SGD","learning rate","mini-batch"],
+          papers:[],
+          res:[{l:"CS231n: Optimization notes (Stanford)",u:"https://cs231n.github.io/optimization-1/"}]},
+        { level:"core", title:"Generalización vs Memorización",
+          desc:"Los modelos de DL pueden memorizar etiquetas aleatorias (training loss = 0) sin generalizar. La teoría clásica de bias-variance no explica por qué funcionan las redes sobreparametrizadas. Double descent: pérdida en test puede caer de nuevo al aumentar capacidad más allá del punto de interpolación.",
+          tags:["generalización","memorización","double descent","sobreparametrización","bias-variance"],
+          papers:[
+            {l:"Understanding Deep Learning Requires Rethinking Generalization (Zhang et al., 2017)",u:"https://arxiv.org/abs/1611.03530"},
+            {l:"Reconciling modern ML and the bias-variance trade-off (Belkin et al., 2019)",u:"https://arxiv.org/abs/1812.11118"}
+          ],
+          res:[]},
+        { level:"core", title:"Regularización: L1, L2, Dropout y Weight Decay",
+          desc:"L2 penaliza pesos grandes (=weight decay con SGD). L1 induce sparsidad. Dropout: apagar neuronas aleatoriamente actúa como ensemble de submodelos. Weight decay en Adam NO es equivalente a L2 — AdamW lo corrige desacoplando la penalización del update adaptativo.",
+          tags:["L1","L2","dropout","weight decay","regularización","sparsidad"],
+          papers:[
+            {l:"Dropout (Srivastava et al., 2014)",u:"https://jmlr.org/papers/v15/srivastava14a.html"},
+            {l:"Decoupled Weight Decay / AdamW (Loshchilov & Hutter, 2019)",u:"https://arxiv.org/abs/1711.05101"}
+          ],
+          res:[]},
+      ]},
+      { label:"Optimizadores modernos", items:[
+        { level:"basic", title:"SGD con momentum y schedules de LR",
+          desc:"Momentum acumula velocidad en la dirección del gradiente, suavizando la convergencia. Cosine annealing con warmup lineal es el schedule estándar en pretraining: evita NaN en los primeros pasos y reduce el LR hacia el final.",
+          tags:["momentum","SGD","warmup","cosine annealing","LR schedule"],
+          papers:[{l:"Cyclical Learning Rates (Smith, 2017)",u:"https://arxiv.org/abs/1506.01186"}],
+          res:[]},
+        { level:"core", title:"Adam y AdamW",
+          desc:"Adam estima primer y segundo momento del gradiente para adaptar el step por parámetro. AdamW desacopla el weight decay del gradiente adaptativo — crítico para generalización en LLMs. β1=0.9, β2=0.95, ε=1e-8 como defaults para pretraining. Bias correction en los primeros pasos.",
+          tags:["Adam","AdamW","adaptive","β1 β2","bias correction","weight decay"],
+          papers:[
+            {l:"Adam (Kingma & Ba, 2015)",u:"https://arxiv.org/abs/1412.6980"},
+            {l:"Decoupled Weight Decay / AdamW (Loshchilov & Hutter, 2019)",u:"https://arxiv.org/abs/1711.05101"}
+          ],
+          res:[]},
+        { level:"sota", title:"Muon Optimizer",
+          desc:"Orthogonaliza los gradientes de matrices de peso vía Nesterov + NewtonSchulz antes del update. Cada paso es ortogonal al anterior en norma de Frobenius. Usado en modelos de alto rendimiento (Keller Jordan, 2024). Coordinado con Adam para embeddings y biases que no son matrices.",
+          tags:["Muon","ortogonalización","NewtonSchulz","Nesterov","SOTA optimizer"],
+          papers:[{l:"Modular Duality in Deep Learning (Bernstein & Newhouse, 2024)",u:"https://arxiv.org/abs/2410.21265"}],
+          res:[{l:"Muon optimizer (Keller Jordan, blog)",u:"https://kellerjordan.github.io/posts/muon/"}]},
+        { level:"core", title:"Gradient Clipping y monitoreo de normas",
+          desc:"Clipear la norma global del gradiente (típico: 1.0) previene explosión de gradientes en Transformers. Loggear la grad norm por step es esencial para diagnosticar inestabilidades: normas consistentemente altas indican LR excesivo o datos corruptos; spikes aislados suelen ser batches ruidosos.",
+          tags:["gradient clipping","grad norm","explosión de gradientes","estabilidad","diagnóstico"],
+          papers:[{l:"On the difficulty of training RNNs (Pascanu et al., 2013)",u:"https://arxiv.org/abs/1211.5063"}],
+          res:[]},
       ]},
     ]
   },
