@@ -325,8 +325,8 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-n">7</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">97</div><div class="stat-l">temas</div></div>
-      <div class="stat"><div class="stat-n">130+</div><div class="stat-l">papers</div></div>
+      <div class="stat"><div class="stat-n">106</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">150+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
 
@@ -356,7 +356,7 @@
 const SECTIONS = [
   {
     id:"fundamentos", cls:"s-fund", icon:"ti-atom", title:"Fundamentos de ML",
-    pill:"2 tracks · 10 temas",
+    pill:"2 tracks · 13 temas",
     tracks:[
       { label:"Fundamentos teóricos", items:[
         { level:"basic", title:"Gradientes y Backpropagation",
@@ -367,13 +367,18 @@ const SECTIONS = [
         { level:"basic", title:"Funciones de loss y descenso de gradiente",
           desc:"Cross-entropy para clasificación; MSE/Huber para regresión. SGD batch vs. mini-batch vs. stochastic. El learning rate como hiperparámetro crítico: demasiado alto diverge, demasiado bajo converge lento o a mínimos peores.",
           tags:["cross-entropy","MSE","SGD","learning rate","mini-batch"],
-          papers:[],
+          papers:[{l:"Deep Learning (Goodfellow, Bengio & Courville, 2016)",u:"https://www.deeplearningbook.org/"}],
           res:[{l:"CS231n: Optimization notes (Stanford)",u:"https://cs231n.github.io/optimization-1/"}]},
         { level:"basic", title:"AlexNet y el surgimiento del Deep Learning",
           desc:"AlexNet (2012) ganó ImageNet con un margen de 10 puntos — el momento en que las redes profundas con GPU reemplazaron a los descriptores manuales. Introdujo ReLU (sin vanishing gradient), dropout como regularizador, y entrenamiento en múltiples GPUs. Base conceptual de toda arquitectura CNN posterior.",
           tags:["AlexNet","CNN","ReLU","ImageNet","GPU training","dropout"],
           papers:[{l:"ImageNet Classification with Deep CNNs (Krizhevsky et al., 2012)",u:"https://proceedings.neurips.cc/paper/2012/file/c399862d3b9d6b76c8436e924a68c45b-Paper.pdf"}],
           res:[{l:"The AlexNet moment (blog Weights & Biases)",u:"https://wandb.ai/authors/dl-illustrated/reports/The-AlexNet-Moment--Vmlldzo2MDMxMA"}]},
+        { level:"basic", title:"Mecanismo de atención (Bahdanau)",
+          desc:"Antes del Transformer ya existía la atención: un vector de contexto pesado por similitud entre la query del decoder y los estados del encoder. Bahdanau (2015) resolvió el cuello de botella del seq2seq fijo. La idea de ponderar dinámicamente qué partes de la entrada mirar es el núcleo del Transformer.",
+          tags:["atención","Bahdanau","seq2seq","encoder-decoder","alignment"],
+          papers:[{l:"Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2015)",u:"https://arxiv.org/abs/1409.0473"}],
+          res:[]},
         { level:"core", title:"Conexiones residuales (ResNet)",
           desc:"Las skip connections suman la entrada de un bloque directamente a su salida: y = F(x) + x. Resuelven el problema de degradación: redes de 100+ capas entrenan peor que las de 20 sin residual. El gradiente puede fluir sin atravesar capas no lineales. Fundamento de los bloques de atención en Transformers.",
           tags:["ResNet","skip connections","degradación","vanishing gradient","residual block"],
@@ -385,6 +390,15 @@ const SECTIONS = [
           papers:[
             {l:"Understanding Deep Learning Requires Rethinking Generalization (Zhang et al., 2017)",u:"https://arxiv.org/abs/1611.03530"},
             {l:"Reconciling modern ML and the bias-variance trade-off (Belkin et al., 2019)",u:"https://arxiv.org/abs/1812.11118"}
+          ],
+          res:[]},
+        { level:"core", title:"Normalización: BatchNorm, LayerNorm y RMSNorm",
+          desc:"BatchNorm normaliza por batch y canal — inestable con batch pequeño. LayerNorm normaliza por token, estándar en Transformers. RMSNorm elimina el centrado de media (solo escala por RMS) — más eficiente y usado en LLaMA, Mistral, Qwen. Pre-norm vs post-norm: pre-norm (normalizar antes de la sub-capa) da training más estable para modelos profundos.",
+          tags:["BatchNorm","LayerNorm","RMSNorm","normalización","pre-norm","LLaMA"],
+          papers:[
+            {l:"Batch Normalization (Ioffe & Szegedy, 2015)",u:"https://arxiv.org/abs/1502.03167"},
+            {l:"Layer Normalization (Ba et al., 2016)",u:"https://arxiv.org/abs/1607.06450"},
+            {l:"RMSNorm (Zhang & Sennrich, 2019)",u:"https://arxiv.org/abs/1910.07467"}
           ],
           res:[]},
         { level:"core", title:"Regularización: L1, L2, Dropout y Weight Decay",
@@ -425,9 +439,27 @@ const SECTIONS = [
   },
   {
     id:"models", cls:"s-models", icon:"ti-robot", title:"Modelos de referencia",
-    pill:"5 familias · 25 modelos",
+    pill:"5 familias · 27 modelos",
     tracks:[
       { label:"Modelos base fundacionales", items:[
+        { level:"basic", title:"BERT y encoders (Google, 2019)",
+          desc:"Bidirectional Encoder Representations from Transformers. Pre-entrenamiento con Masked LM + Next Sentence Prediction. BERT estableció el paradigma de fine-tuning para NLP. Para español: BETO (dccuchile) y RoBERTa-BNE. Para portugués: BERTimbau (neuralmind). Base de modelos de clasificación y NER en LatamGPT.",
+          tags:["BERT","encoder","MLM","fine-tuning","BETO","BERTimbau","es/pt"],
+          papers:[
+            {l:"BERT (Devlin et al., 2019)",u:"https://arxiv.org/abs/1810.04805"},
+            {l:"BETO (Cañete et al., 2020)",u:"https://arxiv.org/abs/2009.09436"},
+            {l:"BERTimbau (Souza et al., 2020)",u:"https://arxiv.org/abs/2005.04249"}
+          ],
+          res:[{l:"dccuchile/bert-base-spanish (HF)",u:"https://huggingface.co/dccuchile/bert-base-spanish-wwm-cased"},{l:"neuralmind/bert-base-portuguese (HF)",u:"https://huggingface.co/neuralmind/bert-base-portuguese-cased"}]},
+        { level:"core", title:"T5 y FLAN-T5 (Google)",
+          desc:"Text-To-Text Transfer Transformer: unifica todas las tareas NLP en un formato texto→texto. FLAN-T5 añade instruction tuning en 1800+ tareas. Demostró que el finetuning con instrucciones mejora la generalización zero-shot. Arquitectura encoder-decoder relevante para traducción y tareas condicionadas.",
+          tags:["T5","FLAN","encoder-decoder","instruction tuning","text-to-text","zero-shot"],
+          papers:[
+            {l:"T5 (Raffel et al., 2020)",u:"https://arxiv.org/abs/1910.10683"},
+            {l:"FLAN (Wei et al., 2022)",u:"https://arxiv.org/abs/2109.01652"},
+            {l:"FLAN-T5 (Chung et al., 2022)",u:"https://arxiv.org/abs/2210.11416"}
+          ],
+          res:[{l:"google/flan-t5-xxl (HF)",u:"https://huggingface.co/google/flan-t5-xxl"}]},
         { level:"basic", title:"GPT-2 y GPT-3 (OpenAI)",
           desc:"Los trabajos que establecieron el paradigma de LLMs. GPT-3 demostró in-context learning emergente a escala.",
           tags:["GPT-3","ICL","few-shot","175B"],
@@ -612,7 +644,7 @@ const SECTIONS = [
   },
   {
     id:"pretrain", cls:"s-pre", icon:"ti-brain", title:"Pretraining",
-    pill:"4 niveles · 14 temas",
+    pill:"4 niveles · 15 temas",
     tracks:[
       { label:"Básico", items:[
         { level:"basic", title:"Arquitectura Transformer",
@@ -662,6 +694,15 @@ const SECTIONS = [
           desc:"Adaptar modelo base a español/Latam sin olvidar inglés. Mixture ratios.",
           tags:["domain adapt","continual PT","forgetting"],
           papers:[{l:"Don't Stop Pretraining (Gururangan et al., 2020)",u:"https://arxiv.org/abs/2004.10964"}],res:[]},
+        { level:"advanced", title:"Quantización: GPTQ, AWQ y GGUF",
+          desc:"Reducir la precisión de los pesos (FP16→INT8→INT4) para inferencia en hardware limitado. GPTQ: quantización post-training con corrección de Hessian. AWQ: escala los pesos por activación para minimizar el error. GGUF (llama.cpp): formato portátil para CPU/GPU mixto. QLoRA usa bitsandbytes NF4 para fine-tuning en GPU de consumo.",
+          tags:["quantización","GPTQ","AWQ","GGUF","INT4","INT8","QLoRA","bitsandbytes"],
+          papers:[
+            {l:"GPTQ (Frantar et al., 2023)",u:"https://arxiv.org/abs/2210.17323"},
+            {l:"AWQ (Lin et al., 2024)",u:"https://arxiv.org/abs/2306.00978"},
+            {l:"QLoRA (Dettmers et al., 2023)",u:"https://arxiv.org/abs/2305.14314"}
+          ],
+          res:[{l:"llama.cpp (GitHub)",u:"https://github.com/ggerganov/llama.cpp"},{l:"bitsandbytes",u:"https://github.com/bitsandbytes-foundation/bitsandbytes"}]},
         { level:"advanced", title:"ALiBi y espacio de encodings posicionales",
           desc:"Attention with Linear Biases: permite extrapolación a contextos más largos que los vistos en entrenamiento sin reentrenar. Alternativa a RoPE con diferente tradeoff velocidad/extrapolación.",
           tags:["ALiBi","positional bias","extrapolación","long context","sin PE"],
@@ -687,7 +728,7 @@ const SECTIONS = [
   },
   {
     id:"posttraining", cls:"s-post", icon:"ti-adjustments", title:"Post-training",
-    pill:"4 niveles · 15 temas",
+    pill:"4 niveles · 17 temas",
     tracks:[
       { label:"Básico", items:[
         { level:"basic", title:"SFT: Supervised Fine-Tuning",
@@ -749,6 +790,23 @@ const SECTIONS = [
           tags:["rubrics","judge bias","multi-LLM"],
           papers:[{l:"MT-Bench (Zheng et al., 2023)",u:"https://arxiv.org/abs/2306.05685"},{l:"JudgeBench (Tan et al., 2024)",u:"https://arxiv.org/abs/2410.12784"}],
           res:[{l:"Distilabel",u:"https://github.com/argilla-io/distilabel"}]},
+        { level:"advanced", title:"RAG: Retrieval-Augmented Generation",
+          desc:"Combinar recuperación de documentos con generación: el modelo consulta una base de conocimiento externa en inference time. Mitiga alucinaciones y permite conocimiento actualizable sin reentrenar. RAG naive vs. advanced (HyDE, re-ranking, RAPTOR). Relevante para aplicaciones LatamGPT sobre documentos legales, médicos y gubernamentales.",
+          tags:["RAG","retrieval","vector DB","FAISS","alucinaciones","grounding"],
+          papers:[
+            {l:"RAG (Lewis et al., 2020)",u:"https://arxiv.org/abs/2005.11401"},
+            {l:"RAPTOR (Sarthi et al., 2024)",u:"https://arxiv.org/abs/2401.18059"}
+          ],
+          res:[{l:"LangChain RAG docs",u:"https://python.langchain.com/docs/tutorials/rag/"},{l:"FAISS (Meta)",u:"https://github.com/facebookresearch/faiss"}]},
+        { level:"advanced", title:"Tool use y Function Calling",
+          desc:"Entrenar modelos para invocar herramientas externas (APIs, búsqueda, código). Toolformer aprende cuándo y cómo llamar herramientas de forma autosupervisada. Gorilla specializa modelos en APIs reales. Basis de todos los agentes modernos (ReAct, function calling de OpenAI/Anthropic).",
+          tags:["tool use","function calling","agentes","Toolformer","Gorilla","ReAct"],
+          papers:[
+            {l:"Toolformer (Schick et al., 2023)",u:"https://arxiv.org/abs/2302.04761"},
+            {l:"Gorilla (Patil et al., 2023)",u:"https://arxiv.org/abs/2305.15334"},
+            {l:"ReAct (Yao et al., 2023)",u:"https://arxiv.org/abs/2210.03629"}
+          ],
+          res:[]},
         { level:"advanced", title:"Merge de modelos y model soups",
           desc:"SLERP, TIES-merging, DARE. Combinar checkpoints SFT y RLHF.",
           tags:["TIES","DARE","mergekit"],
@@ -850,7 +908,7 @@ const SECTIONS = [
   },
   {
     id:"bench", cls:"s-bench", icon:"ti-chart-bar", title:"Benchmarks & Evaluación",
-    pill:"5 categorías · 24 benchmarks",
+    pill:"5 categorías · 26 benchmarks",
     tracks:[
       { label:"Conocimiento general", items:[
         { level:"sat", title:"MMLU",
@@ -933,6 +991,11 @@ const SECTIONS = [
           tags:["win rate","length-control","Arena corr."],
           papers:[{l:"AlpacaEval 2.0 (Dubois et al., 2024)",u:"https://arxiv.org/abs/2404.04475"},{l:"MixEval (Ni et al., 2024)",u:"https://arxiv.org/abs/2406.06565"}],
           res:[{l:"MixEval leaderboard",u:"https://mixeval.github.io/"}]},
+        { level:"core", title:"IFEval — Instruction Following",
+          desc:"500 prompts con instrucciones verificables automáticamente (\"responde en menos de 100 palabras\", \"no uses la palabra X\", \"incluye exactamente 3 bullets\"). Mide seguimiento preciso de instrucciones sin juez LLM. Estándar en evaluaciones de Tülu 3 y OLMo 2.",
+          tags:["instruction following","IFEval","verifiable","Tülu","OLMo"],
+          papers:[{l:"IFEval (Zhou et al., 2023)",u:"https://arxiv.org/abs/2311.07911"}],
+          res:[{l:"IFEval (HF)",u:"https://huggingface.co/datasets/google/IFEval"}]},
         { level:"advanced", title:"TruthfulQA",
           desc:"817 preguntas donde modelos más grandes tienden a ser MÁS incorrectos por imitar creencias humanas falsas. Mide honestidad vs imitación. Fenómeno contraintuitivo de anti-scaling.",
           tags:["alucinaciones","honestidad","anti-scaling","safety","imitation"],
@@ -959,6 +1022,11 @@ const SECTIONS = [
           tags:["multilingüe","42 idiomas","es/pt"],
           papers:[{l:"Global-MMLU (Singh et al., 2024)",u:"https://arxiv.org/abs/2412.03304"}],
           res:[{l:"Global-MMLU (HF)",u:"https://huggingface.co/datasets/CohereForAI/Global-MMLU"}]},
+        { level:"latam", title:"FLORES-200 — Traducción multilingüe",
+          desc:"Benchmark de traducción para 200 idiomas incluido español, portugués y variantes latinoamericanas. Estándar para medir capacidad de traducción y cobertura lingüística. Usa textos de Wikipedia traducidos por traductores profesionales. Clave para evaluar calidad en escenarios es↔pt↔en.",
+          tags:["traducción","FLORES","200 idiomas","es/pt","multilingual","MT"],
+          papers:[{l:"FLORES-200 (NLLB Team, Meta 2022)",u:"https://arxiv.org/abs/2207.04672"}],
+          res:[{l:"FLORES-200 (HF)",u:"https://huggingface.co/datasets/facebook/flores"}]},
         { level:"advanced", title:"IberBench / IberLEF",
           desc:"Suite de evaluación para lenguas ibéricas (es, pt, ca, gl). NLU, NER, sentiment.",
           tags:["ibérico","NLU","NER","es/pt"],
