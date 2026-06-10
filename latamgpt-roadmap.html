@@ -916,9 +916,12 @@ const SECTIONS = [
       ]},
       { label:"Chat e instrucción", items:[
         { level:"core", title:"MT-Bench y LLM-as-a-Judge",
-          desc:"80 preguntas multi-turno. GPT-4 como juez. Paper fundacional de la evaluación LLM-as-judge.",
-          tags:["multi-turn","GPT-4 judge","8 categorías"],
-          papers:[{l:"MT-Bench (Zheng et al., 2023)",u:"https://arxiv.org/abs/2306.05685"}],
+          desc:"80 preguntas multi-turno. GPT-4 como juez. Paper fundacional de la evaluación LLM-as-judge. El sesgo del juez (posición, verbosidad) puede invalidar comparaciones: Lee et al. (ICML 2026) proponen un framework de corrección de sesgo con cuantificación de incertidumbre estadística.",
+          tags:["multi-turn","GPT-4 judge","8 categorías","sesgo","bias correction"],
+          papers:[
+            {l:"MT-Bench (Zheng et al., 2023)",u:"https://arxiv.org/abs/2306.05685"},
+            {l:"How to Correctly Report LLM-as-a-Judge Evaluations (Lee et al., ICML 2026)",u:"https://arxiv.org/abs/2511.21140"}
+          ],
           res:[{l:"FastChat eval",u:"https://github.com/lm-sys/FastChat/tree/main/fastchat/llm_judge"}]},
         { level:"advanced", title:"Chatbot Arena / LMSYS",
           desc:"Evaluación humana blind por pairwise comparison. ELO con >1M votos. El ground truth más confiable.",
