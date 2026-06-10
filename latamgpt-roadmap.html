@@ -727,10 +727,16 @@ const SECTIONS = [
           tags:["CAI","red team","safety"],
           papers:[{l:"Red Teaming LLMs (Ganguli et al., 2022)",u:"https://arxiv.org/abs/2209.07858"}],
           res:[{l:"allenai/wildguardmix (HF)",u:"https://huggingface.co/datasets/allenai/wildguardmix"},{l:"allenai/wildjailbreak (HF)",u:"https://huggingface.co/datasets/allenai/wildjailbreak"}]},
-        { level:"core", title:"Constitutional AI (CAI)",
-          desc:"Técnica de Anthropic para alinear modelos con principios explícitos sin etiquetadores humanos: SL-CAI (supervisado con feedback del propio modelo) + RL-CAI (RLAIF). Base del safety training de Claude.",
-          tags:["CAI","RLAIF","Anthropic","principios","self-critique","RLHF sin humanos"],
-          papers:[{l:"Constitutional AI (Bai et al., 2022)",u:"https://arxiv.org/abs/2212.08073"},{l:"RLAIF vs RLHF (Lee et al., 2023)",u:"https://arxiv.org/abs/2309.00267"}],res:[]},
+        { level:"core", title:"Constitutional AI (CAI) y variantes",
+          desc:"Técnica de Anthropic para alinear modelos con principios explícitos sin etiquetadores humanos: SL-CAI (el modelo critica y revisa sus propias respuestas) + RL-CAI (RLAIF reemplaza etiquetadores humanos). Inverse CAI (ICLR 2025) invierte el proceso: extrae principios interpretables comprimiendo un dataset de preferencias. C3AI (2025) estudia qué hace efectiva una constitución — principios con framing positivo y basados en comportamiento se alinean mejor con preferencias humanas. Reverse CAI (2026) invierte los principios éticos para generar datos adversariales automáticos en red teaming.",
+          tags:["CAI","RLAIF","Anthropic","principios","self-critique","Inverse CAI","C3AI","Reverse CAI","red teaming"],
+          papers:[
+            {l:"Constitutional AI (Bai et al., 2022)",u:"https://arxiv.org/abs/2212.08073"},
+            {l:"RLAIF vs RLHF (Lee et al., 2023)",u:"https://arxiv.org/abs/2309.00267"},
+            {l:"Inverse Constitutional AI (Findeis et al., ICLR 2025)",u:"https://arxiv.org/abs/2406.06560"},
+            {l:"C3AI: Crafting and Evaluating Constitutions (Kyrychenko et al., 2025)",u:"https://arxiv.org/abs/2502.15861"},
+            {l:"Reverse Constitutional AI / R-CAI (Fang et al., 2026)",u:"https://arxiv.org/abs/2604.17769"}
+          ],res:[]},
       ]},
       { label:"Avanzado", items:[
         { level:"advanced", title:"GRPO y RL para razonamiento",
