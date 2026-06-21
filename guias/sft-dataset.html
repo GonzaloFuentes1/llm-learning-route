@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Construcción de datasets SFT para Latam — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <h1 class="guide-title">Construcción de datasets SFT para Latam</h1>
+    <p class="guide-desc">Cómo crear datasets de instrucciones de alta calidad en español y portugués latinoamericano. Cubre formatos de datos, generación sintética con Self-Instruct y Magpie, traducción verificada, filtrado y publicación en HuggingFace Hub.</p>
+  </div>
+
+  <!-- 1. Formatos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-template"></i>1. Formatos de datos SFT</h2>
+    <p>El estándar actual es el formato conversacional (lista de mensajes). Cada modelo tiene su propio chat template; siempre usar <code>apply_chat_template</code> en lugar de construir el string manualmente.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">json — formato conversacional (recomendado)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-json">{
+  "messages": [
+    {"role": "system",    "content": "Eres un asistente experto en legislación latinoamericana."},
+    {"role": "user",      "content": "¿Cuál es la diferencia entre una SRL y una SA en Argentina?"},
+    {"role": "assistant", "content": "En Argentina, las principales diferencias son..."}
+  ],
+  "source": "synthetic_selfinstruct",
+  "language": "es-AR",
+  "quality_score": 0.87
+}</code></pre>
+    </div>
+
+    <table class="model-table">
+      <thead><tr><th>Campo</th><th>Requerido</th><th>Descripción</th></tr></thead>
+      <tbody>
+        <tr><td>messages</td><td>Sí</td><td>Lista ordenada de turnos. role ∈ {system, user, assistant}</td></tr>
+        <tr><td>source</td><td>Recomendado</td><td>Origen del ejemplo (permite filtrar y auditar)</td></tr>
+        <tr><td>language</td><td>Recomendado</td><td>BCP-47: es-MX, es-AR, pt-BR, etc.</td></tr>
+        <tr><td>quality_score</td><td>Opcional</td><td>Score de RM o clasificador, útil para filtrado posterior</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2. Self-Instruct -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-robot"></i>2. Generación con Self-Instruct</h2>
+    <p>Self-Instruct parte de un conjunto de instrucciones semilla (seed tasks) escritas por humanos y las usa para prompting un LLM que genera nuevas instrucciones + respuestas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — self_instruct.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import random
+from openai import OpenAI  # compatible con cualquier API OpenAI-compatible
+
+client = OpenAI(
+    api_key="tu-api-key",
+    # base_url="http://localhost:8000/v1",  # usar modelo local con vLLM
+)
+
+SEED_TASKS = [
+    "Explica qué es el FONASA y cómo acceder a él.",
+    "¿Cómo calculo el aguinaldo en México?",
+    "Escribe un correo formal solicitando vacaciones.",
+    "¿Cuáles son los derechos del consumidor en Brasil?",
+    "Traduce este párrafo al portugués brasileño conservando el registro formal.",
+]
+
+SYSTEM_PROMPT = """Eres un experto generando instrucciones de entrenamiento en español e
+inglés latinoamericano. Genera 5 instrucciones nuevas, diversas y útiles para un asistente
+de IA. Las instrucciones deben ser en español rioplatense, mexicano, colombiano, chileno o
+portugués brasileño. Responde solo con JSON, sin texto adicional."""
+
+def generate_instructions(seed_sample: list[str]) -> list[dict]:
+    seed_str = "\n".join(f"- {s}" for s in seed_sample)
+    prompt = f"Instrucciones de ejemplo:\n{seed_str}\n\nGenera 5 instrucciones nuevas en JSON:"
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.9,
+    )
+    data = json.loads(response.choices[0].message.content)
+    return data.get("instructions", [])
+
+
+def generate_response(instruction: str) -> str:
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system",    "content": "Eres un asistente útil, preciso y culturalmente apropiado para Latinoamérica."},
+            {"role": "user",      "content": instruction},
+        ],
+        temperature=0.7,
+        max_tokens=1024,
+    )
+    return response.choices[0].message.content
+
+
+# Pipeline principal
+all_examples = []
+seeds = SEED_TASKS.copy()
+
+for iteration in range(50):  # genera 250 instrucciones
+    sample = random.sample(seeds, min(5, len(seeds)))
+    new_instructions = generate_instructions(sample)
+    for instr in new_instructions:
+        if isinstance(instr, str) and len(instr) > 20:
+            response = generate_response(instr)
+            example = {
+                "messages": [
+                    {"role": "user",      "content": instr},
+                    {"role": "assistant", "content": response},
+                ],
+                "source": "self_instruct",
+            }
+            all_examples.append(example)
+            seeds.append(instr)   # agregar al pool de seeds
+
+# Guardar
+with open("data/self_instruct_es.jsonl", "w", encoding="utf-8") as f:
+    for ex in all_examples:
+        f.write(json.dumps(ex, ensure_ascii=False) + "\n")
+
+print(f"Generados {len(all_examples)} ejemplos")</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Magpie -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-wand"></i>3. Magpie: generación sin seed tasks</h2>
+    <p>Magpie extrae instrucciones directamente del modelo usando su sistema de templates. No necesita seed tasks: el modelo genera la pregunta del usuario a partir del prompt de sistema truncado.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — magpie_es.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
+import json
+
+MODEL = "meta-llama/Llama-3.2-8B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.bfloat16, device_map="auto")
+
+
+def extract_user_turn(system_prompt: str = None) -> str:
+    """Genera una instrucción de usuario usando el chat template truncado."""
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    # Aplicar template hasta el punto donde empieza el turno del usuario
+    prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    # Para Llama3: el template termina con "<|start_header_id|>user<|end_header_id|>\n\n"
+    # El modelo completará con la instrucción del usuario
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        output = model.generate(
+            **inputs,
+            max_new_tokens=256,
+            temperature=1.0,
+            do_sample=True,
+            eos_token_id=tokenizer.convert_tokens_to_ids("<|eot_id|>"),
+        )
+    generated = tokenizer.decode(output[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+    return generated.strip()
+
+
+def generate_response(instruction: str, system: str = None) -> str:
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": instruction})
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    with torch.no_grad():
+        output = model.generate(**inputs, max_new_tokens=1024, temperature=0.7, do_sample=True)
+    return tokenizer.decode(output[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
+
+
+SYSTEM_ES = "Eres un asistente de IA útil, amable y preciso que responde siempre en español latino."
+
+examples = []
+for i in range(500):
+    instruction = extract_user_turn(system_prompt=SYSTEM_ES)
+    if len(instruction) < 15:
+        continue
+    response = generate_response(instruction, system=SYSTEM_ES)
+    examples.append({
+        "messages": [
+            {"role": "system", "content": SYSTEM_ES},
+            {"role": "user", "content": instruction},
+            {"role": "assistant", "content": response},
+        ],
+        "source": "magpie",
+    })
+    if i % 50 == 0:
+        print(f"[{i}/500] Ejemplo: {instruction[:80]}...")
+
+with open("data/magpie_es.jsonl", "w", encoding="utf-8") as f:
+    for ex in examples:
+        f.write(json.dumps(ex, ensure_ascii=False) + "\n")</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Filtrado -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-filter"></i>4. Filtrado de calidad</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — filter_sft.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import fasttext
+from pathlib import Path
+
+# Cargar detector de idioma
+lid_model = fasttext.load_model("lid.176.bin")
+
+def detect_language(text: str) -> tuple[str, float]:
+    labels, probs = lid_model.predict(text.replace("\n", " "), k=1)
+    lang = labels[0].replace("__label__", "")
+    return lang, float(probs[0])
+
+
+def is_valid(example: dict, target_langs=("es", "pt")) -> bool:
+    msgs = example.get("messages", [])
+    if len(msgs) < 2:
+        return False
+
+    # Filtro de longitud
+    user_content = next((m["content"] for m in msgs if m["role"] == "user"), "")
+    asst_content = next((m["content"] for m in msgs if m["role"] == "assistant"), "")
+    if len(user_content) < 10 or len(asst_content) < 20:
+        return False
+    if len(asst_content) > 4000:  # respuestas excesivamente largas
+        return False
+
+    # Filtro de idioma
+    lang, conf = detect_language(asst_content)
+    if lang not in target_langs or conf < 0.85:
+        return False
+
+    # Filtro de contenido (básico)
+    bad_phrases = ["as an AI language model", "I cannot", "I'm sorry, I can't"]
+    if any(p in asst_content for p in bad_phrases):
+        return False
+
+    return True
+
+
+input_files = ["data/self_instruct_es.jsonl", "data/magpie_es.jsonl"]
+output_file  = "data/sft_latam_filtered.jsonl"
+
+total, kept = 0, 0
+with open(output_file, "w", encoding="utf-8") as out:
+    for path in input_files:
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            example = json.loads(line)
+            total += 1
+            if is_valid(example):
+                out.write(json.dumps(example, ensure_ascii=False) + "\n")
+                kept += 1
+
+print(f"Filtrado: {kept}/{total} ejemplos ({100*kept/total:.1f}%)")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. HF Hub -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-cloud-upload"></i>5. Publicar en HuggingFace Hub</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — upload_dataset.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset, DatasetDict
+from huggingface_hub import HfApi
+
+# Cargar desde JSONL local
+dataset = load_dataset("json", data_files={
+    "train": "data/sft_latam_filtered.jsonl",
+})
+
+# Split train/validation
+split = dataset["train"].train_test_split(test_size=0.05, seed=42)
+dataset = DatasetDict({"train": split["train"], "validation": split["test"]})
+
+# Subir
+dataset.push_to_hub(
+    "latamgpt/sft-latam-v1",
+    private=True,
+    commit_message="SFT dataset v1 — es/pt Latam, 50K ejemplos filtrados",
+)
+print("Dataset subido a HuggingFace Hub")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Dataset card:</strong> crear un README.md en el repo del dataset con: descripción, número de ejemplos por idioma, proceso de generación, licencia y limitaciones conocidas. Los datasets sin card no aparecen bien en búsquedas del Hub.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2212.10560" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Self-Instruct (Wang et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.08464" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Magpie (Xu et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2304.12244" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>WizardLM / Evol-Instruct (Xu et al., 2023)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>UltraFeedback (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/CohereForAI/aya_dataset" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Aya Dataset (multilingüe)</a>
+      <a class="source-link" href="https://fasttext.cc/docs/en/language-identification.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>fastText LangID</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

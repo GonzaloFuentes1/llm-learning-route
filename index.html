@@ -213,6 +213,8 @@
   .badge-debug    { background: #FAECE7; color: #712B13; }
   .c-curso   .card-icon { background: #FFF3CD; color: #7B4F00; }
   .badge-curso    { background: #FFF3CD; color: #7B4F00; }
+  .c-post    .card-icon { background: #F3EEFE; color: #5B21B6; }
+  .badge-post     { background: #F3EEFE; color: #5B21B6; }
 
   @media (prefers-color-scheme: dark) {
     .c-roadmap .card-icon { background: #26215C; color: #AFA9EC; }
@@ -229,6 +231,8 @@
     .badge-debug    { background: #4A1B0C; color: #F5C4B3; }
     .c-curso .card-icon { background: #412402; color: #FAC775; }
     .badge-curso    { background: #412402; color: #FAC775; }
+    .c-post  .card-icon { background: #2D1B69; color: #C4B5FD; }
+    .badge-post     { background: #2D1B69; color: #C4B5FD; }
   }
 
   /* Roadmap card (big) */
@@ -285,8 +289,8 @@
     </div>
     <div class="hero-stats">
       <div class="hstat"><div class="hstat-n">7</div><div class="hstat-l">áreas temáticas</div></div>
-      <div class="hstat"><div class="hstat-n">106</div><div class="hstat-l">temas en roadmap</div></div>
-      <div class="hstat"><div class="hstat-n">10</div><div class="hstat-l">guías con código</div></div>
+      <div class="hstat"><div class="hstat-n">113</div><div class="hstat-l">temas en roadmap</div></div>
+      <div class="hstat"><div class="hstat-n">15</div><div class="hstat-l">guías con código</div></div>
     </div>
   </div>
 
@@ -298,7 +302,7 @@
       <div class="card-content">
         <div class="card-title">
           LatamGPT — Ruta de aprendizaje
-          <span class="card-badge badge-roadmap">106 temas · 150+ papers</span>
+          <span class="card-badge badge-roadmap">113 temas · 160+ papers</span>
         </div>
         <div class="card-desc">
           Roadmap interactivo de fundamentos a SOTA 2026. 7 secciones: Fundamentos de ML, Modelos, Datos, Pretraining, Post-training,
@@ -402,8 +406,57 @@
     </a>
   </div>
 
+  <!-- Post-training y Alineamiento -->
+  <div class="section-label">Post-training & Alineamiento</div>
+  <div class="grid grid-2">
+    <a class="card c-post" href="guias/lora-finetuning.html">
+      <div class="card-icon"><i class="ti ti-adjustments-horizontal" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          LoRA y QLoRA: Fine-tuning eficiente
+          <span class="card-badge badge-post">Core</span>
+        </div>
+        <div class="card-desc">Adapta LLaMA, Mistral o Qwen a español/portugués con adaptadores de bajo rango. Incluye selección de rank, módulos target y diagnóstico de convergencia.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/dpo-alignment.html">
+      <div class="card-icon"><i class="ti ti-scale" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Alineamiento con DPO y variantes
+          <span class="card-badge badge-post">Core</span>
+        </div>
+        <div class="card-desc">DPO clásico, ORPO (sin reference model) y KTO (sin pares). Código completo con TRL, formato de datos y métricas de diagnóstico en W&amp;B.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/sft-dataset.html">
+      <div class="card-icon"><i class="ti ti-database-plus" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Datasets SFT para Latam
+          <span class="card-badge badge-post">Avanzado</span>
+        </div>
+        <div class="card-desc">Construcción de datos de instrucción en español/portugués: Self-Instruct, Magpie, Evol-Instruct, filtrado por idioma y calidad, y publicación en HF Hub.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/continual-pretraining.html">
+      <div class="card-icon"><i class="ti ti-repeat" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Continual Pretraining es/pt
+          <span class="card-badge badge-post">Avanzado</span>
+        </div>
+        <div class="card-desc">Adapta LLaMA 3 o Mistral a español y portugués latinoamericano: mixture de datos, prevención de catastrophic forgetting y evaluación intermedia.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+
   <!-- Deployment -->
-  <div class="section-label">Deployment</div>
+  <div class="section-label">Deployment & Evaluación</div>
   <div class="grid grid-2">
     <a class="card c-deploy" href="guias/inferencia.html">
       <div class="card-icon"><i class="ti ti-server-bolt" aria-hidden="true"></i></div>
@@ -413,6 +466,17 @@
           <span class="card-badge badge-deploy">Básico</span>
         </div>
         <div class="card-desc">Levantar un servidor vLLM con PagedAttention, hacer requests con la API OpenAI-compatible y monitorear throughput.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-deploy" href="guias/evaluacion-latam.html">
+      <div class="card-icon"><i class="ti ti-clipboard-check" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Evaluación para español/portugués
+          <span class="card-badge badge-deploy">Core</span>
+        </div>
+        <div class="card-desc">lm-eval-harness en la práctica: MGSM, FLORES-200, IFEval, tasks personalizados para Trueque/LatamQA, detección de contaminación y batch evaluation en SLURM.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>

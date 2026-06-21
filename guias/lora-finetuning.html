@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LoRA y QLoRA: Fine-tuning eficiente — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <h1 class="guide-title">LoRA y QLoRA: Fine-tuning eficiente</h1>
+    <p class="guide-desc">Adapta modelos decoder grandes (LLaMA, Mistral, Qwen) a tareas en español y portugués sin necesitar el VRAM de un full fine-tune. LoRA congela los pesos base e inyecta matrices de bajo rango; QLoRA agrega cuantización 4-bit al modelo base.</p>
+  </div>
+
+  <!-- 1. Cuándo usar qué -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-help-circle"></i>1. LoRA vs QLoRA vs full fine-tune</h2>
+
+    <table class="model-table">
+      <thead><tr><th>Método</th><th>VRAM (7B)</th><th>Velocidad</th><th>Calidad</th><th>Cuándo usarlo</th></tr></thead>
+      <tbody>
+        <tr><td>Full fine-tune</td><td>~120 GB</td><td>Lento</td><td>Máxima</td><td>Pretraining continuo, cambio de dominio profundo</td></tr>
+        <tr><td>LoRA</td><td>~16 GB</td><td>Rápido</td><td>Muy buena</td><td>SFT en bf16, hardware moderno (A100/H100)</td></tr>
+        <tr><td>QLoRA</td><td>~6-8 GB</td><td>Más lento que LoRA</td><td>Buena</td><td>GPU consumer (3090, 4090, L4), cluster compartido</td></tr>
+      </tbody>
+    </table>
+
+    <div class="tip"><strong>Regla práctica:</strong> Si tienes A100 80 GB, usa LoRA en bf16 — más rápido que QLoRA y sin pérdida de precisión por cuantización. Si tienes menos de 24 GB de VRAM, usa QLoRA con <code>load_in_4bit=True</code>.</div>
+  </div>
+
+  <!-- 2. Setup -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package"></i>2. Instalación</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install transformers peft accelerate bitsandbytes trl datasets</code></pre>
+    </div>
+
+    <div class="tip"><strong>bitsandbytes en Linux:</strong> funciona out-of-the-box. En Windows usa WSL2 o el cluster. La versión para AMD/ROCm es <code>bitsandbytes-rocm</code>.</div>
+  </div>
+
+  <!-- 3. QLoRA completo -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-code"></i>3. Fine-tuning con QLoRA (código completo)</h2>
+    <p>Ejemplo de SFT para instrucciones en español usando <code>trl.SFTTrainer</code>. Los datos deben estar en formato conversacional (lista de mensajes).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — qlora_sft.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, TaskType
+from trl import SFTTrainer, SFTConfig
+
+BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"  # cambia según el modelo base
+OUTPUT_DIR = "models/lora-es-instruct"
+
+# Cuantización 4-bit para QLoRA
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",        # NF4 > int4 para pesos de distribución normal
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,   # ahorra ~0.4 GB adicional
+)
+
+# Cargar modelo y tokenizador
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+tokenizer.pad_token = tokenizer.eos_token  # necesario para batch training
+tokenizer.padding_side = "right"
+
+model = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL,
+    quantization_config=bnb_config,
+    device_map="auto",
+    torch_dtype=torch.bfloat16,
+)
+model.config.use_cache = False  # incompatible con gradient checkpointing
+
+# Configuración LoRA
+lora_config = LoraConfig(
+    r=16,                     # rank — empieza con 16, sube a 64 si la loss no converge
+    lora_alpha=32,            # escala = alpha/r, mantén alpha = 2*r
+    target_modules=[          # módulos donde inyectar adaptadores
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ],
+    lora_dropout=0.05,
+    bias="none",
+    task_type=TaskType.CAUSAL_LM,
+)
+
+# Dataset en formato chat
+dataset = load_dataset("json", data_files={"train": "data/sft_es.jsonl"})
+
+# La función formatea cada ejemplo como string con el chat template del modelo
+def format_chat(example):
+    messages = example["messages"]  # lista de {"role": ..., "content": ...}
+    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+
+# Entrenamiento
+training_args = SFTConfig(
+    output_dir=OUTPUT_DIR,
+    num_train_epochs=3,
+    per_device_train_batch_size=2,
+    gradient_accumulation_steps=8,   # effective batch = 16
+    gradient_checkpointing=True,     # ahorra VRAM, 20-30% más lento
+    learning_rate=2e-4,
+    lr_scheduler_type="cosine",
+    warmup_ratio=0.05,
+    bf16=True,
+    logging_steps=10,
+    save_steps=200,
+    max_seq_length=2048,
+    packing=True,                    # sequence packing para eliminar padding
+    report_to="wandb",
+)
+
+trainer = SFTTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset["train"],
+    peft_config=lora_config,
+    formatting_func=format_chat,
+)
+
+trainer.train()
+trainer.save_model(OUTPUT_DIR)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Formato de datos esperado</strong> (<code>sft_es.jsonl</code>):
+<pre style="font-size:12px;margin-top:6px">{"messages": [{"role": "system", "content": "Eres un asistente útil en español."}, {"role": "user", "content": "¿Qué es la fotosíntesis?"}, {"role": "assistant", "content": "La fotosíntesis es..."}]}</pre>
+    </div>
+  </div>
+
+  <!-- 4. Hiperparámetros -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-adjustments"></i>4. Selección de hiperparámetros</h2>
+
+    <h3 class="sub-title">Rank (r) y Alpha</h3>
+    <table class="model-table">
+      <thead><tr><th>Scenario</th><th>r recomendado</th><th>Alpha</th></tr></thead>
+      <tbody>
+        <tr><td>SFT rápido, dataset pequeño (&lt;10K ejemplos)</td><td>8–16</td><td>16–32</td></tr>
+        <tr><td>SFT estándar (10K–100K ejemplos)</td><td>16–32</td><td>32–64</td></tr>
+        <tr><td>Cambio de dominio significativo</td><td>64–128</td><td>128–256</td></tr>
+        <tr><td>Capacidad creativa / estilo</td><td>128+</td><td>256+</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="sub-title">Módulos target</h3>
+    <p>Para arquitecturas LLaMA/Mistral/Qwen usa todos los módulos de atención y MLP. Puedes inspeccionar los nombres disponibles con:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">for name, module in model.named_modules():
+    print(name)</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Merge y uso -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-git-merge"></i>5. Guardar, cargar y mergear adaptador</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — merge_adapter.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+
+BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
+ADAPTER_PATH = "models/lora-es-instruct"
+MERGED_PATH  = "models/lora-es-instruct-merged"
+
+# Opción A: cargar con adaptador (para inferencia con peft)
+model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, torch_dtype=torch.bfloat16)
+model = PeftModel.from_pretrained(model, ADAPTER_PATH)
+
+# Opción B: mergear pesos y guardar modelo standalone
+merged = model.merge_and_unload()
+merged.save_pretrained(MERGED_PATH)
+AutoTokenizer.from_pretrained(BASE_MODEL).save_pretrained(MERGED_PATH)
+
+print("Modelo mergeado guardado en", MERGED_PATH)</code></pre>
+    </div>
+
+    <div class="tip"><strong>¿Cuándo mergear?</strong> Mergea antes de subir a HuggingFace Hub o de servir con vLLM — vLLM no carga adaptadores PEFT directamente. Durante desarrollo, usa <code>PeftModel</code> para iterar más rápido sin necesitar espacio extra en disco.</div>
+  </div>
+
+  <!-- 6. Diagnóstico -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bug"></i>6. Diagnóstico: cuándo LoRA no es suficiente</h2>
+
+    <table class="model-table">
+      <thead><tr><th>Síntoma</th><th>Causa probable</th><th>Solución</th></tr></thead>
+      <tbody>
+        <tr><td>Loss no baja de 1.5 tras 1000 pasos</td><td>Rank muy bajo o LR muy pequeño</td><td>Subir r a 64, LR a 3e-4</td></tr>
+        <tr><td>Modelo genera en inglés</td><td>Chat template incorrecto o datos mixtos</td><td>Verificar <code>apply_chat_template</code>, filtrar idioma</td></tr>
+        <tr><td>Respuestas truncadas o repetitivas</td><td>max_seq_length corto o packing sin máscara</td><td>Subir max_seq_length, revisar attention mask</td></tr>
+        <tr><td>OOM en forward pass</td><td>Batch demasiado grande para VRAM disponible</td><td>Reducir <code>per_device_train_batch_size</code> a 1, subir <code>gradient_accumulation_steps</code></td></tr>
+        <tr><td>Tarea requiere conocimiento nuevo</td><td>LoRA no puede inyectar conocimiento factual</td><td>Considerar continual pretraining primero</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LoRA (Hu et al., 2021)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2305.14314" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>QLoRA (Dettmers et al., 2023)</a>
+      <a class="source-link" href="https://huggingface.co/docs/peft" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>PEFT docs (HuggingFace)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/sft_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL SFTTrainer docs</a>
+      <a class="source-link" href="https://github.com/TimDettmers/bitsandbytes" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>bitsandbytes</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluación para español/portugués — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Evaluación</div>
+    <h1 class="guide-title">Evaluación para español/portugués con lm-eval-harness</h1>
+    <p class="guide-desc">Cómo correr benchmarks multilingüe en la práctica: instalación de lm-evaluation-harness, ejecución de MGSM, FLORES-200 e IFEval, creación de tasks personalizados para español/portugués y detección de contaminación.</p>
+  </div>
+
+  <!-- 1. Instalación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package"></i>1. Instalación de lm-evaluation-harness</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">git clone https://github.com/EleutherAI/lm-evaluation-harness
+cd lm-evaluation-harness
+pip install -e ".[vllm]"    # instala soporte para vLLM (recomendado para velocidad)
+# pip install -e ".[api]"   # si vas a evaluar via API (OpenAI-compatible)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Backend recomendado:</strong> usa <code>--model vllm</code> para modelos locales (3-5x más rápido que HuggingFace estándar). Requiere GPU con suficiente VRAM para el modelo.</div>
+  </div>
+
+  <!-- 2. Benchmarks estándar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-player-play"></i>2. Correr benchmarks estándar</h2>
+
+    <h3 class="sub-title">Comando base</h3>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Benchmarks de conocimiento general
+lm_eval \
+  --model vllm \
+  --model_args pretrained=models/mi-modelo-es,dtype=bfloat16,max_model_len=4096 \
+  --tasks mmlu,arc_challenge,hellaswag \
+  --num_fewshot 5 \
+  --batch_size auto \
+  --output_path resultados/mmlu_run1.json \
+  --log_samples
+
+# IFEval (instruction following — siempre 0-shot)
+lm_eval \
+  --model vllm \
+  --model_args pretrained=models/mi-modelo-es \
+  --tasks ifeval \
+  --num_fewshot 0 \
+  --batch_size auto \
+  --output_path resultados/ifeval.json</code></pre>
+    </div>
+
+    <h3 class="sub-title">Benchmarks multilingüe clave</h3>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># MGSM — matemáticas en español (3-shot, chain-of-thought)
+lm_eval \
+  --model vllm \
+  --model_args pretrained=models/mi-modelo-es \
+  --tasks mgsm_es \
+  --num_fewshot 8 \
+  --output_path resultados/mgsm_es.json
+
+# Global-MMLU en español
+lm_eval \
+  --model vllm \
+  --model_args pretrained=models/mi-modelo-es \
+  --tasks global_mmlu_es \
+  --num_fewshot 5 \
+  --output_path resultados/global_mmlu_es.json</code></pre>
+    </div>
+
+    <div class="tip"><strong>FLORES-200:</strong> es un benchmark de traducción, no de generación. Para evaluarlo correctamente necesitas un script dedicado con sacrebleu o chrF. Ver sección 4 de esta guía.</div>
+  </div>
+
+  <!-- 3. Suite Latam completa -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-list-check"></i>3. Suite de evaluación Latam (script SLURM)</h2>
+    <p>Corre todos los benchmarks relevantes de un tirón en el cluster. Útil para comparar checkpoints.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — eval_latam.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/bin/bash
+#SBATCH --job-name=eval-latam
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=40G
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/eval-%j.out
+
+MODEL_PATH=$1   # pasar como argumento: sbatch eval_latam.sh models/checkpoint-1000
+OUTPUT_DIR="resultados/$(basename $MODEL_PATH)"
+mkdir -p $OUTPUT_DIR
+
+TASKS="mmlu,arc_challenge,hellaswag,mgsm_es,global_mmlu_es,ifeval"
+
+lm_eval \
+  --model vllm \
+  --model_args pretrained=$MODEL_PATH,dtype=bfloat16,max_model_len=4096 \
+  --tasks $TASKS \
+  --num_fewshot 5 \
+  --batch_size auto \
+  --output_path $OUTPUT_DIR/results.json \
+  --log_samples
+
+echo "Evaluación terminada: $OUTPUT_DIR/results.json"</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — array job para múltiples checkpoints</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/bin/bash
+#SBATCH --array=0-4        # 5 checkpoints
+#SBATCH --gres=gpu:1
+#SBATCH --time=04:00:00
+
+CHECKPOINTS=(
+  "models/checkpoint-500"
+  "models/checkpoint-1000"
+  "models/checkpoint-2000"
+  "models/checkpoint-4000"
+  "models/checkpoint-final"
+)
+
+bash eval_latam.sh ${CHECKPOINTS[$SLURM_ARRAY_TASK_ID]}</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Task custom -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-puzzle"></i>4. Crear un task personalizado</h2>
+    <p>Para benchmarks propios (ej. Trueque, LatamQA) se crea un YAML de configuración. No hace falta tocar código Python.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml — tasks/mi_benchmark_es/mi_benchmark_es.yaml</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml">task: mi_benchmark_es
+dataset_path: huggingface_user/mi-benchmark   # dataset en HF Hub
+dataset_name: es
+test_split: test
+output_type: multiple_choice
+doc_to_text: "Pregunta: {{question}}\nOpciones:\nA. {{choice_a}}\nB. {{choice_b}}\nC. {{choice_c}}\nD. {{choice_d}}\nRespuesta:"
+doc_to_target: "{{answer}}"
+doc_to_choice: ["A", "B", "C", "D"]
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+  - metric: acc_norm
+    aggregation: mean
+    higher_is_better: true
+num_fewshot: 5
+fewshot_config:
+  sampler: first_n</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — correr el task custom</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">lm_eval \
+  --model vllm \
+  --model_args pretrained=models/mi-modelo-es \
+  --tasks mi_benchmark_es \
+  --include_path tasks/mi_benchmark_es \
+  --output_path resultados/mi_benchmark.json</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Interpretación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-bar"></i>5. Interpretar resultados correctamente</h2>
+
+    <h3 class="sub-title">Estructura del JSON de salida</h3>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — leer resultados</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+
+with open("resultados/mmlu_run1.json") as f:
+    results = json.load(f)
+
+# Accuracy por task
+for task, metrics in results["results"].items():
+    acc = metrics.get("acc,none", metrics.get("acc_norm,none"))
+    stderr = metrics.get("acc_stderr,none", metrics.get("acc_norm_stderr,none", 0))
+    print(f"{task}: {acc:.3f} ± {stderr:.3f}")
+
+# Comparar dos modelos
+import pandas as pd
+
+def load_results(path):
+    with open(path) as f:
+        data = json.load(f)
+    return {task: m.get("acc,none", m.get("acc_norm,none"))
+            for task, m in data["results"].items()}
+
+base   = load_results("resultados/baseline/results.json")
+tuned  = load_results("resultados/finetuned/results.json")
+df = pd.DataFrame({"baseline": base, "finetuned": tuned})
+df["delta"] = df["finetuned"] - df["baseline"]
+print(df.sort_values("delta", ascending=False))</code></pre>
+    </div>
+
+    <div class="tip">
+      <strong>Errores comunes de reporting</strong> (ver arXiv:2511.21140):
+      <ul style="margin-top:6px;padding-left:18px">
+        <li>Reportar solo los mejores resultados entre varias ejecuciones (cherry-picking)</li>
+        <li>No reportar el número de few-shot shots usados</li>
+        <li>Comparar modelos evaluados con prompts diferentes</li>
+        <li>Usar <code>acc</code> vs <code>acc_norm</code> inconsistentemente — <code>acc_norm</code> penaliza por longitud de opción</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 6. Contaminación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-alert-triangle"></i>6. Detección de contaminación</h2>
+    <p>La contaminación ocurre cuando los datos de evaluación aparecen en el training set. Puede inflar scores 5–15 puntos. Detectarla con n-gram overlap:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — contamination_check.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+from collections import Counter
+import re
+
+def ngrams(text, n=13):
+    tokens = text.lower().split()
+    return set(zip(*[tokens[i:] for i in range(n)]))
+
+# Cargar benchmark y subset del training data
+benchmark = load_dataset("cais/mmlu", "all", split="test")
+train_sample = load_dataset("HuggingFaceFW/fineweb", split="train", streaming=True)
+
+# Construir set de n-grams del training (muestra de 1M docs)
+train_ngrams = set()
+for i, doc in enumerate(train_sample):
+    if i >= 1_000_000:
+        break
+    train_ngrams.update(ngrams(doc["text"]))
+
+# Verificar contaminación en el benchmark
+contaminated = 0
+for item in benchmark:
+    q_ngrams = ngrams(item["question"])
+    if q_ngrams & train_ngrams:  # intersección no vacía
+        contaminated += 1
+
+print(f"Posible contaminación: {contaminated}/{len(benchmark)} ({100*contaminated/len(benchmark):.1f}%)")</code></pre>
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>lm-evaluation-harness (EleutherAI)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2311.07911" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>IFEval (Zhou et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2210.03057" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>MGSM (Shi et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2207.04672" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FLORES-200 (NLLB Team, 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.21140" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LLM-as-a-Judge reporting (2025)</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

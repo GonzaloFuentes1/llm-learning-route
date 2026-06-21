@@ -325,8 +325,8 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-n">7</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">106</div><div class="stat-l">temas</div></div>
-      <div class="stat"><div class="stat-n">150+</div><div class="stat-l">papers</div></div>
+      <div class="stat"><div class="stat-n">113</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">160+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
 
@@ -356,7 +356,7 @@
 const SECTIONS = [
   {
     id:"fundamentos", cls:"s-fund", icon:"ti-atom", title:"Fundamentos de ML",
-    pill:"2 tracks · 13 temas",
+    pill:"2 tracks · 14 temas",
     tracks:[
       { label:"Fundamentos teóricos", items:[
         { level:"basic", title:"Gradientes y Backpropagation",
@@ -407,6 +407,14 @@ const SECTIONS = [
           papers:[
             {l:"Dropout (Srivastava et al., 2014)",u:"https://jmlr.org/papers/v15/srivastava14a.html"},
             {l:"Decoupled Weight Decay / AdamW (Loshchilov & Hutter, 2019)",u:"https://arxiv.org/abs/1711.05101"}
+          ],
+          res:[]},
+        { level:"core", title:"Destilación de conocimiento",
+          desc:"El modelo estudiante aprende de las distribuciones suaves (soft targets) del modelo teacher, no solo de las etiquetas duras. La temperatura T > 1 suaviza la distribución del teacher, revelando relaciones entre clases. DistilBERT retiene el 97% del desempeño de BERT con la mitad de parámetros. En LLMs modernos: distilación de modelos propietarios para crear modelos más pequeños.",
+          tags:["knowledge distillation","soft targets","temperature","teacher-student","DistilBERT"],
+          papers:[
+            {l:"Distilling the Knowledge in a Neural Network (Hinton et al., 2015)",u:"https://arxiv.org/abs/1503.02531"},
+            {l:"DistilBERT (Sanh et al., 2019)",u:"https://arxiv.org/abs/1910.01108"}
           ],
           res:[]},
       ]},
@@ -644,7 +652,7 @@ const SECTIONS = [
   },
   {
     id:"pretrain", cls:"s-pre", icon:"ti-brain", title:"Pretraining",
-    pill:"4 niveles · 15 temas",
+    pill:"4 niveles · 18 temas",
     tracks:[
       { label:"Básico", items:[
         { level:"basic", title:"Arquitectura Transformer",
@@ -660,6 +668,11 @@ const SECTIONS = [
           desc:"Fertilidad en español. Tradeoffs BPE vs Unigram para Latam. Vocabulario multilingüe.",
           tags:["fertility","multilingüe","BPE"],
           papers:[{l:"SentencePiece (Kudo & Richardson, 2018)",u:"https://arxiv.org/abs/1808.06226"},{l:"Fertility analysis (Rust et al., 2021)",u:"https://arxiv.org/abs/2012.15613"}],res:[]},
+        { level:"basic", title:"Hardware y VRAM: planificación de recursos",
+          desc:"Fórmula clave: VRAM ≈ params × bytes_por_param (FP32=4, BF16=2, INT8=1, INT4=0.5). Un LLaMA 3 8B en BF16 ocupa ~16 GB solo para pesos; más KV-cache y activaciones. Gradient checkpointing divide activaciones por N layers a costa de 30% más cómputo. FLOP/s teórico vs práctico: A100 312 TFLOP/s, uso real ~40-50% con buen código.",
+          tags:["VRAM","GPU","A100","H100","FLOPS","memoria","planificación"],
+          papers:[],
+          res:[{l:"GPU Puzzles (Sasha Rush)",u:"https://github.com/srush/GPU-Puzzles"}]},
       ]},
       { label:"Core", items:[
         { level:"core", title:"Scaling Laws",
@@ -680,6 +693,15 @@ const SECTIONS = [
           tags:["FlashAttention","IO-aware","SRAM","HBM","Triton","eficiencia"],
           papers:[{l:"FlashAttention (Dao et al., 2022)",u:"https://arxiv.org/abs/2205.14135"},{l:"FlashAttention-2 (Dao, 2023)",u:"https://arxiv.org/abs/2307.08691"},{l:"FlashAttention-3 (Shah et al., 2024)",u:"https://arxiv.org/abs/2407.08608"}],
           res:[{l:"flash-attention (Dao-AILab)",u:"https://github.com/Dao-AILab/flash-attention"}]},
+        { level:"core", title:"Embeddings y recuperación densa",
+          desc:"Sentence embeddings con bi-encoders: representan texto como vector denso para búsqueda semántica. FAISS hace búsqueda ANN en millones de vectores en ms. Base de RAG y sistemas de recuperación. E5, BGE y nomic-embed lideran leaderboards multilingüe.",
+          tags:["embeddings","bi-encoder","FAISS","dense retrieval","ANN","semantic search"],
+          papers:[
+            {l:"DPR (Karpukhin et al., 2020)",u:"https://arxiv.org/abs/2004.04906"},
+            {l:"E5 (Wang et al., 2022)",u:"https://arxiv.org/abs/2212.03533"},
+            {l:"BGE-M3 (Chen et al., 2024)",u:"https://arxiv.org/abs/2402.03216"}
+          ],
+          res:[{l:"FAISS (Meta)",u:"https://github.com/facebookresearch/faiss"},{l:"MTEB Leaderboard",u:"https://huggingface.co/spaces/mteb/leaderboard"}]},
       ]},
       { label:"Avanzado", items:[
         { level:"advanced", title:"Arquitecturas modernas: GQA, MoE, RoPE",
@@ -707,6 +729,14 @@ const SECTIONS = [
           desc:"Attention with Linear Biases: permite extrapolación a contextos más largos que los vistos en entrenamiento sin reentrenar. Alternativa a RoPE con diferente tradeoff velocidad/extrapolación.",
           tags:["ALiBi","positional bias","extrapolación","long context","sin PE"],
           papers:[{l:"ALiBi / Train Short, Test Long (Press et al., 2022)",u:"https://arxiv.org/abs/2108.12409"}],res:[]},
+        { level:"advanced", title:"Speculative Decoding",
+          desc:"Un modelo draft pequeño genera tokens en paralelo; el modelo target verifica todos en un solo forward pass. 2-4x speedup con output idéntico al greedy estándar. Medusa usa múltiples cabezas de draft en el propio modelo para evitar modelo separado.",
+          tags:["speculative decoding","draft model","inference speedup","Medusa","autoregressive"],
+          papers:[
+            {l:"Speculative Decoding (Leviathan et al., 2023)",u:"https://arxiv.org/abs/2211.17192"},
+            {l:"Medusa (Cai et al., 2024)",u:"https://arxiv.org/abs/2401.10774"}
+          ],
+          res:[{l:"Medusa (GitHub)",u:"https://github.com/FasterDecoding/Medusa"}]},
       ]},
       { label:"SOTA 2026", items:[
         { level:"sota", title:"MuP y hyperparameter transfer",
@@ -728,9 +758,18 @@ const SECTIONS = [
   },
   {
     id:"posttraining", cls:"s-post", icon:"ti-adjustments", title:"Post-training",
-    pill:"4 niveles · 17 temas",
+    pill:"4 niveles · 19 temas",
     tracks:[
       { label:"Básico", items:[
+        { level:"basic", title:"Prompt Engineering e In-Context Learning",
+          desc:"Zero-shot, few-shot y Chain-of-Thought sin actualizar pesos. El modelo \"aprende\" del contexto. Few-shot ejemplifica el formato; CoT externaliza el razonamiento paso a paso. System prompts: controlan estilo, idioma y comportamiento base del modelo.",
+          tags:["zero-shot","few-shot","CoT","ICL","system prompt","prompting"],
+          papers:[
+            {l:"GPT-3 y Few-Shot (Brown et al., 2020)",u:"https://arxiv.org/abs/2005.14165"},
+            {l:"Chain-of-Thought Prompting (Wei et al., 2022)",u:"https://arxiv.org/abs/2201.11903"},
+            {l:"Large Language Models are Zero-Shot Reasoners (Kojima et al., 2022)",u:"https://arxiv.org/abs/2205.11916"}
+          ],
+          res:[]},
         { level:"basic", title:"SFT: Supervised Fine-Tuning",
           desc:"ChatML, LLaMA templates, datasets de instrucción, overfitting en SFT.",
           tags:["SFT","ChatML","instrucción"],
@@ -819,6 +858,15 @@ const SECTIONS = [
           res:[{l:"vLLM",u:"https://github.com/vllm-project/vllm"}]},
       ]},
       { label:"SOTA 2026", items:[
+        { level:"sota", title:"Agentes: ReAct y planning",
+          desc:"ReAct intercala razonamiento (Thought) y acción (Action) en el mismo contexto. El modelo decide cuándo usar herramientas, interpreta la observación y continúa. Tree-of-Thought explora múltiples ramas de razonamiento en paralelo. Base de todos los sistemas agénticos modernos.",
+          tags:["ReAct","agents","tool use","planning","Tree-of-Thought","agentic"],
+          papers:[
+            {l:"ReAct (Yao et al., 2022)",u:"https://arxiv.org/abs/2210.03629"},
+            {l:"Tree of Thoughts (Yao et al., 2023)",u:"https://arxiv.org/abs/2305.10601"},
+            {l:"OpenAgents (Xie et al., 2023)",u:"https://arxiv.org/abs/2310.10634"}
+          ],
+          res:[]},
         { level:"sota", title:"Razonamiento largo: o3, R1, QwQ",
           desc:"Test-time compute scaling. PRM vs Outcome RM. Verifiable rewards.",
           tags:["PRM","test-time compute","verifiable"],
@@ -908,7 +956,7 @@ const SECTIONS = [
   },
   {
     id:"bench", cls:"s-bench", icon:"ti-chart-bar", title:"Benchmarks & Evaluación",
-    pill:"5 categorías · 26 benchmarks",
+    pill:"5 categorías · 27 benchmarks",
     tracks:[
       { label:"Conocimiento general", items:[
         { level:"sat", title:"MMLU",
@@ -1001,6 +1049,14 @@ const SECTIONS = [
           tags:["alucinaciones","honestidad","anti-scaling","safety","imitation"],
           papers:[{l:"TruthfulQA (Lin et al., 2021)",u:"https://arxiv.org/abs/2109.07958"}],
           res:[{l:"TruthfulQA (HF)",u:"https://huggingface.co/datasets/truthfulqa/truthful_qa"}]},
+        { level:"advanced", title:"Evaluación de sesgo y equidad",
+          desc:"Benchmarks de sesgo miden si el modelo favorece ciertos grupos en tareas de coreference o QA. BBQ: 58K preguntas de sesgo en contextos ambiguos vs no ambiguos. WinoBias: pronombres y roles de género. Los benchmarks en inglés no transfieren directamente a español/portugués — el sesgo es culturalmente específico.",
+          tags:["bias","equidad","BBQ","WinoBias","estereotipos","fairness"],
+          papers:[
+            {l:"BBQ (Parrish et al., 2022)",u:"https://arxiv.org/abs/2110.08193"},
+            {l:"WinoBias (Zhao et al., 2018)",u:"https://arxiv.org/abs/1804.06876"}
+          ],
+          res:[]},
       ]},
       { label:"Multilingüe y Latam", items:[
         { level:"latam", title:"Trueque Benchmark",
