@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Sintético con Reward Model — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Datos sintéticos → Pipeline con Reward Model</div>
+    <div class="guide-title">Pipeline completo: datos sintéticos con Reward Model</div>
+    <div class="guide-desc">End-to-end: generar N respuestas por prompt, puntuar con un RM, filtrar por calidad, iterar con el modelo mejorado. La receta usada en Phi-4, WizardLM y Nemotron.</div>
+  </div>
+
+  <!-- 1. Visión general -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-route" aria-hidden="true"></i>1. Visión del pipeline</div>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Prompts semilla</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Generar N respuestas</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Score con RM</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Filtrar por umbral</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">SFT / DPO</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Nuevo modelo</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Iterar</div>
+    </div>
+
+    <p>El insight clave: el reward model actúa como filtro de calidad. En lugar de pedir a un humano que revise respuestas generadas, el RM puntúa cada una y descartamos las de baja calidad antes del fine-tuning. Con N respuestas por prompt podemos también construir pares (chosen, rejected) para DPO directamente.</p>
+
+    <table class="model-table">
+      <tr><th>Técnica</th><th>Usa RM para</th><th>Salida</th></tr>
+      <tr><td>Best-of-N filtering</td><td>Elegir la mejor respuesta de N</td><td>Dataset SFT limpio</td></tr>
+      <tr><td>Quality filtering</td><td>Descartar respuestas con score bajo</td><td>Dataset SFT filtrado</td></tr>
+      <tr><td>Delta DPO / Online DPO</td><td>Construir pares chosen/rejected</td><td>Dataset de preferencias</td></tr>
+      <tr><td>Curriculum learning</td><td>Ordenar por dificultad (score)</td><td>Secuencia de entrenamiento</td></tr>
+    </table>
+  </div>
+
+  <!-- 2. Estructura de datos -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-database" aria-hidden="true"></i>2. Estructura de datos de entrada</div>
+
+    <p>Los prompts semilla pueden venir de datasets existentes (ShareGPT, UltraChat, Alpaca) o generarse con Self-Instruct/Magpie (ver guía de SFT datasets). Lo único que necesitamos es una lista de mensajes de usuario.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+import json
+
+# Prompts semilla: lista de strings (instrucciones en es/pt)
+seed_prompts = [
+    "Explica en español qué es el gradiente descendente en 3 oraciones.",
+    "¿Cuáles son las diferencias entre Argentina y Chile en términos económicos?",
+    "Escribe un poema corto sobre el mate.",
+    # ... cientos o miles de prompts
+]
+
+# Formato de conversación esperado por el pipeline
+def to_messages(prompt: str) -> list[dict]:
+    return [{"role": "user", "content": prompt}]
+
+# También podemos cargar desde HF datasets
+# ds = load_dataset("HuggingFaceH4/ultrachat_200k", split="train_sft")
+# seed_prompts = [ex["messages"][0]["content"] for ex in ds]</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Generación de N respuestas -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-arrows-split-2" aria-hidden="true"></i>3. Generar N respuestas por prompt</div>
+
+    <p>Generamos múltiples respuestas con temperatura alta para aumentar la diversidad. Con N=8 tenemos suficiente varianza para que el RM pueda discriminar.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
+
+model_name = "meta-llama/Llama-3.1-8B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(
+    model_name, torch_dtype=torch.bfloat16, device_map="auto"
+)
+model.eval()
+
+N = 8  # respuestas por prompt
+TEMPERATURE = 0.9
+MAX_NEW_TOKENS = 512
+
+@torch.no_grad()
+def generate_n_responses(prompt: str, n: int = N) -> list[str]:
+    messages = [{"role": "user", "content": prompt}]
+    input_ids = tokenizer.apply_chat_template(
+        messages, add_generation_prompt=True, return_tensors="pt"
+    ).to(model.device)
+
+    outputs = model.generate(
+        input_ids,
+        max_new_tokens=MAX_NEW_TOKENS,
+        do_sample=True,
+        temperature=TEMPERATURE,
+        top_p=0.95,
+        num_return_sequences=n,       # ← genera N en paralelo
+        pad_token_id=tokenizer.eos_token_id,
+    )
+
+    # Decodificar solo los tokens nuevos
+    prompt_len = input_ids.shape[1]
+    responses = []
+    for out in outputs:
+        text = tokenizer.decode(out[prompt_len:], skip_special_tokens=True)
+        responses.append(text.strip())
+    return responses</code></pre>
+    </div>
+
+    <div class="tip"><strong>Batch por prompt:</strong> <code>num_return_sequences=N</code> genera N respuestas en un solo forward pass. Es mucho más eficiente que llamar <code>generate()</code> N veces.</div>
+  </div>
+
+  <!-- 4. Scoring con RM -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-star" aria-hidden="true"></i>4. Scoring con el Reward Model</div>
+
+    <p>Cargamos el RM entrenado (ver guía de Reward Models) y puntuamos cada respuesta. El score es un escalar: más alto = mejor.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoModelForSequenceClassification
+import torch
+
+RM_PATH = "latamgpt/reward-model-v1"  # checkpoint del RM entrenado
+
+rm_tokenizer = AutoTokenizer.from_pretrained(RM_PATH)
+rm_model = AutoModelForSequenceClassification.from_pretrained(
+    RM_PATH, num_labels=1, torch_dtype=torch.bfloat16, device_map="cuda"
+)
+rm_model.eval()
+
+@torch.no_grad()
+def score_response(prompt: str, response: str) -> float:
+    """Devuelve el reward scalar para un par (prompt, response)."""
+    messages = [
+        {"role": "user", "content": prompt},
+        {"role": "assistant", "content": response},
+    ]
+    text = rm_tokenizer.apply_chat_template(messages, tokenize=False)
+    enc = rm_tokenizer(text, return_tensors="pt", truncation=True, max_length=2048)
+    enc = {k: v.to(rm_model.device) for k, v in enc.items()}
+    logits = rm_model(**enc).logits
+    return logits[0, 0].item()
+
+@torch.no_grad()
+def score_all(prompt: str, responses: list[str]) -> list[float]:
+    return [score_response(prompt, r) for r in responses]</code></pre>
+    </div>
+
+    <div class="sub-title">Scoring en batch con vLLM (producción)</div>
+    <p>Para escalar a millones de prompts, es más eficiente usar vLLM para la generación y el RM como un servicio separado.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from vllm import LLM, SamplingParams
+import torch
+
+llm = LLM(model="meta-llama/Llama-3.1-8B-Instruct", gpu_memory_utilization=0.85)
+sampling = SamplingParams(temperature=0.9, top_p=0.95, max_tokens=512, n=8)
+
+# Generar N respuestas para todos los prompts de una vez
+prompts_text = [
+    tokenizer.apply_chat_template(
+        [{"role": "user", "content": p}],
+        add_generation_prompt=True, tokenize=False
+    )
+    for p in seed_prompts
+]
+
+outputs = llm.generate(prompts_text, sampling)
+# outputs[i].outputs[j].text es la j-ésima respuesta al prompt i</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Filtrado por umbral -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-filter" aria-hidden="true"></i>5. Filtrado por calidad y construcción del dataset</div>
+
+    <p>Usamos el score del RM para filtrar respuestas de baja calidad. El umbral óptimo depende de la distribución de scores — típicamente mantenemos el top 50-70% de respuestas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import Dataset
+
+QUALITY_THRESHOLD = 0.0   # score mínimo (normalizado según tu RM)
+KEEP_TOP_K = 1            # para best-of-N SFT, guardar solo la mejor
+
+def build_sft_dataset(seed_prompts: list[str]) -> Dataset:
+    rows = []
+    for prompt in seed_prompts:
+        responses = generate_n_responses(prompt, n=N)
+        scores   = score_all(prompt, responses)
+
+        # Ordenar por score descendente
+        ranked = sorted(zip(scores, responses), reverse=True)
+
+        # Estrategia A: best-of-N (solo la mejor para SFT)
+        best_score, best_response = ranked[0]
+        if best_score >= QUALITY_THRESHOLD:
+            rows.append({
+                "messages": [
+                    {"role": "user",      "content": prompt},
+                    {"role": "assistant", "content": best_response},
+                ],
+                "rm_score": best_score,
+                "language": "es",
+            })
+
+    return Dataset.from_list(rows)
+
+
+def build_dpo_dataset(seed_prompts: list[str], delta: float = 1.5) -> Dataset:
+    """Construye pares (chosen, rejected) con delta filtering (receta OLMo 3)."""
+    rows = []
+    for prompt in seed_prompts:
+        responses = generate_n_responses(prompt, n=N)
+        scores   = score_all(prompt, responses)
+
+        ranked = sorted(zip(scores, responses), reverse=True)
+        best_score, best_resp   = ranked[0]
+        worst_score, worst_resp = ranked[-1]
+
+        # Solo incluir pares donde la diferencia es significativa
+        if best_score - worst_score >= delta:
+            rows.append({
+                "prompt":   [{"role": "user", "content": prompt}],
+                "chosen":   [{"role": "assistant", "content": best_resp}],
+                "rejected": [{"role": "assistant", "content": worst_resp}],
+                "score_chosen":   best_score,
+                "score_rejected": worst_score,
+            })
+
+    return Dataset.from_list(rows)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Delta filtering:</strong> Solo incluir pares donde <code>score_chosen − score_rejected ≥ δ</code> asegura que el RM tiene una opinión clara. Pares con delta pequeño son ruidosos y pueden confundir al DPO trainer.</div>
+  </div>
+
+  <!-- 6. Curriculum learning -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-stairs-up" aria-hidden="true"></i>6. Curriculum learning</div>
+
+    <p>En lugar de entrenar con todos los datos en orden aleatorio, ordenamos por dificultad: primero las instrucciones más fáciles (que el modelo ya puede responder bien) y progresamos hacia las difíciles. El RM score de la mejor respuesta aproxima la "facilidad".</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import Dataset
+
+def apply_curriculum(ds: Dataset, strategy: str = "easy_first") -> Dataset:
+    """
+    easy_first:  rm_score alto primero (modelo ya lo maneja bien)
+    hard_first:  rm_score bajo primero (fuerza al modelo a aprender cosas difíciles)
+    mixed:       intercalar fácil y difícil
+    """
+    scores = ds["rm_score"]
+    indices = sorted(range(len(scores)), key=lambda i: scores[i],
+                     reverse=(strategy == "easy_first"))
+    return ds.select(indices)
+
+# Combinar SFT datasets de múltiples iteraciones con pesos
+from datasets import concatenate_datasets
+
+iter1_ds = Dataset.load_from_disk("sft_iter1")  # 10k ejemplos, modelo base
+iter2_ds = Dataset.load_from_disk("sft_iter2")  # 8k ejemplos, modelo mejorado
+
+# Las rondas más recientes tienen mayor peso (3:1)
+combined = concatenate_datasets([
+    iter1_ds,
+    iter2_ds, iter2_ds, iter2_ds,
+])
+combined = combined.shuffle(seed=42)</code></pre>
+    </div>
+  </div>
+
+  <!-- 7. Loop iterativo -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-refresh" aria-hidden="true"></i>7. Pipeline iterativo completo</div>
+
+    <p>El poder real viene de iterar: el modelo mejorado genera mejores respuestas, que a su vez producen mejores datos de entrenamiento para la siguiente ronda.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from pathlib import Path
+from trl import SFTTrainer, SFTConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+def run_pipeline_iteration(
+    model_path: str,
+    seed_prompts: list[str],
+    iteration: int,
+    output_dir: str = "output",
+) -> str:
+    """Ejecuta una iteración: genera datos → filtra → entrena → guarda."""
+    print(f"\n=== Iteración {iteration} ===")
+
+    # 1. Generar y filtrar datos con el modelo actual
+    print("Generando respuestas...")
+    sft_ds = build_sft_dataset(seed_prompts)
+    print(f"  Dataset: {len(sft_ds)} ejemplos (rm_score >= {QUALITY_THRESHOLD})")
+
+    sft_ds.save_to_disk(f"{output_dir}/iter{iteration}_data")
+
+    # 2. Fine-tuning SFT
+    print("Entrenando...")
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, torch_dtype=torch.bfloat16, device_map="auto"
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+    trainer = SFTTrainer(
+        model=model,
+        tokenizer=tokenizer,
+        train_dataset=sft_ds,
+        args=SFTConfig(
+            output_dir=f"{output_dir}/iter{iteration}_ckpt",
+            num_train_epochs=2,
+            per_device_train_batch_size=4,
+            gradient_accumulation_steps=4,
+            learning_rate=2e-5,
+            lr_scheduler_type="cosine",
+            warmup_ratio=0.05,
+            bf16=True,
+            save_strategy="epoch",
+            logging_steps=50,
+        ),
+    )
+    trainer.train()
+
+    new_model_path = f"{output_dir}/iter{iteration}_model"
+    trainer.save_model(new_model_path)
+    print(f"  Modelo guardado en: {new_model_path}")
+    return new_model_path
+
+
+# Loop principal
+BASE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+N_ITERATIONS = 3
+
+current_model = BASE_MODEL
+for i in range(1, N_ITERATIONS + 1):
+    current_model = run_pipeline_iteration(
+        model_path=current_model,
+        seed_prompts=seed_prompts,
+        iteration=i,
+    )</code></pre>
+    </div>
+  </div>
+
+  <!-- 8. Detección de model collapse -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i>8. Detección de model collapse</div>
+
+    <p>El model collapse ocurre cuando los datos sintéticos de las rondas posteriores son menos diversos que los de la ronda 1, eventualmente colapsando a respuestas repetitivas. Hay que monitorearlo explícitamente.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+from collections import Counter
+
+def measure_diversity(responses: list[str]) -> dict:
+    """Métricas de diversidad para detectar model collapse."""
+
+    # 1. Distinct-n: fracción de n-gramas únicos
+    def distinct_n(texts, n):
+        all_ngrams = []
+        for text in texts:
+            tokens = text.split()
+            all_ngrams.extend(zip(*[tokens[i:] for i in range(n)]))
+        if not all_ngrams:
+            return 0.0
+        return len(set(all_ngrams)) / len(all_ngrams)
+
+    # 2. Varianza del score del RM (debe mantenerse alta)
+    # (pasarías los scores como argumento adicional)
+
+    # 3. Longitud media y varianza
+    lengths = [len(r.split()) for r in responses]
+
+    return {
+        "distinct_1": distinct_n(responses, 1),
+        "distinct_2": distinct_n(responses, 2),
+        "mean_length": np.mean(lengths),
+        "std_length":  np.std(lengths),
+        "n_unique_responses": len(set(responses)),
+    }
+
+# Comparar entre iteraciones
+for i, iter_ds in enumerate(iter_datasets, 1):
+    responses = [ex["messages"][1]["content"] for ex in iter_ds]
+    metrics = measure_diversity(responses)
+    print(f"Iter {i}: distinct-2={metrics['distinct_2']:.3f}, "
+          f"len_std={metrics['std_length']:.1f}")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Señal de alerta</th><th>Qué indica</th><th>Mitigación</th></tr>
+      <tr><td>distinct-2 &lt; 0.3</td><td>Respuestas muy repetitivas</td><td>Aumentar temperatura, añadir prompts seed humanos</td></tr>
+      <tr><td>std_length → 0</td><td>Respuestas de longitud uniforme</td><td>Añadir ejemplos cortos y largos explícitamente</td></tr>
+      <tr><td>rm_score_std → 0</td><td>RM ya no discrimina</td><td>Reentrenar el RM con nuevos pares</td></tr>
+      <tr><td>Benchmark drops &gt; 5pp</td><td>Forgetting de capacidades base</td><td>Mezclar datos originales (5-10%) en cada ronda</td></tr>
+    </table>
+
+    <div class="warn"><strong>Regla práctica:</strong> Siempre mezclar entre 5-10% de los datos originales (de ronda 0 o datos humanos) en cada iteración. Esto ancla el modelo y previene drift acumulativo. Sin esto, después de 3-4 rondas el modelo puede degradar en tareas que no están en los prompts semilla.</div>
+  </div>
+
+  <!-- 9. Push a HF Hub -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-cloud-upload" aria-hidden="true"></i>9. Publicar el dataset final</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import concatenate_datasets, DatasetDict
+
+# Combinar todas las iteraciones
+all_iters = [Dataset.load_from_disk(f"output/iter{i}_data") for i in range(1, 4)]
+full_dataset = concatenate_datasets(all_iters)
+
+# Añadir metadatos
+full_dataset = full_dataset.map(lambda ex: {
+    **ex,
+    "source": "synthetic-rm-pipeline-v1",
+    "model_generator": "meta-llama/Llama-3.1-8B-Instruct",
+    "rm_model": "latamgpt/reward-model-v1",
+})
+
+# Split train/val
+split = full_dataset.train_test_split(test_size=0.02, seed=42)
+ds_dict = DatasetDict({"train": split["train"], "validation": split["test"]})
+
+ds_dict.push_to_hub(
+    "latamgpt/sft-synthetic-rm-v1",
+    private=True,
+    commit_message="Add synthetic SFT dataset (3 iterations, RM-filtered)",
+)</code></pre>
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2312.11456" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Iterative DPO (Xu et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.15124" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Tülu 3 (Lambert et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2404.07503" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Best Practices Synthetic Data (Liu et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2412.08905" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Phi-4 (Abdin et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2305.17333" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Model Collapse (Shumailov et al., 2023)</a>
+      <a class="source-link" href="reward-models.html"><i class="ti ti-star"></i>Guía: Reward Models</a>
+      <a class="source-link" href="sft-dataset.html"><i class="ti ti-database-plus"></i>Guía: Datasets SFT</a>
+      <a class="source-link" href="grpo-rl.html"><i class="ti ti-tournament"></i>Guía: GRPO y RL</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = '¡Copiado!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      });
+    });
+  });
+</script>
+</body>
+</html>

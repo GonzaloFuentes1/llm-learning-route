@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrenamiento de Tokenizadores — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Datos → Tokenizadores</div>
+    <div class="guide-title">Entrenamiento de Tokenizadores para es/pt</div>
+    <div class="guide-desc">Entrenar un tokenizador BPE desde cero y extender el vocabulario de LLaMA/Mistral para español y portugués latinoamericano — reduciendo la fertility rate y acelerando el entrenamiento.</div>
+  </div>
+
+  <!-- 1. Por qué importa -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-question-mark" aria-hidden="true"></i>1. Por qué el tokenizador de LLaMA es subóptimo para es/pt</div>
+
+    <p>El tokenizador de LLaMA 3 fue entrenado principalmente sobre texto en inglés. Como resultado, palabras comunes en español como "educación" o "también" se tokenizan en 3-5 tokens, mientras que en inglés "education" o "also" son 1-2 tokens. Esto tiene consecuencias directas:</p>
+
+    <table class="model-table">
+      <tr><th>Métrica</th><th>LLaMA 3 tokenizer</th><th>Tokenizador es/pt dedicado</th></tr>
+      <tr><td>Fertility rate (es)</td><td>~2.4 tokens/palabra</td><td>~1.5 tokens/palabra</td></tr>
+      <tr><td>Tokens para "educación"</td><td>4 tokens</td><td>1 token</td></tr>
+      <tr><td>Contexto efectivo</td><td>100%</td><td>~160% (mismo window)</td></tr>
+      <tr><td>Costo de inferencia</td><td>100%</td><td>~65% (menos tokens)</td></tr>
+    </table>
+
+    <p><strong>Fertility rate</strong>: promedio de tokens por palabra en un corpus de referencia. Menor fertility = tokenizador más eficiente para ese idioma.</p>
+
+    <div class="tip"><strong>¿Siempre hay que cambiar el tokenizador?</strong> No. Para fine-tuning sobre pocas épocas, el costo de extender vocabulario (reentrenar embeddings) puede no compensar. Vale la pena cuando: (1) se hace continual pretraining desde cero, (2) el vocabulario de inglés tiene menos del 30% de overlap con el corpus objetivo, (3) el presupuesto de inference es una restricción dura.</div>
+  </div>
+
+  <!-- 2. Instalar y preparar datos -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-package" aria-hidden="true"></i>2. Preparar corpus de entrenamiento</div>
+
+    <p>Para entrenar un buen tokenizador necesitamos texto representativo del dominio objetivo: web en español/portugués, documentos técnicos, y algo de código. Un corpus de ~10GB es suficiente para converger.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install tokenizers datasets</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+from itertools import islice
+
+def get_training_corpus(batch_size: int = 1000):
+    """Iterador perezoso sobre corpus multilingüe es/pt/en."""
+
+    # CulturaX: web crawl limpio en es y pt
+    es_ds = load_dataset("uonlp/CulturaX", "es", split="train", streaming=True)
+    pt_ds = load_dataset("uonlp/CulturaX", "pt", split="train", streaming=True)
+
+    # FineWeb: texto web en inglés de calidad (para mantener capacidad en inglés)
+    en_ds = load_dataset("HuggingFaceFW/fineweb", "sample-10BT",
+                         split="train", streaming=True)
+
+    # Intercalar en ratio 40% es, 30% pt, 30% en
+    sources = [
+        (es_ds, 0.40),
+        (pt_ds, 0.30),
+        (en_ds, 0.30),
+    ]
+
+    iterators = [(iter(ds), weight) for ds, weight in sources]
+
+    while True:
+        batch = []
+        for it, weight in iterators:
+            n = max(1, int(batch_size * weight))
+            for ex in islice(it, n):
+                batch.append(ex["text"])
+        if not batch:
+            break
+        yield batch</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Entrenar tokenizador desde cero -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-binary" aria-hidden="true"></i>3. Entrenar BPE desde cero</div>
+
+    <p>Usamos la librería <code>tokenizers</code> de HuggingFace para entrenar un tokenizador BPE (Byte-Pair Encoding) optimizado para español y portugués.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import ByteLevel
+from tokenizers.normalizers import NFC
+from tokenizers.processors import TemplateProcessing
+
+# Configurar el tokenizador base
+tokenizer = Tokenizer(BPE(unk_token="&lt;unk&gt;"))
+tokenizer.normalizer = NFC()           # normalizar Unicode (importante para acentos)
+tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False)
+
+# Tokens especiales
+SPECIAL_TOKENS = [
+    "&lt;unk&gt;", "&lt;s&gt;", "&lt;/s&gt;", "&lt;pad&gt;",
+    # Chat template tokens
+    "&lt;|user|&gt;", "&lt;|assistant|&gt;", "&lt;|system|&gt;", "&lt;|end|&gt;",
+]
+
+trainer = BpeTrainer(
+    vocab_size=65_536,           # 64k tokens (LLaMA 3 usa 128k)
+    special_tokens=SPECIAL_TOKENS,
+    min_frequency=2,             # ignorar n-gramas con &lt;2 apariciones
+    show_progress=True,
+)
+
+# Entrenar — puede tomar 1-3 horas sobre 10GB de texto
+tokenizer.train_from_iterator(get_training_corpus(), trainer=trainer)
+
+# Post-processor para añadir BOS/EOS automáticamente
+tokenizer.post_processor = TemplateProcessing(
+    single="&lt;s&gt; $A &lt;/s&gt;",
+    pair="&lt;s&gt; $A &lt;/s&gt; $B:1 &lt;/s&gt;:1",
+    special_tokens=[("&lt;s&gt;", tokenizer.token_to_id("&lt;s&gt;")),
+                    ("&lt;/s&gt;", tokenizer.token_to_id("&lt;/s&gt;"))],
+)
+
+tokenizer.save("tokenizer-latamgpt-65k.json")
+print(f"Vocabulary size: {tokenizer.get_vocab_size()}")</code></pre>
+    </div>
+
+    <div class="sub-title">Convertir a PreTrainedTokenizerFast</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import PreTrainedTokenizerFast
+
+hf_tokenizer = PreTrainedTokenizerFast(
+    tokenizer_file="tokenizer-latamgpt-65k.json",
+    bos_token="&lt;s&gt;",
+    eos_token="&lt;/s&gt;",
+    unk_token="&lt;unk&gt;",
+    pad_token="&lt;pad&gt;",
+)
+
+hf_tokenizer.save_pretrained("latamgpt-tokenizer-v1")
+hf_tokenizer.push_to_hub("latamgpt/tokenizer-v1")</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Extender tokenizador existente -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-plus" aria-hidden="true"></i>4. Extender el tokenizador de LLaMA 3 (opción recomendada)</div>
+
+    <p>En lugar de entrenar desde cero, podemos añadir nuevos tokens BPE al tokenizador de LLaMA 3. Esto preserva compatibilidad con pesos preentrenados y solo requiere inicializar embeddings para los tokens nuevos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import ByteLevel
+from transformers import AutoTokenizer
+
+BASE_TOKENIZER = "meta-llama/Meta-Llama-3.1-8B"
+
+# 1. Entrenar un tokenizador auxiliar SOLO sobre texto en es/pt
+aux_tokenizer = Tokenizer(BPE(unk_token="&lt;unk&gt;"))
+aux_tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False)
+
+aux_trainer = BpeTrainer(
+    vocab_size=8_000,   # 8k tokens nuevos a agregar
+    min_frequency=5,
+    show_progress=True,
+)
+aux_tokenizer.train_from_iterator(get_training_corpus(), aux_trainer)
+
+# 2. Extraer los tokens nuevos (los que no existen en LLaMA)
+llama_tok = AutoTokenizer.from_pretrained(BASE_TOKENIZER)
+llama_vocab = set(llama_tok.get_vocab().keys())
+
+new_tokens = [
+    tok for tok in aux_tokenizer.get_vocab().keys()
+    if tok not in llama_vocab
+]
+print(f"Tokens nuevos a añadir: {len(new_tokens)}")  # ~5,000-7,000
+
+# 3. Añadir al tokenizador base
+llama_tok.add_tokens(new_tokens)
+llama_tok.save_pretrained("llama3-extended-tokenizer")
+
+print(f"Vocabulario original: 128,256")
+print(f"Vocabulario extendido: {len(llama_tok)}")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Inicializar embeddings -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-vector" aria-hidden="true"></i>5. Inicializar embeddings para nuevos tokens</div>
+
+    <p>Los nuevos tokens necesitan embeddings iniciales. La mejor estrategia es inicializarlos como el promedio de los embeddings de los subwords con los que se tokenizaba la misma palabra antes de la extensión.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+BASE_MODEL = "meta-llama/Meta-Llama-3.1-8B"
+
+orig_tok = AutoTokenizer.from_pretrained(BASE_MODEL)
+ext_tok  = AutoTokenizer.from_pretrained("llama3-extended-tokenizer")
+
+model = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL, torch_dtype=torch.bfloat16
+)
+
+# Expandir la capa de embeddings
+n_orig = len(orig_tok)   # 128,256
+n_new  = len(ext_tok)    # 128,256 + nuevos tokens
+model.resize_token_embeddings(n_new)
+
+embed_weight = model.get_input_embeddings().weight  # shape: [vocab_size, hidden]
+
+def init_new_token_embedding(new_token: str) -> torch.Tensor:
+    """Inicializa el embedding como promedio de subwords en el tokenizador original."""
+    subword_ids = orig_tok.encode(new_token, add_special_tokens=False)
+    if not subword_ids:
+        return embed_weight[:n_orig].mean(dim=0)
+    return embed_weight[subword_ids].mean(dim=0)
+
+# Inicializar solo los tokens nuevos
+with torch.no_grad():
+    for new_token in new_tokens:
+        new_id = ext_tok.convert_tokens_to_ids(new_token)
+        if new_id >= n_orig:  # es realmente un token nuevo
+            embed_weight[new_id] = init_new_token_embedding(new_token)
+
+# También inicializar la capa lm_head (output embeddings)
+if hasattr(model, "lm_head") and model.lm_head.weight is not model.get_input_embeddings().weight:
+    lm_head_weight = model.lm_head.weight
+    model.resize_token_embeddings(n_new)  # ya lo hicimos, pero por si acaso
+    # Copiar los mismos valores inicializados
+    with torch.no_grad():
+        lm_head_weight[n_orig:] = embed_weight[n_orig:]
+
+model.save_pretrained("llama3-extended-init")
+ext_tok.save_pretrained("llama3-extended-init")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Importante:</strong> Los nuevos embeddings necesitan entrenarse. El modelo con vocabulario extendido <strong>debe pasar por continual pretraining</strong> antes de usarse para inferencia. Los embeddings inicializados por promedio son un buen punto de partida, pero el modelo necesita aprender a usarlos en contexto.</div>
+  </div>
+
+  <!-- 6. Evaluar fertility rate -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>6. Evaluar la calidad del tokenizador</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoTokenizer
+from datasets import load_dataset
+
+def compute_fertility_rate(tokenizer, texts: list[str]) -> float:
+    """Tokens generados / palabras totales. Menor = más eficiente."""
+    total_tokens = 0
+    total_words  = 0
+    for text in texts:
+        tokens = tokenizer.encode(text, add_special_tokens=False)
+        words  = text.split()
+        total_tokens += len(tokens)
+        total_words  += len(words)
+    return total_tokens / total_words if total_words > 0 else 0
+
+# Preparar textos de evaluación
+eval_texts = {
+    "es": load_dataset("uonlp/CulturaX", "es", split="train",
+                       streaming=True).take(1000),
+    "pt": load_dataset("uonlp/CulturaX", "pt", split="train",
+                       streaming=True).take(1000),
+    "en": load_dataset("HuggingFaceFW/fineweb", "sample-10BT",
+                       split="train", streaming=True).take(1000),
+}
+eval_corpus = {lang: [ex["text"] for ex in ds] for lang, ds in eval_texts.items()}
+
+# Comparar tokenizadores
+tokenizers_to_compare = {
+    "LLaMA 3 original":   AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B"),
+    "LLaMA 3 extendido":  AutoTokenizer.from_pretrained("llama3-extended-init"),
+}
+
+print(f"{'Tokenizador':<25} {'es':<8} {'pt':<8} {'en':<8}")
+print("-" * 50)
+for name, tok in tokenizers_to_compare.items():
+    rates = {lang: compute_fertility_rate(tok, texts)
+             for lang, texts in eval_corpus.items()}
+    print(f"{name:<25} {rates['es']:<8.3f} {rates['pt']:<8.3f} {rates['en']:<8.3f}")</code></pre>
+    </div>
+
+    <p>Resultado esperado:</p>
+    <table class="model-table">
+      <tr><th>Tokenizador</th><th>Fertility es</th><th>Fertility pt</th><th>Fertility en</th></tr>
+      <tr><td>LLaMA 3 original</td><td>~2.4</td><td>~2.3</td><td>~1.5</td></tr>
+      <tr><td>LLaMA 3 extendido (+8k es/pt)</td><td>~1.7</td><td>~1.7</td><td>~1.6</td></tr>
+      <tr><td>Tokenizador BPE nativo 65k</td><td>~1.5</td><td>~1.5</td><td>~1.9</td></tr>
+    </table>
+
+    <div class="tip"><strong>Trade-off:</strong> El BPE nativo es el más eficiente para es/pt pero pierde eficiencia en inglés. El extendido ofrece un balance razonable sin romper compatibilidad con los pesos preentrenados. Para LatamGPT, el extendido es la opción más práctica.</div>
+  </div>
+
+  <!-- 7. Continual pretraining -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-repeat" aria-hidden="true"></i>7. Continual pretraining con vocabulario extendido</div>
+
+    <p>Con el modelo inicializado y el tokenizador extendido, el continual pretraining sigue el mismo flujo que la guía correspondiente con una diferencia: hay que congelar los embeddings de los tokens <em>originales</em> durante las primeras épocas para no degradar el inglés.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM
+
+model = AutoModelForCausalLM.from_pretrained("llama3-extended-init",
+                                              torch_dtype=torch.bfloat16)
+n_orig = 128_256  # vocabulario original de LLaMA 3
+
+def freeze_original_embeddings(model, n_orig_tokens: int):
+    """Congela los embeddings de los tokens originales, deja libres los nuevos."""
+    embed = model.get_input_embeddings()
+
+    def make_hook(n_orig):
+        def hook(grad):
+            grad[:n_orig] = 0  # no actualizar tokens originales
+            return grad
+        return hook
+
+    embed.weight.register_hook(make_hook(n_orig_tokens))
+
+# Activar durante las primeras ~1000 steps para estabilizar los nuevos embeddings
+freeze_original_embeddings(model, n_orig)
+
+# Después de 1000 steps, descongelar para permitir ajuste fino del vocabulario completo
+# (simplemente no registrar el hook para las siguientes etapas)</code></pre>
+    </div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2308.12950" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>BLOOM tokenizer (Workshop et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>LLaMA 3 (Dubey et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.09400" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>CulturaX (Nguyen et al., 2023)</a>
+      <a class="source-link" href="https://huggingface.co/docs/tokenizers/index" target="_blank" rel="noopener"><i class="ti ti-book"></i>HuggingFace Tokenizers docs</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = '¡Copiado!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -289,8 +289,8 @@
     </div>
     <div class="hero-stats">
       <div class="hstat"><div class="hstat-n">7</div><div class="hstat-l">áreas temáticas</div></div>
-      <div class="hstat"><div class="hstat-n">113</div><div class="hstat-l">temas en roadmap</div></div>
-      <div class="hstat"><div class="hstat-n">17</div><div class="hstat-l">guías con código</div></div>
+      <div class="hstat"><div class="hstat-n">115</div><div class="hstat-l">temas en roadmap</div></div>
+      <div class="hstat"><div class="hstat-n">21</div><div class="hstat-l">guías con código</div></div>
     </div>
   </div>
 
@@ -302,7 +302,7 @@
       <div class="card-content">
         <div class="card-title">
           LatamGPT — Ruta de aprendizaje
-          <span class="card-badge badge-roadmap">113 temas · 160+ papers</span>
+          <span class="card-badge badge-roadmap">115 temas · 160+ papers</span>
         </div>
         <div class="card-desc">
           Roadmap interactivo de fundamentos a SOTA 2026. 7 secciones: Fundamentos de ML, Modelos, Datos, Pretraining, Post-training,
@@ -375,6 +375,28 @@
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
+    <a class="card c-datos" href="guias/tokenizer-training.html">
+      <div class="card-icon"><i class="ti ti-binary-tree" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Entrenamiento de Tokenizadores
+          <span class="card-badge badge-datos">Avanzado</span>
+        </div>
+        <div class="card-desc">Entrenar BPE desde cero y extender el vocabulario de LLaMA 3 para español y portugués: fertility rate, embeddings para nuevos tokens y evaluación.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-datos" href="guias/synthetic-pipeline.html">
+      <div class="card-icon"><i class="ti ti-refresh-dot" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Pipeline Sintético con Reward Model
+          <span class="card-badge badge-datos">Avanzado</span>
+        </div>
+        <div class="card-desc">Pipeline end-to-end: generar N respuestas, puntuar con RM, filtrar por umbral, curriculum learning e iteración con el modelo mejorado. Detección de model collapse.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
   </div>
 
   <!-- Entrenamiento -->
@@ -401,6 +423,17 @@
       <div class="card-content">
         <div class="card-title">Debugging de Entrenamiento</div>
         <div class="card-desc">Loss spikes, gradient norms, OOM errors, NaN en gradientes y memory profiling con torch.profiler.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-train" href="guias/quantization.html">
+      <div class="card-icon"><i class="ti ti-database-cog" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Quantización para inferencia
+          <span class="card-badge badge-train">Core</span>
+        </div>
+        <div class="card-desc">GPTQ, AWQ y GGUF/llama.cpp: cuándo usar cada método, cómo quantizar modelos LatamGPT y benchmarking de calidad vs velocidad.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
@@ -499,6 +532,17 @@
           <span class="card-badge badge-deploy">Core</span>
         </div>
         <div class="card-desc">lm-eval-harness en la práctica: MGSM, FLORES-200, IFEval, tasks personalizados para Trueque/LatamQA, detección de contaminación y batch evaluation en SLURM.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-deploy" href="guias/speculative-decoding.html">
+      <div class="card-icon"><i class="ti ti-bolt" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Speculative Decoding
+          <span class="card-badge badge-deploy">Avanzado</span>
+        </div>
+        <div class="card-desc">2-3× más rápido sin degradar calidad: draft model + verificación paralela, vLLM nativo, Medusa heads y benchmarking de tokens/s.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>

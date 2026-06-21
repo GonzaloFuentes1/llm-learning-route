@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantización para inferencia — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Deployment & Evaluación → Quantización</div>
+    <div class="guide-title">Quantización para inferencia eficiente</div>
+    <div class="guide-desc">GPTQ, AWQ y GGUF: cuándo usar cada uno, cómo quantizar modelos LatamGPT y cuánta calidad se pierde con cada método.</div>
+  </div>
+
+  <!-- 1. Comparación -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-table" aria-hidden="true"></i>1. Comparación de métodos</div>
+
+    <table class="model-table">
+      <tr><th>Método</th><th>Approach</th><th>Hardware</th><th>Integración</th><th>Calidad</th></tr>
+      <tr><td>BitsAndBytes (NF4)</td><td>Quantización en tiempo de carga</td><td>GPU CUDA</td><td>transformers nativo</td><td>Muy buena (training)</td></tr>
+      <tr><td>GPTQ</td><td>Post-training, calibración offline</td><td>GPU CUDA</td><td>AutoGPTQ / transformers</td><td>Buena</td></tr>
+      <tr><td>AWQ</td><td>Activation-aware, calibración offline</td><td>GPU CUDA</td><td>AutoAWQ / vLLM</td><td>Excelente</td></tr>
+      <tr><td>GGUF / llama.cpp</td><td>Quantización flexible (Q2-Q8)</td><td>CPU / Metal / CUDA</td><td>llama.cpp / Ollama</td><td>Depende del nivel Q</td></tr>
+    </table>
+
+    <p><strong>Regla de elección:</strong> AWQ para producción en GPU (mejor throughput en vLLM), GGUF para desarrollo local o hardware sin GPU, BitsAndBytes para fine-tuning (no para inferencia en producción), GPTQ si AWQ no está disponible para tu modelo.</p>
+  </div>
+
+  <!-- 2. AWQ -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-cpu" aria-hidden="true"></i>2. AWQ: Activation-Aware Weight Quantization</div>
+
+    <p>AWQ identifica los pesos más importantes para la activación y los protege durante la quantización. Resultado: menor degradación que GPTQ al mismo número de bits.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install autoawq</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from awq import AutoAWQForCausalLM
+from transformers import AutoTokenizer
+
+MODEL_PATH = "latamgpt/llama3-8b-sft-v1"   # tu modelo fino-tuneado
+
+# 1. Cargar modelo y tokenizador
+model = AutoAWQForCausalLM.from_pretrained(MODEL_PATH, safetensors=True)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+
+# 2. Dataset de calibración: textos representativos del uso final
+calib_data = [
+    "Hola, ¿cómo puedo ayudarte hoy?",
+    "El modelo de lenguaje grande es una red neuronal que...",
+    "Para calcular la derivada de x², aplicamos la regla de la potencia...",
+    # añadir ~100-200 ejemplos representativos en es/pt
+]
+
+# 3. Configurar quantización
+quant_config = {
+    "zero_point": True,
+    "q_group_size": 128,   # granularidad de los grupos
+    "w_bit": 4,            # 4 bits por peso
+    "version": "GEMM",     # GEMM = más rápido en batch grande; GEMV = mejor en batch=1
+}
+
+# 4. Quantizar (requiere GPU, ~30 min para 8B)
+model.quantize(tokenizer, quant_config=quant_config, calib_data=calib_data)
+
+# 5. Guardar
+model.save_quantized("latamgpt-llama3-8b-awq-4bit")
+tokenizer.save_pretrained("latamgpt-llama3-8b-awq-4bit")</code></pre>
+    </div>
+
+    <div class="sub-title">Servir con vLLM (producción)</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># vLLM detecta AWQ automáticamente por los metadatos del modelo
+python -m vllm.entrypoints.openai.api_server \
+  --model latamgpt-llama3-8b-awq-4bit \
+  --quantization awq \
+  --dtype bfloat16 \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.9</code></pre>
+    </div>
+
+    <div class="tip"><strong>Memoria AWQ 4-bit:</strong> Un modelo de 8B en bfloat16 ocupa ~16 GB; en AWQ-4bit ocupa ~5-6 GB. Permite servir LLaMA 3 8B en una GPU de 8 GB como la RTX 3070.</div>
+  </div>
+
+  <!-- 3. GPTQ -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-bolt" aria-hidden="true"></i>3. GPTQ con transformers</div>
+
+    <p>GPTQ está integrado directamente en <code>transformers</code> desde la versión 4.35. No requiere librería externa para cuantizar modelos ya publicados en HF Hub.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install optimum auto-gptq</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer, GPTQConfig
+
+tokenizer = AutoTokenizer.from_pretrained("latamgpt/llama3-8b-sft-v1")
+
+# Dataset de calibración (mínimo 128 ejemplos)
+calib_dataset = [
+    tokenizer(text, return_tensors="pt").input_ids
+    for text in calib_data[:128]
+]
+
+gptq_config = GPTQConfig(
+    bits=4,
+    dataset=calib_dataset,
+    group_size=128,
+    desc_act=True,   # activar para mejor calidad (más lento)
+)
+
+model = AutoModelForCausalLM.from_pretrained(
+    "latamgpt/llama3-8b-sft-v1",
+    quantization_config=gptq_config,
+    device_map="auto",
+)
+
+model.save_pretrained("latamgpt-llama3-8b-gptq-4bit")
+tokenizer.save_pretrained("latamgpt-llama3-8b-gptq-4bit")
+
+# Subir a HF Hub
+model.push_to_hub("latamgpt/llama3-8b-gptq-4bit")
+tokenizer.push_to_hub("latamgpt/llama3-8b-gptq-4bit")</code></pre>
+    </div>
+
+    <div class="sub-title">Cargar un modelo GPTQ ya quantizado</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# transformers detecta GPTQ por los metadatos en config.json
+model = AutoModelForCausalLM.from_pretrained(
+    "latamgpt/llama3-8b-gptq-4bit",
+    device_map="auto",
+)
+tokenizer = AutoTokenizer.from_pretrained("latamgpt/llama3-8b-gptq-4bit")</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. GGUF / llama.cpp -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-device-laptop" aria-hidden="true"></i>4. GGUF con llama.cpp (CPU / hardware limitado)</div>
+
+    <p>GGUF es el formato de llama.cpp. Permite correr modelos cuantizados en CPU, Apple Silicon (Metal) y GPU con CUDA. Ideal para desarrollo local y prototipado sin GPU dedicada.</p>
+
+    <div class="sub-title">Convertir a GGUF</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># 1. Clonar llama.cpp y compilar
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+cmake -B build -DGGML_CUDA=ON    # añadir -DGGML_METAL=ON para Mac
+cmake --build build --config Release -j
+
+pip install -r requirements.txt
+
+# 2. Convertir modelo HuggingFace a GGUF (F16 = sin quantizar)
+python convert_hf_to_gguf.py latamgpt-llama3-8b-sft-v1 \
+  --outtype f16 \
+  --outfile models/llama3-8b-f16.gguf
+
+# 3. Quantizar el GGUF
+./build/bin/llama-quantize \
+  models/llama3-8b-f16.gguf \
+  models/llama3-8b-Q4_K_M.gguf \
+  Q4_K_M</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Nivel GGUF</th><th>Bits/peso</th><th>Tamaño 8B</th><th>Calidad relativa</th><th>Cuándo usar</th></tr>
+      <tr><td>Q2_K</td><td>~2.6</td><td>~3 GB</td><td>Degradación notable</td><td>RAM muy limitada (&lt;4GB)</td></tr>
+      <tr><td>Q4_K_M</td><td>~4.5</td><td>~5 GB</td><td>Muy buena</td><td>Recomendado para uso general</td></tr>
+      <tr><td>Q5_K_M</td><td>~5.5</td><td>~6 GB</td><td>Excelente</td><td>Si tienes RAM suficiente</td></tr>
+      <tr><td>Q8_0</td><td>~8.5</td><td>~9 GB</td><td>Casi idéntica a F16</td><td>Máxima calidad, todavía < F16</td></tr>
+      <tr><td>F16</td><td>16</td><td>~16 GB</td><td>Referencia</td><td>Solo para comparar</td></tr>
+    </table>
+
+    <div class="sub-title">Inferencia con llama.cpp</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Servidor OpenAI-compatible (igual que vLLM pero en CPU)
+./build/bin/llama-server \
+  --model models/llama3-8b-Q4_K_M.gguf \
+  --n-gpu-layers 0 \   # 0 = solo CPU; aumentar para offloading parcial a GPU
+  --ctx-size 4096 \
+  --threads 8 \
+  --port 8080</code></pre>
+    </div>
+
+    <div class="sub-title">Con Python (llama-cpp-python)</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from llama_cpp import Llama
+
+llm = Llama(
+    model_path="models/llama3-8b-Q4_K_M.gguf",
+    n_ctx=4096,
+    n_threads=8,
+    n_gpu_layers=0,   # aumentar si tienes GPU parcial
+    verbose=False,
+)
+
+response = llm.create_chat_completion(
+    messages=[
+        {"role": "system",    "content": "Eres un asistente en español."},
+        {"role": "user",      "content": "Explica qué es el gradiente descendente."},
+    ],
+    temperature=0.7,
+    max_tokens=512,
+)
+print(response["choices"][0]["message"]["content"])</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Benchmark -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>5. Benchmarking: calidad vs rendimiento</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import time
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+def benchmark_throughput(model, tokenizer, prompt: str, n_tokens: int = 200) -> dict:
+    """Mide tokens/segundo y VRAM usada."""
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+    # Warmup
+    with torch.no_grad():
+        model.generate(**inputs, max_new_tokens=10)
+
+    # Medición
+    torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=n_tokens, do_sample=False)
+    torch.cuda.synchronize()
+    t1 = time.perf_counter()
+
+    n_generated = out.shape[1] - inputs["input_ids"].shape[1]
+    tps = n_generated / (t1 - t0)
+
+    vram_mb = torch.cuda.max_memory_allocated() / 1e6
+
+    return {"tokens_per_sec": tps, "vram_mb": vram_mb, "n_tokens": n_generated}
+
+# Comparar
+PROMPT = "Explica en detalle qué es el pretraining de modelos de lenguaje y por qué es importante."
+models_to_test = {
+    "BF16 original":   "latamgpt/llama3-8b-sft-v1",
+    "AWQ 4-bit":       "latamgpt/llama3-8b-awq-4bit",
+    "GPTQ 4-bit":      "latamgpt/llama3-8b-gptq-4bit",
+}
+
+for name, path in models_to_test.items():
+    tok = AutoTokenizer.from_pretrained(path)
+    m   = AutoModelForCausalLM.from_pretrained(path, device_map="auto", torch_dtype=torch.bfloat16)
+    res = benchmark_throughput(m, tok, PROMPT)
+    print(f"{name}: {res['tokens_per_sec']:.1f} tok/s, {res['vram_mb']:.0f} MB VRAM")</code></pre>
+    </div>
+
+    <p>Resultados típicos en una A100 80GB para LLaMA 3 8B, batch=1:</p>
+    <table class="model-table">
+      <tr><th>Método</th><th>Throughput</th><th>VRAM</th><th>PPL (WikiText-2)</th></tr>
+      <tr><td>BF16 original</td><td>~90 tok/s</td><td>~16 GB</td><td>referencia</td></tr>
+      <tr><td>AWQ 4-bit</td><td>~150 tok/s</td><td>~5.5 GB</td><td>+0.3 PPL</td></tr>
+      <tr><td>GPTQ 4-bit</td><td>~130 tok/s</td><td>~5.5 GB</td><td>+0.5 PPL</td></tr>
+      <tr><td>GGUF Q4_K_M (CPU)</td><td>~15 tok/s</td><td>RAM ~5 GB</td><td>+0.4 PPL</td></tr>
+    </table>
+
+    <div class="warn"><strong>No confiar en perplexity sola:</strong> PPL no captura degradación en tareas de razonamiento o seguimiento de instrucciones. Siempre evaluar el modelo quantizado con <code>lm-eval-harness</code> en los benchmarks del proyecto (MGSM, IFEval) antes de desplegar en producción.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>GPTQ (Frantar et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>AWQ (Lin et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2208.07339" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SqueezeLLM (Kim et al., 2023)</a>
+      <a class="source-link" href="https://github.com/ggerganov/llama.cpp" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>llama.cpp</a>
+      <a class="source-link" href="https://github.com/casper-hansen/AutoAWQ" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>AutoAWQ</a>
+      <a class="source-link" href="inferencia.html"><i class="ti ti-server-bolt"></i>Guía: Serving con vLLM</a>
+      <a class="source-link" href="lora-finetuning.html"><i class="ti ti-adjustments-horizontal"></i>Guía: LoRA/QLoRA (BitsAndBytes)</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = '¡Copiado!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      });
+    });
+  });
+</script>
+</body>
+</html>

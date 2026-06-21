@@ -325,7 +325,7 @@
     </div>
     <div class="stats">
       <div class="stat"><div class="stat-n">7</div><div class="stat-l">secciones</div></div>
-      <div class="stat"><div class="stat-n">113</div><div class="stat-l">temas</div></div>
+      <div class="stat"><div class="stat-n">115</div><div class="stat-l">temas</div></div>
       <div class="stat"><div class="stat-n">160+</div><div class="stat-l">papers</div></div>
     </div>
   </div>
@@ -758,7 +758,7 @@ const SECTIONS = [
   },
   {
     id:"posttraining", cls:"s-post", icon:"ti-adjustments", title:"Post-training",
-    pill:"4 niveles · 19 temas",
+    pill:"4 niveles · 21 temas",
     tracks:[
       { label:"Básico", items:[
         { level:"basic", title:"Prompt Engineering e In-Context Learning",
@@ -824,6 +824,16 @@ const SECTIONS = [
           tags:["GRPO","DeepSeek-R1","RLVR"],
           papers:[{l:"GRPO/DeepSeekMath (Shao et al., 2024)",u:"https://arxiv.org/abs/2402.03300"},{l:"DeepSeek-R1 (2025)",u:"https://arxiv.org/abs/2501.12948"},{l:"DAPO (Yu et al., 2025)",u:"https://arxiv.org/abs/2503.14476"}],
           res:[{l:"verl (GitHub)",u:"https://github.com/volcengine/verl"},{l:"allenai/RLVR-GSM-MATH-IF-Mixed-Constraints (HF)",u:"https://huggingface.co/datasets/allenai/RLVR-GSM-MATH-IF-Mixed-Constraints"},{l:"nvidia/Nemotron-RL-math-OpenMathReasoning (HF)",u:"https://huggingface.co/datasets/nvidia/Nemotron-RL-math-OpenMathReasoning"}]},
+        { level:"advanced", title:"Online DPO / Iterative DPO",
+          desc:"Versión iterativa de DPO: generar respuestas con el modelo actual, puntuar con un RM, construir pares on-the-fly y entrenar. Evita la distribución estática del DPO offline. Usado en Tülu 3 y OLMo 3. SPIN extiende esto a auto-juego: el modelo compite consigo mismo.",
+          tags:["Online DPO","Iterative DPO","SPIN","OAIF","on-policy"],
+          papers:[
+            {l:"Iterative DPO (Xu et al., 2023)",u:"https://arxiv.org/abs/2312.11456"},
+            {l:"SPIN (Chen et al., 2024)",u:"https://arxiv.org/abs/2401.01335"},
+            {l:"Online AI Feedback / OAIF (Guo et al., 2024)",u:"https://arxiv.org/abs/2402.04792"},
+            {l:"Tülu 3 (Lambert et al., 2024)",u:"https://arxiv.org/abs/2411.15124"}
+          ],
+          res:[{l:"Open-Instruct (AllenAI)",u:"https://github.com/allenai/open-instruct"}]},
         { level:"advanced", title:"LLM-as-a-Judge",
           desc:"Diseño de rúbricas, sesgos del juez, multi-LLM judging.",
           tags:["rubrics","judge bias","multi-LLM"],
@@ -881,6 +891,13 @@ const SECTIONS = [
           tags:["Trueque","LatamQA","cultural eval"],
           papers:[{l:"LatamQA (EACL 2026)",u:"https://arxiv.org/abs/2406.07228"}],
           res:[{l:"Trueque (LatamGPT)",u:"https://huggingface.co/latamgpt"}]},
+        { level:"sota", title:"GSPO: Group Sequence Policy Optimization",
+          desc:"Sucesor de GRPO que optimiza a nivel de secuencia completa en lugar de a nivel de token. Calcula la ventaja sobre el grupo de secuencias generadas por prompt, no sobre tokens individuales, obteniendo gradientes más estables y menor varianza. Demuestra mejoras sobre GRPO en matemáticas y razonamiento.",
+          tags:["GSPO","GRPO sucesor","sequence-level","ventaja grupal","razonamiento"],
+          papers:[
+            {l:"GSPO (2025)",u:"https://arxiv.org/abs/2507.18071"}
+          ],
+          res:[]},
       ]},
     ]
   },
