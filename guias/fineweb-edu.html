@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FineWeb-Edu: etiquetar con LLM y clasificador BERT — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Datos → Clasificador de Calidad</div>
+    <div class="guide-title">FineWeb-Edu: etiquetar con LLM y entrenar un clasificador BERT</div>
+    <div class="guide-desc">La misma estrategia de HuggingFace para construir FineWeb-Edu, adaptada a español y portugués: pedir a un LLM que puntúe páginas, entrenar un clasificador BERT sobre esas etiquetas y correr inferencia masiva sobre el corpus completo.</div>
+  </div>
+
+  <!-- 1. Estrategia -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. La estrategia completa</div>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">~500k páginas web</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">LLM anota calidad (0-5)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Entrenar BERT regresor</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Inferencia en billones de docs</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Filtrar score ≥ 3</div>
+    </div>
+
+    <p>El problema: un LLM grande (Llama 3 70B) puede puntuar la calidad educativa de un texto con alta precisión, pero es demasiado lento y caro para procesar billones de páginas de CommonCrawl. La solución de FineWeb-Edu: usar el LLM solo sobre una muestra (~500k docs), entrenar un BERT pequeño en esas etiquetas, y correr el BERT —que es 1000× más rápido— sobre el corpus completo.</p>
+
+    <table class="model-table">
+      <tr><th>Etapa</th><th>Modelo</th><th>Velocidad</th><th>Costo</th></tr>
+      <tr><td>Anotación</td><td>Llama 3 70B Instruct</td><td>~5 docs/s (GPU cluster)</td><td>Alto — solo 500k docs</td></tr>
+      <tr><td>Entrenamiento BERT</td><td>DistilBERT / XLM-R-base</td><td>1-4 horas (A100)</td><td>Bajo — una sola vez</td></tr>
+      <tr><td>Inferencia masiva</td><td>BERT fine-tuned</td><td>~5,000 docs/s (A100)</td><td>Bajo — escala lineal</td></tr>
+    </table>
+  </div>
+
+  <!-- 2. Prompt de anotación -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-prompt" aria-hidden="true"></i>2. Prompt de anotación con el LLM</div>
+
+    <p>El prompt tiene que ser concreto y forzar una respuesta numérica parseable. La escala 0-5 permite al modelo expresar diferencias sutiles sin generar desacuerdo entre anotadores.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">ANNOTATION_PROMPT = """A continuación se muestra un extracto de una página web en español o portugués.
+Evalúa su valor educativo usando la siguiente escala:
+
+0 - Sin valor educativo: spam, publicidad, contenido generado automáticamente, listas de productos.
+1 - Poco valor: algo de información pero superficial o irrelevante para el aprendizaje.
+2 - Valor moderado: tiene contenido informativo pero mezclado con mucho ruido o sin estructura clara.
+3 - Buen valor educativo: texto informativo, bien escrito, útil para aprender un tema.
+4 - Alto valor educativo: texto claro, estructurado, con explicaciones, ejemplos o definiciones.
+5 - Valor educativo excepcional: material de estudio, libro de texto, explicación detallada con rigor.
+
+Extracto:
+\"\"\"
+{text}
+\"\"\"
+
+Responde ÚNICAMENTE con un número entero del 0 al 5. No agregues explicación."""
+
+
+def build_annotation_messages(text: str) -> list[dict]:
+    return [
+        {"role": "system",  "content": "Eres un evaluador experto de calidad educativa de textos en español y portugués. Solo respondes con un número del 0 al 5."},
+        {"role": "user",    "content": ANNOTATION_PROMPT.format(text=text[:2000])},
+    ]</code></pre>
+    </div>
+
+    <div class="sub-title">Anotar en batch con vLLM (recomendado para volumen)</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+from vllm import LLM, SamplingParams
+from transformers import AutoTokenizer
+from datasets import load_dataset, Dataset
+
+ANNOTATOR_MODEL = "meta-llama/Meta-Llama-3.1-70B-Instruct"
+
+llm = LLM(
+    model=ANNOTATOR_MODEL,
+    tensor_parallel_size=4,       # 70B requiere al menos 4× A100 80GB
+    gpu_memory_utilization=0.90,
+    max_model_len=4096,
+)
+tok = AutoTokenizer.from_pretrained(ANNOTATOR_MODEL)
+
+sampling = SamplingParams(
+    temperature=0.0,      # determinista — queremos consistencia
+    max_tokens=4,         # solo necesitamos un dígito
+    stop=["\n", " "],
+)
+
+def parse_score(text: str) -> int | None:
+    """Extrae el entero 0-5 de la respuesta del LLM."""
+    m = re.search(r"[0-5]", text.strip())
+    return int(m.group()) if m else None
+
+
+def annotate_batch(texts: list[str]) -> list[int | None]:
+    prompts = [
+        tok.apply_chat_template(
+            build_annotation_messages(t),
+            add_generation_prompt=True,
+            tokenize=False,
+        )
+        for t in texts
+    ]
+    outputs = llm.generate(prompts, sampling)
+    return [parse_score(o.outputs[0].text) for o in outputs]
+
+
+# Cargar corpus y anotar
+raw_ds = load_dataset("uonlp/CulturaX", "es", split="train", streaming=True)
+sample = list(raw_ds.take(500_000))   # muestra de anotación
+
+BATCH = 512
+scores, valid_texts = [], []
+
+for i in range(0, len(sample), BATCH):
+    batch_texts = [ex["text"] for ex in sample[i:i+BATCH]]
+    batch_scores = annotate_batch(batch_texts)
+    for text, score in zip(batch_texts, batch_scores):
+        if score is not None:
+            scores.append(score)
+            valid_texts.append(text)
+    if i % 10_000 == 0:
+        print(f"Anotados: {i:,} | válidos: {len(valid_texts):,}")
+
+annotation_ds = Dataset.from_dict({"text": valid_texts, "score": scores})
+annotation_ds.save_to_disk("annotation_dataset_es")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> Si no tienes acceso a Llama 70B, usa Llama 3.1 8B Instruct o un modelo de API. La calidad de las etiquetas cae un poco pero el clasificador BERT final sigue siendo útil. Con 50k docs ya puedes entrenar un clasificador razonable.</div>
+  </div>
+
+  <!-- 3. Análisis de la distribución -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>3. Inspeccionar la distribución de scores</div>
+
+    <p>Antes de entrenar el clasificador, hay que verificar que las etiquetas tienen sentido y que la distribución no está colapsada.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from collections import Counter
+import statistics
+
+scores_list = annotation_ds["score"]
+dist = Counter(scores_list)
+
+print("Distribución de scores:")
+for s in range(6):
+    count = dist[s]
+    pct   = count / len(scores_list) * 100
+    bar   = "█" * int(pct / 2)
+    print(f"  {s}: {bar} {pct:.1f}% ({count:,})")
+
+print(f"\nMedia: {statistics.mean(scores_list):.2f}")
+print(f"Mediana: {statistics.median(scores_list):.0f}")
+
+# Verificar ejemplos por score — inspección manual obligatoria
+for target_score in [0, 2, 3, 5]:
+    examples = [t for t, s in zip(annotation_ds["text"], scores_list)
+                if s == target_score][:2]
+    print(f"\n--- Ejemplos con score={target_score} ---")
+    for ex in examples:
+        print(ex[:300])
+        print("...")</code></pre>
+    </div>
+
+    <p>Distribución esperada en corpus web en español (similar a FineWeb-Edu en inglés):</p>
+    <table class="model-table">
+      <tr><th>Score</th><th>Fracción típica</th><th>Descripción</th></tr>
+      <tr><td>0</td><td>~25%</td><td>Spam, listas, contenido autogenerado</td></tr>
+      <tr><td>1</td><td>~30%</td><td>Texto irrelevante o muy superficial</td></tr>
+      <tr><td>2</td><td>~25%</td><td>Informativo pero con ruido</td></tr>
+      <tr><td>3</td><td>~12%</td><td>Buena calidad educativa</td></tr>
+      <tr><td>4</td><td>~6%</td><td>Alta calidad</td></tr>
+      <tr><td>5</td><td>~2%</td><td>Excelente — material académico</td></tr>
+    </table>
+  </div>
+
+  <!-- 4. Entrenar el clasificador -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-topology-star-3" aria-hidden="true"></i>4. Entrenar el clasificador BERT</div>
+
+    <p>Entrenamos un modelo de regresión: el BERT produce un score continuo 0-5 que luego usamos para filtrar. Usamos MSE loss sobre los scores del LLM anotador. Para es/pt usamos XLM-RoBERTa-base como backbone — fue entrenado sobre 100 idiomas y es la mejor opción multilingüe.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install transformers datasets accelerate scikit-learn</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk, DatasetDict
+from transformers import (
+    AutoTokenizer, AutoModelForSequenceClassification,
+    TrainingArguments, Trainer,
+)
+import torch
+import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+
+BACKBONE = "xlm-roberta-base"      # multilingüe es/pt/en/...
+# Alternativas monolingüe: "dccuchile/bert-base-spanish-wwm-cased" (BETO)
+#                          "neuralmind/bert-base-portuguese-cased" (BERTimbau)
+
+tokenizer = AutoTokenizer.from_pretrained(BACKBONE)
+
+# Preparar dataset
+ds = load_from_disk("annotation_dataset_es")
+split = ds.train_test_split(test_size=0.05, seed=42)
+
+def tokenize(batch):
+    enc = tokenizer(
+        batch["text"],
+        truncation=True,
+        max_length=512,
+        padding="max_length",
+    )
+    # El score es float para regresión
+    enc["labels"] = [float(s) for s in batch["score"]]
+    return enc
+
+tokenized = DatasetDict({
+    "train": split["train"].map(tokenize, batched=True, remove_columns=["text","score"]),
+    "test":  split["test"].map(tokenize,  batched=True, remove_columns=["text","score"]),
+})
+tokenized.set_format("torch")
+
+# Modelo: num_labels=1 → regresión
+model = AutoModelForSequenceClassification.from_pretrained(
+    BACKBONE, num_labels=1
+)
+
+def compute_metrics(eval_pred):
+    preds, labels = eval_pred
+    preds = preds.squeeze()
+    return {
+        "mse": mean_squared_error(labels, preds),
+        "mae": mean_absolute_error(labels, preds),
+        "rmse": np.sqrt(mean_squared_error(labels, preds)),
+    }
+
+training_args = TrainingArguments(
+    output_dir="edu-classifier-xlmr",
+    num_train_epochs=3,
+    per_device_train_batch_size=32,
+    per_device_eval_batch_size=64,
+    learning_rate=2e-5,
+    lr_scheduler_type="cosine",
+    warmup_ratio=0.06,
+    bf16=True,
+    eval_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+    metric_for_best_model="mse",
+    greater_is_better=False,
+    logging_steps=100,
+    dataloader_num_workers=4,
+    report_to="wandb",
+    run_name="edu-classifier-xlmr-v1",
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized["train"],
+    eval_dataset=tokenized["test"],
+    compute_metrics=compute_metrics,
+)
+
+trainer.train()
+trainer.save_model("edu-classifier-xlmr-best")
+tokenizer.save_pretrained("edu-classifier-xlmr-best")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Métricas objetivo:</strong> Con 500k ejemplos de entrenamiento, XLM-R-base suele alcanzar MAE ≈ 0.55 y RMSE ≈ 0.72. Para el filtrado de datos lo que importa es que el clasificador acierte en qué textos están por encima o por debajo del umbral, no la precisión decimal del score.</div>
+  </div>
+
+  <!-- 5. Calibración del umbral -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>5. Calibrar el umbral de filtrado</div>
+
+    <p>El umbral óptimo depende de cuánto corpus queremos retener vs. la calidad deseada. FineWeb-Edu usó score ≥ 3 y retuvo ~9% del corpus original.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+from transformers import pipeline
+
+classifier = pipeline(
+    "text-classification",
+    model="edu-classifier-xlmr-best",
+    tokenizer=tokenizer,
+    device=0,
+    function_to_apply="none",  # devuelve el logit crudo (= el score)
+)
+
+# Evaluar sobre el test set para elegir umbral
+test_texts  = split["test"]["text"][:5000]
+test_scores = split["test"]["score"][:5000]
+
+pred_scores = [r["score"] for r in classifier(test_texts, batch_size=128, truncation=True)]
+
+# Para cada umbral: ¿cuánto corpus retenemos y qué calidad media tiene?
+print(f"{'Umbral':<10} {'% retenido':<15} {'Precision@3+':<15}")
+for threshold in [2.0, 2.5, 3.0, 3.5, 4.0]:
+    kept  = [p >= threshold for p in pred_scores]
+    true_qual = [s >= 3 for p, s in zip(pred_scores, test_scores) if p >= threshold]
+    pct_kept  = sum(kept) / len(kept) * 100
+    precision = sum(true_qual) / len(true_qual) * 100 if true_qual else 0
+    print(f"{threshold:<10.1f} {pct_kept:<15.1f} {precision:<15.1f}")</code></pre>
+    </div>
+
+    <p>Resultado típico:</p>
+    <table class="model-table">
+      <tr><th>Umbral</th><th>% corpus retenido</th><th>Precision (score LLM ≥ 3)</th></tr>
+      <tr><td>2.0</td><td>~35%</td><td>~62%</td></tr>
+      <tr><td>2.5</td><td>~22%</td><td>~74%</td></tr>
+      <tr><td>3.0</td><td>~12%</td><td>~85%</td></tr>
+      <tr><td>3.5</td><td>~7%</td><td>~93%</td></tr>
+      <tr><td>4.0</td><td>~3%</td><td>~97%</td></tr>
+    </table>
+  </div>
+
+  <!-- 6. Inferencia masiva -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>6. Inferencia masiva sobre el corpus completo</div>
+
+    <p>Con el clasificador entrenado, lo corremos sobre el corpus completo. El patrón es el mismo que la guía de inferencia con BERT, pero aquí el objetivo es filtrar billones de documentos, así que la eficiencia importa.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader, Dataset as TorchDataset
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from datasets import load_dataset
+import numpy as np
+
+THRESHOLD = 3.0
+CLASSIFIER_PATH = "edu-classifier-xlmr-best"
+BATCH_SIZE = 512
+MAX_LENGTH = 512
+
+tok_inf = AutoTokenizer.from_pretrained(CLASSIFIER_PATH)
+clf = AutoModelForSequenceClassification.from_pretrained(
+    CLASSIFIER_PATH, torch_dtype=torch.bfloat16
+).to("cuda").eval()
+
+
+class TextDataset(TorchDataset):
+    def __init__(self, texts):
+        self.texts = texts
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, idx):
+        return self.texts[idx]
+
+
+def collate_fn(batch):
+    return tok_inf(
+        batch,
+        max_length=MAX_LENGTH,
+        truncation=True,
+        padding=True,
+        return_tensors="pt",
+    )
+
+
+@torch.no_grad()
+def score_texts(texts: list[str]) -> np.ndarray:
+    ds = TextDataset(texts)
+    loader = DataLoader(ds, batch_size=BATCH_SIZE, collate_fn=collate_fn,
+                        num_workers=4, pin_memory=True)
+    all_scores = []
+    for batch in loader:
+        batch = {k: v.to("cuda") for k, v in batch.items()}
+        logits = clf(**batch).logits.squeeze(-1)
+        all_scores.append(logits.float().cpu().numpy())
+    return np.concatenate(all_scores)
+
+
+# Procesar el corpus completo en shards para no cargar todo en RAM
+corpus = load_dataset("uonlp/CulturaX", "es", split="train", streaming=True)
+
+kept_docs = []
+shard_size = 50_000
+shard = []
+total_seen, total_kept = 0, 0
+
+for doc in corpus:
+    shard.append(doc["text"])
+    if len(shard) == shard_size:
+        scores = score_texts(shard)
+        mask = scores >= THRESHOLD
+        kept_docs.extend([t for t, m in zip(shard, mask) if m])
+        total_seen += shard_size
+        total_kept += int(mask.sum())
+        print(f"Procesados: {total_seen:,} | Retenidos: {total_kept:,} "
+              f"({total_kept/total_seen*100:.1f}%)")
+        shard = []
+
+# Guardar resultado
+from datasets import Dataset
+filtered = Dataset.from_dict({"text": kept_docs})
+filtered.push_to_hub("latamgpt/culturax-es-edu-filtered", private=True)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Throughput esperado:</strong> XLM-R-base con batch=512 y bf16 en una A100 procesa ~5,000 documentos/segundo. Un shard de 50M documentos tarda ~2.8 horas. Para el corpus completo de CulturaX en español (~200M docs), ~12 horas en una A100.</div>
+  </div>
+
+  <!-- 7. Validar el filtrado -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-check" aria-hidden="true"></i>7. Validar que el filtrado mejoró la calidad</div>
+
+    <p>Antes de usar el corpus filtrado para pretraining, hay que verificar que el filtro no introdujo sesgos inesperados y que efectivamente la calidad mejoró.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+
+# 1. Comparar perplexity antes/después sobre un modelo de referencia
+# (entrenar dos modelos pequeños: uno sobre corpus raw, otro sobre filtrado)
+
+# 2. Inspección manual: 50 ejemplos aleatorios del corpus filtrado
+filtered = load_dataset("latamgpt/culturax-es-edu-filtered", split="train")
+random_sample = filtered.shuffle(seed=42).select(range(50))
+
+for i, ex in enumerate(random_sample):
+    print(f"\n[{i+1}] {ex['text'][:400]}")
+    print("---")
+
+# 3. Verificar diversidad temática (no solo texto académico)
+# El corpus debe incluir: ciencia, cultura, historia, noticias, divulgación
+# Si el 90% es de un solo dominio, el umbral está muy alto
+
+# 4. Comprobar ratio es vs pt vs otras lenguas
+# (si CulturaX está bien filtrado, debería ser >95% español)
+import langdetect
+sample_texts = filtered.shuffle(seed=1).select(range(2000))["text"]
+langs = []
+for t in sample_texts:
+    try:
+        langs.append(langdetect.detect(t[:500]))
+    except Exception:
+        langs.append("unknown")
+
+from collections import Counter
+lang_dist = Counter(langs)
+print("Distribución de idiomas en corpus filtrado:")
+for lang, count in lang_dist.most_common(10):
+    print(f"  {lang}: {count/len(langs)*100:.1f}%")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Sesgo hacia texto formal:</strong> El clasificador entrenado con el prompt de "calidad educativa" tenderá a favorecer textos académicos y noticias sobre lenguaje coloquial, tweets o literatura. Para LatamGPT, si queremos que el modelo maneje bien el español informal latinoamericano, hay que complementar este corpus filtrado con datos de otras fuentes (foros, redes sociales). No todo el corpus de pretraining debe ser edu-filtered.</warn>
+  </div>
+
+  <!-- 8. Adaptar para pt-BR -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-globe" aria-hidden="true"></i>8. Adaptar para portugués (pt-BR)</div>
+
+    <p>El mismo pipeline funciona para pt-BR con cambios mínimos: traducir el prompt de anotación y cambiar el corpus de entrada.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">ANNOTATION_PROMPT_PT = """A seguir está um trecho de uma página web em português do Brasil.
+Avalie seu valor educativo usando a seguinte escala:
+
+0 - Sem valor educativo: spam, publicidade, listas de produtos, conteúdo gerado automaticamente.
+1 - Pouco valor: alguma informação, mas superficial ou irrelevante para o aprendizado.
+2 - Valor moderado: conteúdo informativo mas misturado com ruído.
+3 - Bom valor educativo: texto informativo, bem escrito, útil para aprender um tema.
+4 - Alto valor educativo: texto claro, estruturado, com explicações e exemplos.
+5 - Valor educativo excepcional: material didático, livro texto, explicação detalhada.
+
+Trecho:
+\"\"\"
+{text}
+\"\"\"
+
+Responda APENAS com um número inteiro de 0 a 5. Não adicione explicação."""
+
+# Para el modelo de clasificación, XLM-R-base funciona para ambos idiomas.
+# Si entrenas un clasificador por separado para pt-BR, usa CulturaX "pt" en lugar de "es".
+
+pt_corpus = load_dataset("uonlp/CulturaX", "pt", split="train", streaming=True)
+
+# El resto del pipeline es idéntico — solo cambia el corpus y el prompt</code></pre>
+    </div>
+
+    <div class="tip"><strong>Clasificador unificado:</strong> Si anotas ~250k docs en español y ~250k en portugués, puedes entrenar un solo clasificador XLM-R que funcione para ambos idiomas. XLM-R-base es suficientemente multilingüe como para transferir entre es y pt sin problemas.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb-Edu (Penedo et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.11794" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>DCLM (Li et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.09400" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>CulturaX (Nguyen et al., 2023)</a>
+      <a class="source-link" href="https://huggingface.co/HuggingFaceFW/fineweb-edu-classifier" target="_blank" rel="noopener"><i class="ti ti-robot"></i>FineWeb-Edu Classifier (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-Edu Dataset (HF)</a>
+      <a class="source-link" href="bert.html"><i class="ti ti-topology-star-3"></i>Guía: Modelos BERT es/pt</a>
+      <a class="source-link" href="filtrado.html"><i class="ti ti-filter"></i>Guía: Filtrado de calidad</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => {
+        btn.textContent = '¡Copiado!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      });
+    });
+  });
+</script>
+</body>
+</html>
