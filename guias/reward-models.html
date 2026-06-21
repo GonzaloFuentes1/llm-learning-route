@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reward Models — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <h1 class="guide-title">Reward Models: entrenamiento y uso</h1>
+    <p class="guide-desc">Un Reward Model (RM) es un LLM ajustado para puntuar respuestas en una escala escalar. Base del pipeline RLHF clásico y herramienta clave para filtrar datos sintéticos. Cubre entrenamiento con Bradley-Terry, scoring de respuestas y best-of-N.</p>
+  </div>
+
+  <!-- 1. Qué es -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bulb"></i>1. El modelo Bradley-Terry</h2>
+    <p>Un RM convierte comparaciones pareadas (A es mejor que B) en scores escalares. El modelo Bradley-Terry asume que la probabilidad de preferir A sobre B es:</p>
+    <div class="tip" style="font-family:monospace;font-size:13px">
+      P(A &gt; B) = σ(r(A) − r(B))
+    </div>
+    <p>donde <code>r(x)</code> es el score del RM para la respuesta x y <code>σ</code> es la función sigmoide. El entrenamiento minimiza la cross-entropy sobre pares (chosen, rejected).</p>
+
+    <table class="model-table">
+      <thead><tr><th>Tipo de RM</th><th>Arquitectura</th><th>Cuándo usarlo</th></tr></thead>
+      <tbody>
+        <tr><td>Scalar RM</td><td>LLM + linear head → 1 número</td><td>RLHF/PPO, filtrado de datos, best-of-N</td></tr>
+        <tr><td>Sequence Classifier</td><td>LLM + clasificación binaria</td><td>Más simple, menos expresivo</td></tr>
+        <tr><td>LLM-as-Judge</td><td>Prompt a un LLM grande</td><td>Más caro, bueno para tareas abiertas</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 2. Datos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database"></i>2. Formato de datos</h2>
+    <p>El RM necesita pares (chosen, rejected) con el mismo prompt. El modelo aprende a asignar mayor score al chosen.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">json — formato preference para RM</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-json">{
+  "prompt":   "¿Cómo funciona el sistema de salud en Chile?",
+  "chosen":   "El sistema de salud chileno es mixto: el sector público (Fonasa) cubre al 80% de la población con financiamiento estatal, mientras el sector privado (Isapres) atiende al 20% restante. Para acceder a Fonasa necesitas...",
+  "rejected": "Chile tiene hospitales y clínicas. Hay Fonasa para los pobres e Isapres para los ricos."
+}</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — cargar datos para RewardTrainer</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
+
+def tokenize_pair(example):
+    """RewardTrainer espera input_ids_chosen / input_ids_rejected."""
+    chosen_msgs  = [{"role": "user", "content": example["prompt"]},
+                    {"role": "assistant", "content": example["chosen"]}]
+    rejected_msgs = [{"role": "user", "content": example["prompt"]},
+                     {"role": "assistant", "content": example["rejected"]}]
+
+    chosen  = tokenizer.apply_chat_template(chosen_msgs,  tokenize=True, truncation=True, max_length=2048)
+    rejected = tokenizer.apply_chat_template(rejected_msgs, tokenize=True, truncation=True, max_length=2048)
+
+    return {
+        "input_ids_chosen":   chosen,
+        "attention_mask_chosen":  [1] * len(chosen),
+        "input_ids_rejected": rejected,
+        "attention_mask_rejected": [1] * len(rejected),
+    }
+
+dataset = load_dataset("json", data_files="data/preference_pairs.jsonl", split="train")
+dataset = dataset.map(tokenize_pair, remove_columns=dataset.column_names)</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Entrenamiento -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-code"></i>3. Entrenamiento del RM</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — train_rm.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from trl import RewardTrainer, RewardConfig
+from peft import LoraConfig
+
+BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
+OUTPUT_DIR = "models/reward-model-es"
+
+# AutoModelForSequenceClassification con num_labels=1 → scalar output
+model = AutoModelForSequenceClassification.from_pretrained(
+    BASE_MODEL,
+    num_labels=1,           # score escalar
+    torch_dtype=torch.bfloat16,
+    device_map="auto",
+)
+model.config.pad_token_id = model.config.eos_token_id
+
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+tokenizer.pad_token = tokenizer.eos_token
+
+lora_config = LoraConfig(
+    r=32,
+    lora_alpha=64,
+    target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
+    bias="none",
+)
+
+training_args = RewardConfig(
+    output_dir=OUTPUT_DIR,
+    num_train_epochs=1,
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=4,
+    learning_rate=1e-5,
+    bf16=True,
+    max_length=2048,
+    remove_unused_columns=False,
+    logging_steps=20,
+    save_steps=200,
+    report_to="wandb",
+)
+
+trainer = RewardTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset,    # dataset ya tokenizado arriba
+    tokenizer=tokenizer,
+    peft_config=lora_config,
+)
+
+trainer.train()
+trainer.save_model(OUTPUT_DIR)</code></pre>
+    </div>
+
+    <div class="tip"><strong>¿Cuántos datos necesito?</strong> Un RM útil para filtrado básico puede entrenarse con 10K–50K pares de alta calidad. Para RLHF/PPO estable necesitas 100K+. Empieza con UltraFeedback (64K pares) y añade datos propios del dominio.</div>
+  </div>
+
+  <!-- 4. Scoring -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-star"></i>4. Usar el RM para puntuar respuestas</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — score_responses.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+RM_PATH = "models/reward-model-es"
+
+tokenizer = AutoTokenizer.from_pretrained(RM_PATH)
+rm = AutoModelForSequenceClassification.from_pretrained(
+    RM_PATH,
+    num_labels=1,
+    torch_dtype=torch.bfloat16,
+    device_map="cuda",
+)
+rm.eval()
+
+
+def score(prompt: str, response: str) -> float:
+    """Devuelve el score del RM para un par (prompt, response)."""
+    messages = [
+        {"role": "user",      "content": prompt},
+        {"role": "assistant", "content": response},
+    ]
+    tokens = tokenizer.apply_chat_template(
+        messages, tokenize=True, return_tensors="pt", max_length=2048, truncation=True
+    ).to(rm.device)
+
+    with torch.no_grad():
+        output = rm(input_ids=tokens)
+    return output.logits[0, 0].item()
+
+
+def best_of_n(prompt: str, responses: list[str], n: int = None) -> tuple[str, float]:
+    """Selecciona la mejor respuesta según el RM."""
+    scored = [(r, score(prompt, r)) for r in responses]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[0]   # (mejor respuesta, score)
+
+
+# Ejemplo
+prompt = "Explica la reforma previsional en Chile"
+responses = [
+    "La reforma busca aumentar la tasa de cotización del 10% al 16%...",
+    "No sé exactamente pero creo que cambian las AFP",
+    "En 2024, el Congreso chileno debatió una reforma que modifica el sistema de AFP...",
+]
+
+best, best_score = best_of_n(prompt, responses)
+print(f"Mejor respuesta (score={best_score:.3f}):\n{best}")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Best-of-N para sintéticos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-layers-intersect"></i>5. Generación sintética con RM (best-of-N + delta DPO)</h2>
+    <p>Técnica usada en Tülu 3 / OLMo 3: generar N respuestas por prompt, puntuar con RM, y construir pares DPO filtrando por diferencia de score (δ).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — online_dpo_data.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="token")  # modelo local con vLLM
+
+DELTA = 1.5   # diferencia mínima de score para incluir el par
+N     = 8     # respuestas generadas por prompt
+
+
+def generate_n_responses(prompt: str, n: int) -> list[str]:
+    responses = []
+    for _ in range(n):
+        resp = client.chat.completions.create(
+            model="models/sft-checkpoint",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.9,
+            max_tokens=1024,
+        )
+        responses.append(resp.choices[0].message.content)
+    return responses
+
+
+def build_dpo_pairs(prompts: list[str], delta: float = DELTA) -> list[dict]:
+    """Para cada prompt: genera N respuestas, puntúa, filtra por delta y construye pares DPO."""
+    pairs = []
+    for prompt in prompts:
+        responses = generate_n_responses(prompt, N)
+        scored = [(r, score(prompt, r)) for r in responses]   # score() del bloque anterior
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        best_resp,  best_score  = scored[0]
+        worst_resp, worst_score = scored[-1]
+
+        # Solo incluir si la diferencia supera el umbral delta
+        if best_score - worst_score >= delta:
+            pairs.append({
+                "prompt":   [{"role": "user", "content": prompt}],
+                "chosen":   [{"role": "assistant", "content": best_resp}],
+                "rejected": [{"role": "assistant", "content": worst_resp}],
+                "score_chosen":   best_score,
+                "score_rejected": worst_score,
+            })
+
+    return pairs
+
+
+# Cargar prompts y generar dataset
+prompts = [line.strip() for line in open("data/prompts_es.txt")]
+dpo_data = build_dpo_pairs(prompts)
+
+with open("data/online_dpo_delta_filtered.jsonl", "w") as f:
+    for pair in dpo_data:
+        f.write(json.dumps(pair, ensure_ascii=False) + "\n")
+
+print(f"Pares DPO generados: {len(dpo_data)} / {len(prompts)} prompts ({100*len(dpo_data)/len(prompts):.0f}%)")</code></pre>
+    </div>
+    <div class="tip"><strong>El truco del delta (δ):</strong> si el RM puntúa casi igual el chosen y el rejected, el par no aporta señal útil al DPO. Filtrar por δ ≥ 1.0–2.0 mejora la calidad del dataset a costa de reducir cantidad. OLMo 3 / Tülu 3 usan este pipeline en múltiples iteraciones (<em>online DPO</em>).</div>
+  </div>
+
+  <!-- 6. Reward hacking -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-alert-triangle"></i>6. Reward hacking y ley de Goodhart</h2>
+    <p>"When a measure becomes a target, it ceases to be a good measure." El modelo aprende a explotar debilidades del RM en lugar de ser genuinamente mejor.</p>
+
+    <table class="model-table">
+      <thead><tr><th>Síntoma</th><th>Causa</th><th>Mitigación</th></tr></thead>
+      <tbody>
+        <tr><td>Respuestas largas pero vacías</td><td>RM favorece longitud</td><td>Añadir penalización por longitud al RM</td></tr>
+        <tr><td>Listas de bullets en cualquier respuesta</td><td>RM favorece formato estructurado</td><td>Diversificar ejemplos de entrenamiento del RM</td></tr>
+        <tr><td>Scores del RM suben pero benchmark baja</td><td>RM está saturado / fuera de distribución</td><td>Reentrenar RM con datos frescos; usar KL penalty alto</td></tr>
+        <tr><td>Respuestas demasiado cortas (KTO)</td><td>Modelo aprende a minimizar el rejected</td><td>Aumentar β en DPO</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>InstructGPT / RLHF (Ouyang et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2210.10760" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Scaling Laws for RM Overoptimization (Gao et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.15124" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Tülu 3 / OLMo 3 (AllenAI, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.08673" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>HelpSteer2 (NVIDIA, 2024)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/reward_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL RewardTrainer docs</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>UltraFeedback binarized</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

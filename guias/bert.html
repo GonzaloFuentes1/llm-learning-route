@@ -273,11 +273,225 @@ trainer.train()</code></pre>
     <div class="tip"><strong>Sobre la alineación de etiquetas:</strong> En NER con BIO tagging, solo el <em>primer subword</em> de cada palabra recibe la etiqueta real. Los subwords subsecuentes reciben <code>-100</code> para que el loss los ignore. Esto es crítico: sin esta alineación correcta, el modelo no converge bien.</div>
   </div>
 
+  <!-- 5. Inferencia -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-player-play"></i>5. Inferencia: pipeline simplificado y batch</h2>
+
+    <h3 class="sub-title">Versión simple — pipeline API</h3>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — inferencia_simple.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import pipeline
+
+# Clasificación
+clf = pipeline(
+    "text-classification",
+    model="models/clasificador-sentimiento/best",
+    device=0,         # GPU 0; -1 para CPU
+    top_k=None,       # devuelve scores para todas las clases
+)
+
+textos = [
+    "El servicio fue excelente, volvería sin duda.",
+    "Pésima atención, nunca más vuelvo.",
+    "El producto llegó a tiempo.",
+]
+for resultado in clf(textos, batch_size=32):
+    print(resultado)
+# [{'label': 'positivo', 'score': 0.97}, ...]
+
+# NER
+ner = pipeline(
+    "token-classification",
+    model="models/ner-es",
+    aggregation_strategy="simple",  # agrupa tokens del mismo span
+    device=0,
+)
+entities = ner("María González trabaja en Google Chile desde 2021.")
+for ent in entities:
+    print(f"{ent['word']:20s} {ent['entity_group']:6s} {ent['score']:.2f}")</code></pre>
+    </div>
+
+    <h3 class="sub-title">Versión batch manual (mayor control)</h3>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — inferencia_batch.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from torch.utils.data import DataLoader, Dataset
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+MODEL_PATH = "models/clasificador-sentimiento/best"
+BATCH_SIZE = 64
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+model.eval().cuda()
+
+id2label = model.config.id2label
+
+
+class TextDataset(Dataset):
+    def __init__(self, texts):
+        self.texts = texts
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, idx):
+        return self.texts[idx]
+
+
+def collate(batch):
+    return tokenizer(batch, truncation=True, max_length=512,
+                     padding=True, return_tensors="pt")
+
+
+texts = open("data/textos_a_clasificar.txt").read().splitlines()
+loader = DataLoader(TextDataset(texts), batch_size=BATCH_SIZE, collate_fn=collate)
+
+all_preds, all_probs = [], []
+with torch.no_grad():
+    for batch in loader:
+        batch = {k: v.cuda() for k, v in batch.items()}
+        logits = model(**batch).logits
+        probs  = torch.softmax(logits, dim=-1)
+        preds  = probs.argmax(dim=-1)
+        all_preds.extend([id2label[p.item()] for p in preds])
+        all_probs.extend(probs.max(dim=-1).values.tolist())
+
+for text, pred, prob in zip(texts[:5], all_preds[:5], all_probs[:5]):
+    print(f"{pred} ({prob:.2f}) — {text[:60]}")</code></pre>
+    </div>
+  </div>
+
+  <!-- 6. Accelerate multi-GPU -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-cpu"></i>6. Entrenamiento distribuido con Accelerate</h2>
+    <p>Para datasets grandes o modelos más grandes (BERT-large, XLM-R-large), el Trainer de HuggingFace puede ser demasiado opaco. Con Accelerate tienes control total sobre el training loop y escala a múltiples GPUs sin cambiar el código.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — configurar accelerate</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">accelerate config   # responde las preguntas: cuántas GPUs, mixed precision, etc.
+# O pasar config directamente:
+accelerate launch --num_processes 4 --mixed_precision bf16 bert_accelerate.py</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — bert_accelerate.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from torch.optim import AdamW
+from torch.utils.data import DataLoader
+from transformers import (
+    AutoTokenizer, AutoModelForSequenceClassification,
+    get_cosine_schedule_with_warmup,
+)
+from accelerate import Accelerator
+from datasets import load_dataset
+import evaluate
+
+MODEL_NAME  = "FacebookAI/xlm-roberta-large"
+OUTPUT_DIR  = "models/xlmr-clasificador-es"
+NUM_EPOCHS  = 3
+LR          = 2e-5
+BATCH_SIZE  = 16   # por GPU
+
+accelerator = Accelerator(mixed_precision="bf16", log_with="wandb")
+accelerator.init_trackers("bert-es-classification")
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+
+# Dataset
+raw = load_dataset("json", data_files={"train": "data/train.jsonl", "val": "data/val.jsonl"})
+LABELS = sorted(set(raw["train"]["label"]))
+label2id = {l: i for i, l in enumerate(LABELS)}
+
+def tokenize(ex):
+    enc = tokenizer(ex["text"], truncation=True, max_length=512, padding="max_length")
+    enc["labels"] = label2id[ex["label"]]
+    return enc
+
+tokenized = raw.map(tokenize, remove_columns=raw["train"].column_names)
+tokenized.set_format("torch")
+
+train_loader = DataLoader(tokenized["train"], batch_size=BATCH_SIZE, shuffle=True)
+val_loader   = DataLoader(tokenized["val"],   batch_size=BATCH_SIZE*2)
+
+# Modelo
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_NAME,
+    num_labels=len(LABELS),
+    id2label={i: l for i, l in enumerate(LABELS)},
+    label2id=label2id,
+)
+
+optimizer = AdamW(model.parameters(), lr=LR, weight_decay=0.01)
+num_steps = len(train_loader) * NUM_EPOCHS
+scheduler = get_cosine_schedule_with_warmup(
+    optimizer, num_warmup_steps=int(0.06 * num_steps), num_training_steps=num_steps
+)
+
+# Accelerate se encarga de distribuir en múltiples GPUs
+model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
+    model, optimizer, train_loader, val_loader, scheduler
+)
+
+accuracy = evaluate.load("accuracy")
+f1_metric = evaluate.load("f1")
+
+for epoch in range(NUM_EPOCHS):
+    # ── Entrenamiento ──────────────────────────────────────────────────────────
+    model.train()
+    for step, batch in enumerate(train_loader):
+        outputs = model(**batch)
+        loss = outputs.loss
+        accelerator.backward(loss)     # reemplaza loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
+
+        if step % 50 == 0:
+            accelerator.log({"train/loss": loss.item(), "train/lr": scheduler.get_last_lr()[0]})
+
+    # ── Validación ─────────────────────────────────────────────────────────────
+    model.eval()
+    all_preds, all_labels = [], []
+    for batch in val_loader:
+        with torch.no_grad():
+            outputs = model(**batch)
+        preds = outputs.logits.argmax(dim=-1)
+        # gather de todos los procesos antes de evaluar
+        preds, labels = accelerator.gather_for_metrics((preds, batch["labels"]))
+        all_preds.extend(preds.cpu().tolist())
+        all_labels.extend(labels.cpu().tolist())
+
+    acc = accuracy.compute(predictions=all_preds, references=all_labels)["accuracy"]
+    f1  = f1_metric.compute(predictions=all_preds, references=all_labels, average="macro")["f1"]
+    accelerator.log({"val/accuracy": acc, "val/f1_macro": f1}, step=epoch)
+    accelerator.print(f"Epoch {epoch+1}: acc={acc:.3f}, f1={f1:.3f}")
+
+# Guardar solo desde el proceso principal
+accelerator.wait_for_everyone()
+unwrapped = accelerator.unwrap_model(model)
+unwrapped.save_pretrained(OUTPUT_DIR, save_function=accelerator.save)
+tokenizer.save_pretrained(OUTPUT_DIR)</code></pre>
+    </div>
+
+    <div class="tip">
+      <strong>Diferencias clave vs Trainer:</strong>
+      <ul style="margin-top:6px;padding-left:18px">
+        <li><code>accelerator.backward(loss)</code> reemplaza <code>loss.backward()</code> — maneja mixed precision automáticamente</li>
+        <li><code>accelerator.gather_for_metrics()</code> recoge predicciones de todas las GPUs antes de calcular métricas</li>
+        <li><code>accelerator.unwrap_model()</code> extrae el modelo real de los wrappers de distribución antes de guardar</li>
+      </ul>
+    </div>
+  </div>
+
   <div class="sources">
     <div class="sources-title">Fuentes</div>
     <div class="source-list">
       <a class="source-link paper" href="https://arxiv.org/abs/2010.04871" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BETO (Cañete et al., 2020)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2005.04249" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BERTimbau (Souza et al., 2020)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1911.02116" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>XLM-R (Conneau et al., 2020)</a>
+      <a class="source-link" href="https://huggingface.co/docs/accelerate" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Accelerate docs</a>
       <a class="source-link" href="https://huggingface.co/docs/transformers/tasks/token_classification" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF Token Classification Guide</a>
       <a class="source-link" href="https://github.com/chakki-works/seqeval" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>seqeval</a>
       <a class="source-link" href="https://huggingface.co/PlanTL-GOB-ES/roberta-base-bne" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>RoBERTa-BNE</a>

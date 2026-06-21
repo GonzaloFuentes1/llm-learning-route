@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GRPO y RL para razonamiento — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <h1 class="guide-title">GRPO y RL para razonamiento</h1>
+    <p class="guide-desc">Group Relative Policy Optimization: el algoritmo que está detrás de DeepSeek-R1 y los modelos de razonamiento modernos. Entrena el modelo con recompensas verificables (matemáticas, código) sin necesitar un reward model aprendido separado.</p>
+  </div>
+
+  <!-- 1. Conceptos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bulb"></i>1. ¿Por qué GRPO en lugar de PPO?</h2>
+
+    <table class="model-table">
+      <thead><tr><th></th><th>PPO (RLHF clásico)</th><th>GRPO (DeepSeek-R1)</th></tr></thead>
+      <tbody>
+        <tr><td>Reward model</td><td>RM aprendido (otro LLM)</td><td>Función determinista (regex, test)</td></tr>
+        <tr><td>Baseline</td><td>Value network (otro modelo)</td><td>Media del grupo de respuestas</td></tr>
+        <tr><td>Complejidad</td><td>Alta (3 modelos en memoria)</td><td>Baja (1 modelo + referencia)</td></tr>
+        <tr><td>Reward hacking</td><td>Posible si el RM se satura</td><td>No posible con rewards verificables</td></tr>
+        <tr><td>Dominio ideal</td><td>Alineamiento general</td><td>Matemáticas, código, razonamiento formal</td></tr>
+      </tbody>
+    </table>
+
+    <p>En GRPO, para cada prompt se generan <strong>G respuestas</strong> del modelo actual. La recompensa de cada respuesta se normaliza restando la media del grupo y dividiendo por la desviación estándar — este es el "baseline" que en PPO lo hace una value network. Resultado: mismo efecto de reducción de varianza pero sin modelo de valor.</p>
+
+    <div class="tip"><strong>Recompensas verificables:</strong> la clave de DeepSeek-R1 es que las tareas de matemáticas y código tienen respuesta objetivamente correcta o incorrecta. Esto elimina la necesidad de un RM aprendido que puede hackear.</div>
+  </div>
+
+  <!-- 2. Funciones de reward -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-award"></i>2. Funciones de recompensa</h2>
+    <p>Las reward functions toman el prompt + la respuesta generada y devuelven un escalar. Para razonamiento matemático suelen combinarse varias:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — reward_functions.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+
+# ── Reward 1: respuesta correcta ─────────────────────────────────────────────
+def reward_correctness(completions: list[str], answers: list[str], **kwargs) -> list[float]:
+    """Verifica si la respuesta final dentro de \\boxed{} es correcta."""
+    rewards = []
+    for completion, answer in zip(completions, answers):
+        # Extraer número dentro de \boxed{...}
+        match = re.search(r"\\boxed\{([^}]+)\}", completion)
+        if match:
+            predicted = match.group(1).strip().replace(",", "")
+            expected  = str(answer).strip().replace(",", "")
+            rewards.append(2.0 if predicted == expected else 0.0)
+        else:
+            rewards.append(0.0)   # no hay respuesta formateada
+    return rewards
+
+
+# ── Reward 2: formato correcto ────────────────────────────────────────────────
+def reward_format(completions: list[str], **kwargs) -> list[float]:
+    """Premio si el modelo usa el formato <think>...</think> y \\boxed{}."""
+    rewards = []
+    for completion in completions:
+        has_think = bool(re.search(r"<think>.*?</think>", completion, re.DOTALL))
+        has_boxed = bool(re.search(r"\\boxed\{", completion))
+        rewards.append(0.5 if (has_think and has_boxed) else 0.0)
+    return rewards
+
+
+# ── Reward 3: longitud razonable (anti-padding) ───────────────────────────────
+def reward_length(completions: list[str], **kwargs) -> list[float]:
+    """Penaliza respuestas muy cortas o excesivamente largas."""
+    rewards = []
+    for completion in completions:
+        n = len(completion.split())
+        if 50 <= n <= 800:
+            rewards.append(0.1)
+        elif n < 20 or n > 2000:
+            rewards.append(-0.5)
+        else:
+            rewards.append(0.0)
+    return rewards
+
+
+# Combinar todas las reward functions
+REWARD_FUNCTIONS = [reward_correctness, reward_format, reward_length]</code></pre>
+    </div>
+  </div>
+
+  <!-- 3. Dataset -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database"></i>3. Preparar el dataset</h2>
+    <p>GRPO no necesita respuestas en el dataset de entrenamiento — solo prompts y la respuesta correcta para verificar. El modelo genera sus propias respuestas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — prepare_dataset.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+
+# GSM8K en español (o cualquier dataset de matemáticas)
+dataset = load_dataset("openai/gsm8k", "main", split="train")
+
+SYSTEM_PROMPT = """Eres un asistente matemático. Razona paso a paso dentro de etiquetas <think> y </think>,
+luego da tu respuesta final dentro de \\boxed{}.
+
+Ejemplo:
+<think>
+Primero calculo...
+Luego...
+</think>
+La respuesta es \\boxed{42}."""
+
+def format_prompt(example):
+    return {
+        "prompt": [
+            {"role": "system",  "content": SYSTEM_PROMPT},
+            {"role": "user",    "content": example["question"]},
+        ],
+        "answer": example["answer"].split("####")[-1].strip(),   # número final
+    }
+
+dataset = dataset.map(format_prompt, remove_columns=dataset.column_names)
+print(dataset[0])</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. GRPOTrainer -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-code"></i>4. Entrenamiento con GRPOTrainer</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — grpo_train.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig
+from trl import GRPOTrainer, GRPOConfig
+from datasets import load_dataset
+
+MODEL = "Qwen/Qwen2.5-3B-Instruct"   # modelo base — necesita capacidad básica de razonamiento
+OUTPUT = "models/grpo-math-es"
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL,
+    torch_dtype=torch.bfloat16,
+    device_map="auto",
+)
+
+dataset = load_dataset("json", data_files="data/gsm8k_es_prompts.jsonl", split="train")
+
+# Importar reward functions del archivo anterior
+from reward_functions import REWARD_FUNCTIONS
+
+lora_config = LoraConfig(
+    r=16,
+    lora_alpha=32,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    bias="none",
+)
+
+training_args = GRPOConfig(
+    output_dir=OUTPUT,
+    num_train_epochs=2,
+    learning_rate=1e-5,
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=16,
+    num_generations=8,          # G: cuántas respuestas genera por prompt (el "grupo")
+    max_prompt_length=512,
+    max_completion_length=1024, # espacio para el chain-of-thought
+    beta=0.04,                  # KL penalty contra el modelo de referencia
+    temperature=0.9,            # temperatura de sampling — más alta = más diversidad
+    bf16=True,
+    logging_steps=5,
+    save_steps=100,
+    report_to="wandb",
+)
+
+trainer = GRPOTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=dataset,
+    reward_funcs=REWARD_FUNCTIONS,  # lista de funciones; los scores se suman
+    peft_config=lora_config,
+)
+
+trainer.train()
+trainer.save_model(OUTPUT)</code></pre>
+    </div>
+
+    <div class="tip">
+      <strong>Hiperparámetros clave:</strong>
+      <ul style="margin-top:6px;padding-left:18px">
+        <li><code>num_generations</code> (G): más generaciones = baseline más estable pero más VRAM. Empieza con 8.</li>
+        <li><code>beta</code>: KL penalty. Muy alto = el modelo no se aleja del SFT. Muy bajo = olvida el formato de chat.</li>
+        <li><code>temperature</code>: necesitas diversidad en el grupo. Si todas las respuestas son idénticas, el gradiente es 0.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 5. Métricas -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-line"></i>5. Métricas durante el entrenamiento</h2>
+
+    <table class="model-table">
+      <thead><tr><th>Métrica en W&B</th><th>Qué mide</th><th>Señal saludable</th></tr></thead>
+      <tbody>
+        <tr><td>reward/mean</td><td>Recompensa promedio del grupo</td><td>Sube gradualmente</td></tr>
+        <tr><td>reward/std</td><td>Diversidad de rewards en el grupo</td><td>No colapsa a 0 (necesitas varianza)</td></tr>
+        <tr><td>kl</td><td>Divergencia KL vs modelo de referencia</td><td>Se estabiliza; no explota</td></tr>
+        <tr><td>completion_length</td><td>Longitud de las respuestas generadas</td><td>Sube (el modelo aprende a razonar más)</td></tr>
+        <tr><td>reward_correctness/mean</td><td>% de respuestas correctas en el grupo</td><td>Sube de ~10% a 50%+</td></tr>
+      </tbody>
+    </table>
+
+    <div class="tip"><strong>Colapso de reward:</strong> si <code>reward/std</code> cae a 0, el modelo genera respuestas idénticas — no hay señal de gradiente. Sube la temperatura de sampling o usa más diversas seed prompts.</div>
+  </div>
+
+  <!-- 6. Verifiable rewards para código -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-terminal-2"></i>6. Rewards verificables para código</h2>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — code_reward.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+import subprocess
+import tempfile
+import os
+
+def reward_code_execution(completions: list[str], test_cases: list[str], **kwargs) -> list[float]:
+    """Ejecuta el código generado contra casos de prueba en un proceso aislado."""
+    rewards = []
+    for completion, tests in zip(completions, test_cases):
+        # Extraer bloque de código Python
+        match = re.search(r"```python\n(.*?)```", completion, re.DOTALL)
+        if not match:
+            rewards.append(-1.0)
+            continue
+
+        code = match.group(1)
+        full_code = code + "\n\n" + tests   # agregar asserts
+
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                f.write(full_code)
+                tmp_path = f.name
+
+            result = subprocess.run(
+                ["python", tmp_path],
+                timeout=5,       # timeout por seguridad
+                capture_output=True,
+                text=True,
+            )
+            os.unlink(tmp_path)
+
+            if result.returncode == 0:
+                rewards.append(2.0)   # código correcto
+            else:
+                rewards.append(0.0)   # código con error en tests
+        except subprocess.TimeoutExpired:
+            rewards.append(-0.5)      # timeout
+        except Exception:
+            rewards.append(-1.0)
+
+    return rewards</code></pre>
+    </div>
+    <div class="tip"><strong>Seguridad:</strong> ejecutar código generado por LLMs en el mismo proceso es peligroso. En producción usa sandboxing (contenedores Docker, nsjail, o servicios como E2B). El ejemplo de arriba usa subprocess con timeout como primera línea de defensa.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Fuentes</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DeepSeek-R1 (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2402.03300" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DeepSeekMath / GRPO (Shao et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2507.18071" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>GSPO (2025)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/grpo_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL GRPOTrainer docs</a>
+      <a class="source-link" href="https://huggingface.co/datasets/openai/gsm8k" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>GSM8K (HF)</a>
+    </div>
+  </div>
+</main>
+
+<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+hljs.highlightAll();
+document.querySelectorAll('.code-block').forEach(block => {
+  const btn = block.querySelector('.copy-btn');
+  const code = block.querySelector('code');
+  if (!btn || !code) return;
+  btn.addEventListener('click', () => {
+    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
+      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>
