@@ -191,6 +191,9 @@
   .s-fund   { border-color: #94A3B8; background: rgba(100,116,139,0.06); }
   .s-fund .sec-title   { color: #1e293b; }
   .s-fund .sec-pill    { background: #CBD5E1; color: #1e293b; }
+  .s-interp { border-color: #F2A490; background: rgba(217,90,50,0.06); }
+  .s-interp .sec-title { color: #7A2A0F; }
+  .s-interp .sec-pill  { background: #F7C4B3; color: #4A1806; }
 
   @media (prefers-color-scheme: dark) {
     .s-datos  { border-color: #085041; background: rgba(8,80,65,0.15); }
@@ -214,6 +217,9 @@
     .s-fund   { border-color: #334155; background: rgba(51,65,85,0.15); }
     .s-fund .sec-title   { color: #94A3B8; }
     .s-fund .sec-pill    { background: #334155; color: #94A3B8; }
+    .s-interp { border-color: #7A2A0F; background: rgba(122,42,15,0.15); }
+    .s-interp .sec-title { color: #F7C4B3; }
+    .s-interp .sec-pill  { background: #7A2A0F; color: #F7C4B3; }
   }
 
   /* ── Track label ── */
@@ -957,7 +963,7 @@ const SECTIONS = [
         { level:"sota", title:"Verifiable synthetic data para RL",
           desc:"Generar problemas verificables (math, código) para GRPO/RLVR.",
           tags:["RLVR","GRPO","verifiable"],
-          papers:[{l:"DeepSeek-R1 (2025)",u:"https://arxiv.org/abs/2501.12948"}],
+          papers:[{l:"DeepSeek-R1 (2025)",u:"https://arxiv.org/abs/2501.12948"},{l:"VMR-RLVR (Zhang et al., 2025)",u:"https://arxiv.org/abs/2511.02463"}],
           res:[{l:"open-r1 (HF)",u:"https://github.com/huggingface/open-r1"}]},
         { level:"sota", title:"Model collapse y soluciones",
           desc:"Shumailov et al. (Nature 2024). Mixing con datos reales para evitar degradación.",
@@ -1109,6 +1115,19 @@ const SECTIONS = [
           tags:["contamination","prompt sensitivity","reproducibility"],
           papers:[{l:"Contamination detection (Golchin & Surdeanu, 2023)",u:"https://arxiv.org/abs/2310.16789"},{l:"NLP eval in trouble (Sainz et al., 2023)",u:"https://arxiv.org/abs/2310.18018"},{l:"MMLU prompt sensitivity (Gema et al., 2024)",u:"https://arxiv.org/abs/2402.07765"}],
           res:[{l:"lm-evaluation-harness",u:"https://github.com/EleutherAI/lm-evaluation-harness"}]},
+      ]},
+    ]
+  },
+  {
+    id:"interp", cls:"s-interp", icon:"ti-search", title:"Interpretabilidad",
+    pill:"1 tema",
+    tracks:[
+      { label:"Representaciones internas", items:[
+        { level:"sota", title:"Global Workspace en LLMs (Anthropic, 2025)",
+          desc:"Anthropic identificó un 'J-space': un pequeño conjunto de patrones neuronales en Claude que funciona como un global workspace (teoría de neurociencia). Sostiene conceptos que el modelo no está expresando, es controlable deliberadamente, sirve para razonamiento complejo y difunde información a otras partes de la red. Emergió sin programación explícita durante el entrenamiento.",
+          tags:["interpretability","global workspace","Anthropic","Jacobian lens"],
+          papers:[],
+          res:[{l:"A Global Workspace in Language Models (Anthropic)",u:"https://www.anthropic.com/research/global-workspace"}]},
       ]},
     ]
   },
