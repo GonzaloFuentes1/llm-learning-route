@@ -288,9 +288,9 @@
       </p>
     </div>
     <div class="hero-stats">
-      <div class="hstat"><div class="hstat-n">7</div><div class="hstat-l">áreas temáticas</div></div>
-      <div class="hstat"><div class="hstat-n">115</div><div class="hstat-l">temas en roadmap</div></div>
-      <div class="hstat"><div class="hstat-n">22</div><div class="hstat-l">guías con código</div></div>
+      <div class="hstat"><div class="hstat-n" data-stat="areas">7</div><div class="hstat-l">áreas temáticas</div></div>
+      <div class="hstat"><div class="hstat-n" data-stat="temas">115</div><div class="hstat-l">temas en roadmap</div></div>
+      <div class="hstat"><div class="hstat-n" data-stat="guias">22</div><div class="hstat-l">guías con código</div></div>
     </div>
   </div>
 
@@ -302,11 +302,11 @@
       <div class="card-content">
         <div class="card-title">
           LatamGPT — Ruta de aprendizaje
-          <span class="card-badge badge-roadmap">115 temas · 160+ papers</span>
+          <span class="card-badge badge-roadmap" data-stat="roadmap-badge">115 temas · 160+ papers</span>
         </div>
         <div class="card-desc">
-          Roadmap interactivo de fundamentos a SOTA 2026. 7 secciones: Fundamentos de ML, Modelos, Datos, Pretraining, Post-training,
-          Datos Sintéticos y Benchmarks. Con búsqueda y filtros por nivel.
+          Roadmap interactivo de fundamentos a SOTA 2026. 8 secciones: Fundamentos de ML, Modelos, Datos, Pretraining, Post-training,
+          Datos Sintéticos, Benchmarks &amp; Evaluación e Interpretabilidad. Con búsqueda y filtros por nivel.
         </div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
@@ -591,6 +591,41 @@
 <footer>
   Construido para CENIA · LatamGPT · Actualizado junio 2026
 </footer>
+
+<script>
+// Los números de arriba se recalculan solos leyendo latamgpt-roadmap.html,
+// así no quedan desactualizados cuando se agregan temas o papers al roadmap.
+(function () {
+  document.querySelectorAll('[data-stat="guias"]').forEach(function (el) {
+    el.textContent = document.querySelectorAll('a.card[href^="guias/"]').length;
+  });
+
+  fetch('latamgpt-roadmap.html')
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      var m = html.match(/const SECTIONS = (\[[\s\S]*?\n\]);/);
+      if (!m) return;
+      var src = m[1];
+
+      var areas = (src.match(/icon:"ti-[\w-]+",\s*title:"[^"]+"/g) || []).length;
+      var temas = (src.match(/level:"(basic|core|advanced|sota|latam|sat)"/g) || []).length;
+      var arxivRefs = src.match(/https:\/\/arxiv\.org\/(abs|pdf|html)\/[0-9]{4}\.[0-9]{4,6}/g) || [];
+      var uniquePapers = new Set(arxivRefs.map(function (u) {
+        return u.replace(/^https:\/\/arxiv\.org\/(abs|pdf|html)\//, '');
+      }));
+      var papersFloor = Math.floor(uniquePapers.size / 10) * 10;
+
+      document.querySelectorAll('[data-stat="areas"]').forEach(function (el) { el.textContent = areas; });
+      document.querySelectorAll('[data-stat="temas"]').forEach(function (el) { el.textContent = temas; });
+      document.querySelectorAll('[data-stat="roadmap-badge"]').forEach(function (el) {
+        el.textContent = temas + ' temas · ' + papersFloor + '+ papers';
+      });
+    })
+    .catch(function () {
+      // Si el fetch falla (ej. abierto como file:// sin servidor), quedan los números estáticos del HTML.
+    });
+})();
+</script>
 
 </body>
 </html>
