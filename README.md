@@ -10,17 +10,18 @@ Portal de recursos para ingenieros y practicantes que trabajan en [LatamGPT](htt
 
 ### Ruta de Aprendizaje
 
-Roadmap interactivo con 7 secciones, 97 temas y 130+ papers enlazados a arXiv. Incluye búsqueda y filtros por nivel (Básico / Core / Avanzado / SOTA 2026 / LatamGPT).
+Roadmap interactivo con 8 secciones, 139 temas y 230+ papers enlazados a arXiv. Incluye búsqueda y filtros por nivel (Básico / Core / Avanzado / SOTA 2026 / LatamGPT) — el filtro "Básico" da una ruta mínima que toca fundamentos de casi todas las secciones.
 
 | Sección | Qué cubre |
 |---|---|
 | Fundamentos de ML | Backprop, gradientes, AlexNet, ResNets, regularización, Adam/AdamW/Muon |
-| Modelos de referencia | LLaMA, OLMo, DeepSeek, Qwen, BLOOM, Salamandra y 20+ más |
-| Datos | Fuentes, tokenización, deduplicación, filtrado, FineWeb, DCLM, RedPajama |
-| Pretraining | Transformer, scaling laws, paralelismo, FlashAttention, MoE, RoPE |
-| Post-training | SFT, LoRA, RLHF, DPO/ORPO/KTO, Constitutional AI, GRPO |
-| Datos Sintéticos | Self-Instruct, Evol-Instruct, Magpie, PersonaHub, CoT sintético |
-| Benchmarks & Evaluación | MMLU, MATH, LiveCodeBench, Trueque, MGSM, BBH, HLE |
+| Modelos de referencia | LLaMA, OLMo, DeepSeek (incl. V3.2), Qwen, GLM-4.5/5, Kimi K2, MiniMax-M1, gpt-oss, Gemini 2.5, EuroLLM, Apertus, Salamandra y 30+ más |
+| Datos | Fuentes, tokenización, deduplicación, filtrado, FineWeb/FineWeb2, DCLM, Nemotron-CC, RedPajama |
+| Pretraining | Transformer, scaling laws, paralelismo, FlashAttention, MoE, RoPE, Native Sparse Attention, Kimi Linear |
+| Post-training | SFT, LoRA, RLHF, DPO/ORPO/KTO, Constitutional AI, GRPO/DAPO/VAPO/GVPO, agentes con RL |
+| Datos Sintéticos | Self-Instruct, Evol-Instruct, Magpie, PersonaHub, CoT sintético, Synthetic Data RL |
+| Benchmarks & Evaluación | MMLU, MATH, LiveCodeBench, ARC-AGI-2, SWE-Bench Pro, Terminal-Bench, Trueque, MGSM, BBH, HLE |
+| Interpretabilidad | Global Workspace, auditorías de objetivos ocultos, introspección, Sparse Autoencoders |
 
 ### Guías Prácticas
 
