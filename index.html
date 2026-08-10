@@ -250,11 +250,45 @@
 
   footer {
     text-align: center;
-    padding: 20px;
+    padding: 28px 20px 24px;
     font-size: 12px;
     color: var(--text3);
     border-top: 0.5px solid var(--border);
     margin-top: 40px;
+  }
+  .footer-made {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+  .social-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .social-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 99px;
+    border: 0.5px solid var(--border2);
+    background: var(--bg);
+    transition: all 0.15s;
+  }
+  .social-link i, .social-link .emoji { font-size: 14px; }
+  .social-link:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: transparent;
+    transform: translateY(-1px);
+  }
+  @media (prefers-color-scheme: dark) {
+    .social-link:hover { color: #1c1c1a; }
   }
 </style>
 </head>
@@ -589,6 +623,20 @@
 </main>
 
 <footer>
+  <div class="footer-made">
+    Creado por Gonzalo Fuentes
+    <div class="social-links">
+      <a class="social-link" href="https://github.com/GonzaloFuentes1" target="_blank" rel="noopener" aria-label="GitHub de Gonzalo Fuentes">
+        <i class="ti ti-brand-github" aria-hidden="true"></i> GitHub
+      </a>
+      <a class="social-link" href="https://www.linkedin.com/in/gonzalo-fuentes-olivares-850bb12a7/" target="_blank" rel="noopener" aria-label="LinkedIn de Gonzalo Fuentes">
+        <i class="ti ti-brand-linkedin" aria-hidden="true"></i> LinkedIn
+      </a>
+      <a class="social-link" href="https://huggingface.co/GonzaloFuentes1" target="_blank" rel="noopener" aria-label="Hugging Face de Gonzalo Fuentes">
+        <span class="emoji" aria-hidden="true">🤗</span> Hugging Face
+      </a>
+    </div>
+  </div>
   Construido para CENIA · LatamGPT · Actualizado junio 2026
 </footer>
 
