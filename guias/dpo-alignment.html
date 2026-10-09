@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alineamiento con DPO y variantes — LatamGPT</title>
+<meta name="description" content="Cómo alinear un modelo SFT con preferencias usando DPO, ORPO, KTO y SimPO con TRL 1.x, sin entrenar un reward model explícito.">
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -70,7 +72,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
     <h1 class="guide-title">Alineamiento con DPO y variantes</h1>
     <p class="guide-desc">Cómo alinear un modelo SFT con preferencias humanas sin entrenar un reward model explícito. Cubre DPO clásico, ORPO (sin reference model) y KTO (sin pares), con código completo usando la librería TRL.</p>
   </div>
@@ -86,7 +88,7 @@
         <tr><td>DPO</td><td>Pares (chosen, rejected)</td><td>Sí (frozen)</td><td>Caso estándar; tienes pares de comparación</td></tr>
         <tr><td>ORPO</td><td>Pares (chosen, rejected)</td><td>No</td><td>Ahorras VRAM; menos hiperparámetros</td></tr>
         <tr><td>KTO</td><td>Ejemplos con label bueno/malo</td><td>Sí (frozen)</td><td>No tienes pares; solo feedback binario</td></tr>
-        <tr><td>SimPO</td><td>Pares (chosen, rejected)</td><td>No</td><td>ORPO con normalización por longitud</td></tr>
+        <tr><td>SimPO</td><td>Pares (chosen, rejected)</td><td>No</td><td>Objetivo tipo DPO con recompensa = log-prob promedio por token y margen γ; evita el sesgo hacia respuestas largas. En TRL: <code>DPOConfig(loss_type="sigmoid_norm")</code></td></tr>
       </tbody>
     </table>
   </div>
@@ -116,14 +118,14 @@
       <div class="code-toolbar"><span class="code-lang">python — preparar datos DPO</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from datasets import load_dataset
 
-# Dataset ya en formato binarized (chosen/rejected listos)
-dataset = load_dataset("HuggingFaceH4/ultrafeedback_binarized", split="train_prefs")
+# Dataset ya en formato binarized (chosen/rejected conversacionales, prompt implícito)
+dataset = load_dataset("trl-lib/ultrafeedback_binarized", split="train")
 
 # Filtrar solo español (si el dataset es multilingüe)
 # dataset = dataset.filter(lambda x: x.get("lang", "en") == "es")
 
 print(dataset[0].keys())
-# dict_keys(['prompt', 'prompt_id', 'chosen', 'rejected', 'score_chosen', 'score_rejected'])
+# dict_keys(['chosen', 'rejected', 'score_chosen', 'score_rejected'])
 
 # Filtrar pares con margen de calidad suficiente
 dataset = dataset.filter(lambda x: x["score_chosen"] - x["score_rejected"] >= 1.0)
@@ -147,15 +149,17 @@ SFT_MODEL = "models/sft-checkpoint"   # modelo SFT ya entrenado
 OUTPUT_DIR = "models/dpo-aligned"
 
 tokenizer = AutoTokenizer.from_pretrained(SFT_MODEL)
-tokenizer.pad_token = tokenizer.eos_token
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+tokenizer.padding_side = "left"       # DPOTrainer exige padding a la izquierda
 
 model = AutoModelForCausalLM.from_pretrained(
     SFT_MODEL,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="auto",
 )
 
-dataset = load_dataset("HuggingFaceH4/ultrafeedback_binarized", split="train_prefs")
+dataset = load_dataset("trl-lib/ultrafeedback_binarized", split="train")
 dataset = dataset.filter(lambda x: x["score_chosen"] - x["score_rejected"] >= 1.0)
 
 lora_config = LoraConfig(
@@ -171,23 +175,22 @@ training_args = DPOConfig(
     num_train_epochs=1,
     per_device_train_batch_size=2,
     gradient_accumulation_steps=8,
-    learning_rate=5e-7,          # DPO requiere LR mucho más bajo que SFT
-    beta=0.1,                    # temperatura KL: 0.01 conservador, 0.5 agresivo
+    learning_rate=5e-6,          # con LoRA (~1e-5 según TRL); sin LoRA usa ~5e-7
+    beta=0.1,                    # fuerza del KL: 0.5 conservador, 0.01 agresivo
     bf16=True,
     logging_steps=10,
     save_steps=200,
     lr_scheduler_type="cosine",
-    warmup_ratio=0.1,
+    warmup_steps=0.1,            # float &lt; 1 = fracción de los pasos totales
     report_to="wandb",
-    max_length=2048,
-    max_prompt_length=512,
+    max_length=2048,             # prompt + respuesta; trunca con truncation_mode="keep_start"
 )
 
 trainer = DPOTrainer(
     model=model,
     args=training_args,
     train_dataset=dataset,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
     peft_config=lora_config,
 )
 
@@ -205,7 +208,8 @@ trainer.save_model(OUTPUT_DIR)</code></pre>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — orpo_train.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from trl import ORPOTrainer, ORPOConfig
+      <pre><code class="language-python"># Continúa el bloque anterior (model, tokenizer, dataset, lora_config)
+from trl.experimental.orpo import ORPOConfig, ORPOTrainer   # ORPO vive en trl.experimental en TRL 1.x
 
 # Misma configuración que DPO pero sin reference model
 training_args = ORPOConfig(
@@ -217,7 +221,6 @@ training_args = ORPOConfig(
     beta=0.1,                    # peso del término de odds ratio
     bf16=True,
     max_length=2048,
-    max_prompt_length=512,
     logging_steps=10,
     report_to="wandb",
 )
@@ -226,7 +229,43 @@ trainer = ORPOTrainer(
     model=model,           # no necesita reference_model
     args=training_args,
     train_dataset=dataset,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
+    peft_config=lora_config,
+)
+trainer.train()</code></pre>
+    </div>
+
+    <h3 class="sub-title">KTO: cuando solo tienes feedback binario</h3>
+    <p>KTO no necesita pares: cada ejemplo es un <code>prompt</code>, una <code>completion</code> y un <code>label</code> booleano (deseable / no deseable), el formato natural de los botones de "me gusta / no me gusta" en producción. Si le pasas un dataset de pares, <code>KTOTrainer</code> lo convierte solo (chosen → <code>True</code>, rejected → <code>False</code>).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — kto_train.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa el bloque de DPO (model, tokenizer, lora_config)
+from datasets import load_dataset
+from trl import KTOConfig, KTOTrainer
+
+# Formato unpaired: {"prompt": [...], "completion": [...], "label": True/False}
+kto_dataset = load_dataset("trl-lib/kto-mix-14k", split="train")
+
+training_args = KTOConfig(
+    output_dir="models/kto-aligned",
+    num_train_epochs=1,
+    per_device_train_batch_size=4,   # &gt; 1 obligatorio: el KL se estima con otros ejemplos del batch
+    gradient_accumulation_steps=8,
+    learning_rate=5e-6,              # TRL recomienda 5e-7 a 5e-6
+    beta=0.1,
+    desirable_weight=1.0,            # sube el peso de la clase minoritaria si están desbalanceadas
+    undesirable_weight=1.0,
+    max_length=2048,
+    logging_steps=10,
+    report_to="wandb",
+)
+
+trainer = KTOTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=kto_dataset,
+    processing_class=tokenizer,
     peft_config=lora_config,
 )
 trainer.train()</code></pre>
@@ -258,9 +297,13 @@ trainer.train()</code></pre>
       <a class="source-link paper" href="https://arxiv.org/abs/2305.18290" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DPO (Rafailov et al., 2023)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2403.07691" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>ORPO (Hong et al., 2024)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2402.01306" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>KTO (Ethayarajh et al., 2024)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2404.12253" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>SimPO (Meng et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2405.14734" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>SimPO (Meng et al., 2024)</a>
       <a class="source-link" href="https://huggingface.co/docs/trl/dpo_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL DPOTrainer docs</a>
-      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>UltraFeedback binarized (HF)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/kto_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL KTOTrainer docs</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/orpo_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL ORPOTrainer docs</a>
+      <a class="source-link" href="https://huggingface.co/datasets/trl-lib/ultrafeedback_binarized" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>UltraFeedback binarized (trl-lib)</a>
+      <a class="source-link" href="lora-finetuning.html"><i class="ti ti-arrow-right" style="font-size:11px"></i>Guía: LoRA fine-tuning</a>
+      <a class="source-link" href="reward-models.html"><i class="ti ti-arrow-right" style="font-size:11px"></i>Guía: Reward models</a>
     </div>
   </div>
 </main>
@@ -269,18 +312,31 @@ trainer.train()</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

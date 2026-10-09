@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Filtrado de Calidad — LatamGPT</title>
+<meta name="description" content="Pipeline para filtrar documentos de baja calidad de un corpus web en español y portugués con reglas Gopher/C4, identificación de idioma, clasificadores fastText, perplejidad KenLM, Datatrove, Dolma y NeMo Curator.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -75,6 +76,7 @@
     <h2 class="section-title"><i class="ti ti-info-circle"></i>1. Por qué el filtrado importa</h2>
     <p>DCLM (2024) demostró experimentalmente que la calidad del pipeline de datos supera a la arquitectura del modelo: un modelo más pequeño entrenado con datos bien filtrados supera a uno más grande con datos crudos. El filtrado es posiblemente el componente con mayor ROI en el pipeline.</p>
     <div class="tip"><strong>Flujo típico:</strong> corpus crudo → filtro de idioma → reglas Gopher/C4 → clasificador de calidad → filtro de perplejidad → corpus limpio para training</div>
+    <div class="tip"><strong>Guías relacionadas:</strong> para un clasificador de calidad multilingüe basado en embeddings (alternativa a los clasificadores fastText solo-inglés) ver <a href="jql-filtrado-multilingue.html">JQL: filtrado multilingüe de calidad</a>; para eliminar contenido tóxico del corpus ver <a href="filtrado-toxicidad-pretraining.html">Filtrado de toxicidad en pretraining es/pt</a>.</div>
   </div>
 
   <!-- 2. Reglas Gopher/C4 -->
@@ -84,11 +86,10 @@
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — reglas_heuristicas.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import re
-import unicodedata
+      <pre><code class="language-python">import json
 
 
-def passes_gopher_rules(text: str) -> bool:
+def passes_gopher_rules(text: str) -&gt; bool:
     """
     Reglas inspiradas en el paper de Gopher (DeepMind, 2022).
     Returns True si el documento pasa el filtro.
@@ -98,35 +99,35 @@ def passes_gopher_rules(text: str) -> bool:
     n_chars = len(text)
 
     # 1. Longitud mínima y máxima
-    if not (50 <= n_words <= 100_000):
+    if not (50 &lt;= n_words &lt;= 100_000):
         return False
 
     # 2. Ratio de caracteres alfabéticos
     alpha_chars = sum(1 for c in text if c.isalpha())
-    if alpha_chars / n_chars < 0.70:
+    if alpha_chars / n_chars &lt; 0.70:
         return False
 
     # 3. Palabras promedio no demasiado largas (spam de SEO)
     avg_word_len = sum(len(w) for w in words) / n_words
-    if not (3 <= avg_word_len <= 10):
+    if not (3 &lt;= avg_word_len &lt;= 10):
         return False
 
     # 4. No más del 10% de líneas terminan con "..."
     lines = text.split("\n")
     ellipsis_lines = sum(1 for l in lines if l.rstrip().endswith("..."))
-    if len(lines) > 0 and ellipsis_lines / len(lines) > 0.10:
+    if len(lines) &gt; 0 and ellipsis_lines / len(lines) &gt; 0.10:
         return False
 
     # 5. No más del 30% de líneas son duplicadas (listas repetitivas)
     non_empty_lines = [l for l in lines if l.strip()]
-    if len(non_empty_lines) > 5:
+    if len(non_empty_lines) &gt; 5:
         unique_ratio = len(set(non_empty_lines)) / len(non_empty_lines)
-        if unique_ratio < 0.70:
+        if unique_ratio &lt; 0.70:
             return False
 
     # 6. Ratio de símbolos (filtrar código o contenido técnico irrelevante)
-    symbol_ratio = sum(1 for c in text if c in "{}[]<>|#@") / n_chars
-    if symbol_ratio > 0.05:
+    symbol_ratio = sum(1 for c in text if c in "{}[]&lt;&gt;|#@") / n_chars
+    if symbol_ratio &gt; 0.05:
         return False
 
     return True
@@ -135,9 +136,8 @@ def passes_gopher_rules(text: str) -> bool:
 # Aplicar a dataset
 def filter_corpus(input_path: str, output_path: str):
     kept, removed = 0, 0
-    with open(input_path) as fin, open(output_path, "w") as fout:
+    with open(input_path, encoding="utf-8") as fin, open(output_path, "w", encoding="utf-8") as fout:
         for line in fin:
-            import json
             doc = json.loads(line)
             if passes_gopher_rules(doc["text"]):
                 fout.write(line)
@@ -154,7 +154,9 @@ def filter_corpus(input_path: str, output_path: str):
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">pip install fasttext-wheel
+      <pre><code class="language-bash"># fastText original está archivado y sus ruedas fallan con NumPy 2;
+# fasttext-numpy2-wheel mantiene el mismo "import fasttext" (es la que usa datatrove)
+pip install fasttext-numpy2-wheel
 
 # Descargar el modelo de identificación de idioma (lid.176.bin, 126MB)
 wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin</code></pre>
@@ -166,7 +168,7 @@ wget https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin</code
 
 lid_model = fasttext.load_model("lid.176.bin")
 
-def detect_language(text: str, threshold: float = 0.65) -> tuple[str, float]:
+def detect_language(text: str, threshold: float = 0.65) -&gt; tuple[str, float]:
     """Detecta el idioma de un texto. Retorna (lang_code, confidence)."""
     # fastText requiere texto sin saltos de línea
     clean = text.replace("\n", " ").strip()[:500]  # solo primeros 500 chars
@@ -176,19 +178,21 @@ def detect_language(text: str, threshold: float = 0.65) -> tuple[str, float]:
     return lang, confidence
 
 
-def is_spanish_or_portuguese(text: str, threshold: float = 0.65) -> bool:
+def is_spanish_or_portuguese(text: str, threshold: float = 0.65) -&gt; bool:
     lang, conf = detect_language(text)
-    return lang in ("es", "pt") and conf >= threshold
+    return lang in ("es", "pt") and conf &gt;= threshold
 
 
-# Filtrar corpus por idioma
+# Filtrar corpus por idioma (una sola predicción por documento)
 def filter_by_language(docs: list[dict], target_langs=("es", "pt"), threshold=0.65):
-    return [
-        doc for doc in docs
-        if detect_language(doc["text"])[0] in target_langs
-        and detect_language(doc["text"])[1] >= threshold
-    ]</code></pre>
+    kept = []
+    for doc in docs:
+        lang, conf = detect_language(doc["text"])
+        if lang in target_langs and conf &gt;= threshold:
+            kept.append({**doc, "language": lang, "language_score": conf})
+    return kept</code></pre>
     </div>
+    <div class="tip"><strong>Alternativa: GlotLID.</strong> GlotLID cubre 1.600+ idiomas y distingue mejor variedades cercanas; en datatrove basta con <code>LanguageFilter(languages=["spa_Latn", "por_Latn"], backend="glotlid")</code> (códigos ISO 639-3 + escritura).</div>
   </div>
 
   <!-- 4. Clasificador de calidad fastText -->
@@ -221,7 +225,7 @@ def prepare_training_file(
 
 
 # Entrenar el modelo
-def train_quality_classifier(train_file: str, val_file: str) -> fasttext.FastText._FastText:
+def train_quality_classifier(train_file: str, val_file: str) -&gt; fasttext.FastText._FastText:
     model = fasttext.train_supervised(
         input=train_file,
         epoch=3,
@@ -237,7 +241,7 @@ def train_quality_classifier(train_file: str, val_file: str) -> fasttext.FastTex
 
 
 # Usar el clasificador
-def score_document(model, text: str) -> float:
+def score_document(model, text: str) -&gt; float:
     """Retorna probabilidad de que el documento sea de alta calidad."""
     clean = text.replace("\n", " ")[:300]
     pred = model.predict(clean, k=2)
@@ -250,7 +254,7 @@ def score_document(model, text: str) -> float:
 model = fasttext.load_model("quality_classifier_es.bin")
 HIGH_QUALITY_THRESHOLD = 0.5
 
-filtered = [doc for doc in corpus if score_document(model, doc["text"]) >= HIGH_QUALITY_THRESHOLD]
+filtered = [doc for doc in corpus if score_document(model, doc["text"]) &gt;= HIGH_QUALITY_THRESHOLD]
 print(f"Conservados: {len(filtered):,} / {len(corpus):,} ({len(filtered)/len(corpus):.1%})")</code></pre>
     </div>
   </div>
@@ -262,44 +266,49 @@ print(f"Conservados: {len(filtered):,} / {len(corpus):,} ({len(filtered)/len(cor
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash — instalar KenLM</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">pip install kenlm
+      <pre><code class="language-bash">pip install kenlm sentencepiece datatrove
 
-# Descargar modelo KenLM en español (5-gramas, entrenado en Wikipedia)
-# Se puede entrenar propio o usar uno pre-entrenado de CCNet:
-wget https://dl.fbaipublicfiles.com/cc_net/lm/es.arpa.bin</code></pre>
+# Los modelos KenLM de CCNet (5-gramas, Wikipedia) esperan texto normalizado
+# a la CCNet y tokenizado con su SentencePiece: se necesitan ambos archivos.
+# datatrove los descarga solos desde el repo HF edugp/kenlm (wikipedia/es, wikipedia/pt).
+# Descarga manual equivalente desde CCNet:
+wget https://dl.fbaipublicfiles.com/cc_net/lm/es.arpa.bin
+wget https://dl.fbaipublicfiles.com/cc_net/lm/es.sp.model</code></pre>
     </div>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — filtro_perplejidad.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import kenlm
-import math
+      <pre><code class="language-python">import numpy as np
+from datatrove.utils.perplexity import KenlmModel
 
-model = kenlm.Model("es.arpa.bin")
+# Normalización CCNet (minúsculas, dígitos→0, sin diacríticos, puntuación unicode)
+# + tokenización SentencePiece + score KenLM, igual que en el pipeline original
+lm = {
+    "es": KenlmModel.from_pretrained("wikipedia", "es"),
+    "pt": KenlmModel.from_pretrained("wikipedia", "pt"),
+}
 
-def compute_perplexity(text: str, model: kenlm.Model) -> float:
-    """Calcula la perplejidad de un texto con el modelo KenLM."""
-    words = text.lower().split()
-    if len(words) < 10:
+
+def compute_perplexity(text: str, lang: str) -&gt; float:
+    """Perplejidad del documento según el KenLM de Wikipedia del idioma dado."""
+    if len(text.split()) &lt; 10:
         return float("inf")
-
-    log_prob = model.score(text.lower())  # log base 10
-    n_words = len(list(model.full_scores(text.lower())))
-    return 10 ** (-log_prob / n_words)
+    return lm[lang].get_perplexity(text)
 
 
-# Calibrar umbrales en tu corpus
-# Típicamente: PPL < 100 → texto limpio, PPL > 500 → spam/incoherente
+# Los umbrales absolutos no son transferibles entre modelos/idiomas:
+# calibrarlos por percentiles sobre una muestra del propio corpus
+# (CCNet partió cada idioma en terciles head/middle/tail).
 def filter_by_perplexity(
     docs: list[dict],
-    min_ppl: float = 10,
-    max_ppl: float = 500,
-) -> list[dict]:
-    filtered = []
-    for doc in docs:
-        ppl = compute_perplexity(doc["text"], model)
-        if min_ppl <= ppl <= max_ppl:
-            filtered.append({**doc, "perplexity": ppl})
-    return filtered</code></pre>
+    lang: str,
+    low_pct: float = 1,     # quita el 1% más bajo (texto repetitivo/plantillas)
+    high_pct: float = 70,   # quita el 30% más alto (incoherente/spam)
+) -&gt; list[dict]:
+    scored = [{**doc, "perplexity": compute_perplexity(doc["text"], lang)} for doc in docs]
+    ppls = np.array([d["perplexity"] for d in scored if np.isfinite(d["perplexity"])])
+    lo, hi = np.percentile(ppls, [low_pct, high_pct])
+    return [d for d in scored if lo &lt;= d["perplexity"] &lt;= hi]</code></pre>
     </div>
   </div>
 
@@ -317,45 +326,57 @@ from datatrove.pipeline.filters import (
     LanguageFilter,
     C4QualityFilter,
 )
-from datatrove.pipeline.dedup import MinhashDedupSignature
+from datatrove.utils.typeshelper import Languages
 
-executor = LocalPipelineExecutor(
-    pipeline=[
-        JsonlReader(data_folder="data/raw/", glob_pattern="**/*.jsonl"),
+# Por defecto Gopher/C4 usan language=english y stop words en inglés
+# ("the", "be", "to", ...): sin esto se descarta casi todo el texto es/pt.
+# Se corre un pipeline por idioma, con su tokenizador y sus stop words.
+CONFIG = {
+    "es": (Languages.spanish, ["de", "la", "que", "el", "en", "y", "a", "los"]),
+    "pt": (Languages.portuguese, ["de", "a", "o", "que", "e", "do", "da", "em"]),
+}
 
-        # 1. Filtro de idioma (conservar es y pt)
-        LanguageFilter(languages=["es", "pt"], language_threshold=0.65),
+for lid_code, (language, stop_words) in CONFIG.items():
+    executor = LocalPipelineExecutor(
+        pipeline=[
+            JsonlReader(data_folder="data/raw/", glob_pattern="**/*.jsonl"),
 
-        # 2. Reglas Gopher de calidad básica
-        GopherQualityFilter(
-            min_doc_words=50,
-            max_doc_words=100_000,
-            min_avg_word_length=3,
-            max_avg_word_length=10,
-            max_symbol_word_ratio=0.1,
-        ),
+            # 1. Filtro de idioma (lid.176: códigos "es" / "pt")
+            LanguageFilter(languages=[lid_code], language_threshold=0.65),
 
-        # 3. Filtro de repetición
-        GopherRepetitionFilter(
-            max_duplicated_5_grams_char_fraction=0.15,
-            max_top_ngram_character_fraction=0.20,
-        ),
+            # 2. Reglas Gopher de calidad básica
+            GopherQualityFilter(
+                min_doc_words=50,
+                max_doc_words=100_000,
+                min_avg_word_length=3,
+                max_avg_word_length=10,
+                max_symbol_word_ratio=0.1,
+                stop_words=stop_words,
+                language=language,
+            ),
 
-        # 4. Filtros C4 adicionales
-        C4QualityFilter(
-            filter_no_terminal_punct=True,
-            min_num_sentences=3,
-        ),
+            # 3. Filtro de repetición (valores de Gopher)
+            GopherRepetitionFilter(
+                dup_n_grams=((5, 0.15), (6, 0.14), (7, 0.13), (8, 0.12), (9, 0.11), (10, 0.10)),
+                top_n_grams=((2, 0.20), (3, 0.18), (4, 0.16)),
+                language=language,
+            ),
 
-        # Guardar corpus filtrado
-        JsonlWriter(output_folder="data/filtered/"),
-    ],
-    tasks=64,
-    workers=16,
-    logging_dir="logs/filtering/",
-)
+            # 4. Filtros C4 adicionales
+            C4QualityFilter(
+                filter_no_terminal_punct=True,
+                min_num_sentences=3,
+                language=language,
+            ),
 
-executor.run()</code></pre>
+            # Guardar corpus filtrado
+            JsonlWriter(output_folder=f"data/filtered/{lid_code}/"),
+        ],
+        tasks=64,
+        workers=16,
+        logging_dir=f"logs/filtering/{lid_code}/",
+    )
+    executor.run()</code></pre>
     </div>
     <div class="tip"><strong>Orden importa:</strong> Poner los filtros más baratos primero (longitud, idioma) elimina documentos antes de aplicar filtros costosos (perplejidad, clasificadores ML). Esto reduce el tiempo total de procesamiento.</div>
   </div>
@@ -363,20 +384,22 @@ executor.run()</code></pre>
   <!-- 7. DCLM: clasificador OH2.5 + ELI5 -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-robot"></i>7. DCLM: clasificador OH2.5 + ELI5 vs RefinedWeb</h2>
-    <p>La innovación principal de DCLM fue usar <strong>datos de instrucción</strong> (OpenHermes 2.5 + ELI5 Reddit) como positivos en vez de Wikipedia. La hipótesis: si quieres que el modelo escriba como en instrucciones de alta calidad, entrena el clasificador con esos ejemplos. El umbral real usado en DCLM-Baseline es <code>0.018112</code> — muy permisivo, deja pasar casi todo excepto spam claro.</p>
+    <p>La innovación principal de DCLM fue usar <strong>datos de instrucción</strong> (OpenHermes 2.5 + ELI5 Reddit) como positivos en vez de Wikipedia. La hipótesis: si quieres que el modelo escriba como en instrucciones de alta calidad, entrena el clasificador con esos ejemplos. El umbral usado en DCLM-Baseline es <code>0.018112</code>: no es permisivo, sino que corresponde a quedarse con aprox. el <strong>10% superior</strong> de los documentos según el score (las probabilidades P(hq) están muy sesgadas hacia 0, por eso el valor absoluto es bajo). Lo correcto es fijar el umbral por percentil sobre tu propio corpus.</p>
+    <p>Ojo: <code>fasttext_oh_eli5</code> se entrenó solo con texto en inglés. Para es/pt hay que entrenar un clasificador propio con positivos en español/portugués (instrucciones traducidas o curadas) o usar un clasificador multilingüe como <a href="jql-filtrado-multilingue.html">JQL</a> o FineWeb-Edu multilingüe.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash — preparar datos y entrenar clasificador DCLM</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash"># Instalar DCLM
 git clone https://github.com/mlfoundations/dclm
-cd dclm && pip install -e .
+cd dclm &amp;&amp; pip install -e .
 
 # Preparar archivo de entrenamiento en formato fastText
 # Positivos: OpenHermes 2.5 (instruction data)
 # Negativos: muestra aleatoria de RefinedWeb / CommonCrawl
 
+# training_data.txt: una línea por documento con __label__hq o __label__cc
 python baselines/train_fasttext_classifier.py \
-  --input training_data.txt \    # __label__hq y __label__cc alternados
+  --input training_data.txt \
   --valid_frac 0.05 \
   --name fasttext_oh_eli5 \
   --epoch 3 \
@@ -395,7 +418,7 @@ python baselines/train_fasttext_classifier.py \
       key: fasttext_oh_eli5_vs_rw_v2_prob
     - func: quality_filter
       key: fasttext_oh_eli5_vs_rw_v2_prob
-      threshold: 0.018112   # umbral real usado en DCLM-Baseline</code></pre>
+      threshold: 0.018112   # en DCLM-Baseline ≈ percentil 90 (top-10%); recalibrar en tu corpus</code></pre>
     </div>
 
     <div class="code-block">
@@ -404,10 +427,10 @@ python baselines/train_fasttext_classifier.py \
 
 model = fasttext.load_model("fasttext_oh_eli5.bin")
 
-def dclm_score(text: str) -> float:
+def dclm_score(text: str) -&gt; float:
     """
     Retorna P(hq) según el clasificador DCLM.
-    Threshold del paper: 0.018112 (muy permisivo, elimina solo spam claro).
+    Threshold del paper: 0.018112 (≈ top-10% del pool de DCLM; no es permisivo).
     """
     clean = text.replace("\n", " ").strip()[:300]
     pred = model.predict(clean, k=2)
@@ -418,9 +441,12 @@ def dclm_score(text: str) -> float:
     return float(1.0 - probs[0])
 
 
-# Filtrar corpus
-DCLM_THRESHOLD = 0.018112  # del paper; sube a 0.1-0.3 para corpus más pequeño/limpio
-filtered = [doc for doc in corpus if dclm_score(doc["text"]) >= DCLM_THRESHOLD]</code></pre>
+# Filtrar corpus: umbral por percentil (DCLM-Baseline conservó ~10% superior)
+import numpy as np
+
+scores = np.array([dclm_score(doc["text"]) for doc in corpus])
+threshold = np.percentile(scores, 90)
+filtered = [doc for doc, sc in zip(corpus, scores) if sc &gt;= threshold]</code></pre>
     </div>
 
     <div class="tip"><strong>OH2.5 vs Wikipedia como positivos:</strong> Wikipedia captura "texto enciclopédico bien escrito". OpenHermes/ELI5 captura "texto explicativo, instructivo, útil para un asistente". Para un LLM de chat/instrucción, el segundo da mejores resultados downstream según los ablaciones de DCLM.</div>
@@ -429,7 +455,7 @@ filtered = [doc for doc in corpus if dclm_score(doc["text"]) >= DCLM_THRESHOLD]<
   <!-- 8. Dolma Toolkit (OLMo) -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-package"></i>8. Dolma Toolkit — pipeline de OLMo/AllenAI</h2>
-    <p>Dolma es el toolkit de curaciónde datos de AllenAI, usado para construir el corpus de OLMo. Está escrito en Rust + Python, es muy rápido y usa deduplicación con Bloom filters en Rust. Los "taggers" son módulos Python que anotantributos sobre cada documento; el paso de mezcla/filtrado aplica los umbrales.</p>
+    <p>Dolma es el toolkit de curación de datos de AllenAI, usado para construir el corpus de OLMo. Está escrito en Rust + Python, es muy rápido y usa deduplicación con Bloom filters en Rust. Los "taggers" son módulos Python que anotan atributos sobre cada documento; el paso de mezcla/filtrado aplica los umbrales.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash — instalar y aplicar taggers</span><button class="copy-btn">Copiar</button></div>
@@ -439,125 +465,128 @@ filtered = [doc for doc in corpus if dclm_score(doc["text"]) >= DCLM_THRESHOLD]<
 dolma list
 
 # Taggers clave disponibles:
-# gopher_quality_v1          → reglas de calidad de Gopher (longitud, símbolos, etc.)
-# gopher_repetition_v1       → detección de repeticiones n-gram
-# c4_quality_v1              → reglas del dataset C4 (puntuación terminal, etc.)
-# ft_lang_id_en_doc_v2       → detección de idioma con fastText
-# jigsaw_hatespeech_v2       → contenido de odio (clasificador Jigsaw)
-# pii_presidio_v1            → detección de PII con Presidio
+# gopher_v1                       → reglas de calidad y repetición de Gopher
+# c4_v1 / c4_v2                   → reglas del dataset C4 (puntuación terminal, etc.)
+# ft_lang_id_en_doc_v2            → LID fastText, pero solo puntúa inglés (no sirve para es/pt)
+# jigsaw_hatespeech_document_v2   → contenido de odio (clasificador Jigsaw, inglés)
+# pii_regex_v1 / pii_presidio_v1  → detección de PII
 
-# Aplicar taggers sobre el corpus (anota atributos, no filtra todavía)
+# Aplicar taggers sobre el corpus (anota atributos, no filtra todavía).
+# Los documentos deben estar bajo una carpeta "documents/"; los atributos
+# se escriben en la carpeta hermana "attributes/&lt;experiment&gt;/".
 dolma tag \
-  --taggers gopher_quality_v1 c4_quality_v1 ft_lang_id_en_doc_v2 \
-  --documents "data/raw/*.jsonl.gz" \
-  --work_dir data/work/ \
+  --experiment latam \
+  --documents "data/documents/*.jsonl.gz" \
+  --taggers gopher_v1 c4_v2 \
   --processes 16</code></pre>
     </div>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — filtrar con los atributos de Dolma</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from dolma.core.data_types import Document
-from dolma.taggers.gopher import GopherQualityTagger
-from dolma.taggers.language import FastTextLanguageTagger
+      <pre><code class="language-python">import gzip
+import json
 
-# Los taggers anotan atributos en cada documento
-gopher = GopherQualityTagger()
-lang_tagger = FastTextLanguageTagger(model_path="lid.176.bin")
+# dolma tag escribe, por cada archivo de documents/, un archivo paralelo en
+# attributes/latam/ con {"id", "attributes": {"latam__gopher_v1__word_count": [[start, end, score]], ...}}
+# (clave = experimento__tagger__atributo; cada valor es una lista de spans)
+# El LID es/pt se hace antes, con datatrove o GlotLID (Dolma solo trae LID para inglés).
 
-def should_keep(doc: dict) -> bool:
-    text = doc["text"]
-    # Filtro de idioma
-    lang_pred = lang_tagger.predict(text)
-    if lang_pred.label not in ("es", "pt") or lang_pred.score < 0.65:
+def doc_score(attrs: dict, key: str, default: float) -&gt; float:
+    spans = attrs.get(key)
+    return spans[0][2] if spans else default
+
+
+def should_keep(attrs: dict) -&gt; bool:
+    if doc_score(attrs, "latam__gopher_v1__word_count", 0) &lt; 50:
         return False
-    # Filtros Gopher
-    preds = gopher.predict(text)
-    attrs = {p.label: p.score for p in preds}
-    if attrs.get("gopher_word_count", 0) < 50:
-        return False
-    if attrs.get("gopher_symbol_to_word_ratio", 1.0) > 0.1:
+    if doc_score(attrs, "latam__gopher_v1__symbol_to_word_ratio", 1.0) &gt; 0.1:
         return False
     return True
 
-filtered = [doc for doc in corpus if should_keep(doc)]</code></pre>
+
+with gzip.open("data/documents/part-0000.jsonl.gz", "rt", encoding="utf-8") as fd, \
+     gzip.open("data/attributes/latam/part-0000.jsonl.gz", "rt", encoding="utf-8") as fa:
+    filtered = [
+        json.loads(d) for d, a in zip(fd, fa)
+        if should_keep(json.loads(a)["attributes"])
+    ]
+
+# Para corpus grandes, usar "dolma mix" con filtros declarados en un YAML
+# en vez de este bucle en Python.</code></pre>
+    <div class="tip"><strong>Ojo con gopher_v1 en es/pt:</strong> sus atributos de "palabras requeridas" usan stop words en inglés; para español/portugués usa solo los atributos independientes del idioma (conteo de palabras, símbolos, repetición) o los filtros por idioma de datatrove.</div>
     </div>
   </div>
 
   <!-- 9. NeMo Curator (NVIDIA) -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-brand-nvidia"></i>9. NeMo Curator — filtrado acelerado con GPU</h2>
-    <p>NeMo Curator de NVIDIA acelera el pipeline de filtrado usando <strong>RAPIDS/cuDF</strong> en GPU. La deduplicación fuzzy es ~16× más rápida que la alternativa en CPU. Útil para corpus de decenas de TB donde Datatrove en CPU es demasiado lento.</p>
+    <h2 class="section-title"><i class="ti ti-cpu"></i>9. NeMo Curator — filtrado acelerado con GPU</h2>
+    <p>NeMo Curator de NVIDIA acelera el pipeline de filtrado usando <strong>RAPIDS/cuDF</strong> en GPU. Desde la serie 25.x/26.x los pipelines se arman con <code>Pipeline</code> + stages y se ejecutan sobre <strong>Ray</strong> (la API Dask con <code>DocumentDataset</code>/<code>nc.Sequential</code> quedó deprecada). La deduplicación fuzzy es ~16× más rápida que la alternativa en CPU. Útil para corpus de decenas de TB donde Datatrove en CPU es demasiado lento.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">pip install nemo-curator[all]
+      <pre><code class="language-bash"># CPU: filtros heurísticos y fastText
+uv pip install "nemo-curator[text_cpu]"
 
-# Requiere RAPIDS (cuDF) para aceleración GPU
-# En cluster con GPUs NVIDIA A100/H100</code></pre>
+# GPU (CUDA 12, RAPIDS/cuDF + dedup): cluster con NVIDIA A100/H100
+uv pip install "nemo-curator[text_cuda12]"</code></pre>
     </div>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — pipeline NeMo Curator</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import nemo_curator as nc
-from nemo_curator.datasets import DocumentDataset
-from nemo_curator.filters import (
-    FastTextLangId,
-    FastTextQualityFilter,
-    WordCountFilter,
-    NonAlphaNumericFilter,
-    RepeatedLinesByCharFilter,
-)
-from nemo_curator.utils.distributed_utils import get_client
+      <pre><code class="language-python">from nemo_curator.pipeline import Pipeline
+from nemo_curator.backends.ray_data import RayDataExecutor
+from nemo_curator.stages.text.io.reader import JsonlReader
+from nemo_curator.stages.text.io.writer import JsonlWriter
+from nemo_curator.stages.text.filters import ScoreFilter
+from nemo_curator.stages.text.filters.fasttext import FastTextLangId, FastTextQualityFilter
+from nemo_curator.stages.text.filters.heuristic import NonAlphaNumericFilter, WordCountFilter
+from nemo_curator.stages.text.filters.heuristic.repetition import RepeatedLinesByCharFilter
 
-# Inicializar cluster (CPU o GPU)
-client = get_client(cluster_type="gpu", n_workers=4)   # GPU
-# client = get_client(cluster_type="cpu", n_workers=16) # CPU
+LANG = "es"  # repetir con "pt"
 
-# Cargar dataset (soporta múltiples formatos)
-dataset = DocumentDataset.read_json("data/raw/", add_filename=True)
+pipeline = Pipeline(name=f"filtrado_{LANG}")
+pipeline.add_stage(JsonlReader(file_paths="data/raw/", fields=["text", "id"]))
 
-# Definir pipeline de filtros
-pipeline = nc.Sequential([
-    # 1. Idioma
-    nc.ScoreFilter(
-        FastTextLangId("lid.176.bin"),
-        text_field="text",
-        score_field="language",
-        score_type=str,
-    ),
+# 1. Idioma (lid.176: conserva docs cuyo idioma es LANG con score &gt;= 0.65)
+pipeline.add_stage(ScoreFilter(
+    filter_obj=FastTextLangId(model_path="lid.176.bin", min_langid_score=0.65, lang=LANG),
+    text_field="text",
+    score_field="language",
+))
 
-    # 2. Longitud mínima
-    nc.ScoreFilter(
-        WordCountFilter(min_words=50),
-        text_field="text",
-        score_field="word_count",
-    ),
+# 2. Longitud mínima
+pipeline.add_stage(ScoreFilter(
+    filter_obj=WordCountFilter(min_words=50),
+    text_field="text",
+    score_field="word_count",
+))
 
-    # 3. Ratio alfanumérico
-    nc.ScoreFilter(
-        NonAlphaNumericFilter(max_non_alpha_numeric_ratio=0.25),
-        text_field="text",
-        score_field="non_alpha",
-    ),
+# 3. Ratio no alfanumérico
+pipeline.add_stage(ScoreFilter(
+    filter_obj=NonAlphaNumericFilter(max_non_alpha_numeric_to_text_ratio=0.25),
+    text_field="text",
+    score_field="non_alpha",
+))
 
-    # 4. Líneas repetidas
-    nc.ScoreFilter(
-        RepeatedLinesByCharFilter(max_repeated_lines_ratio=0.70),
-        text_field="text",
-        score_field="repeated_lines",
-    ),
+# 4. Caracteres en líneas repetidas
+pipeline.add_stage(ScoreFilter(
+    filter_obj=RepeatedLinesByCharFilter(max_repeated_lines_char_ratio=0.70),
+    text_field="text",
+    score_field="repeated_lines",
+))
 
-    # 5. Clasificador de calidad fastText
-    nc.ScoreFilter(
-        FastTextQualityFilter("fasttext_oh_eli5.bin", label="hq", threshold=0.018),
-        text_field="text",
-        score_field="quality_score",
-    ),
-])
+# 5. Clasificador de calidad fastText (sin umbral fijo: muestreo Pareto
+#    sobre P(hq), como en GPT-3; label debe coincidir con tu modelo)
+pipeline.add_stage(ScoreFilter(
+    filter_obj=FastTextQualityFilter(model_path="quality_classifier_es.bin", label="__label__hq", alpha=3),
+    text_field="text",
+    score_field="quality_score",
+))
 
-# Ejecutar
-filtered = pipeline(dataset)
-filtered.to_json("data/filtered/", write_to_filename=True)</code></pre>
+pipeline.add_stage(JsonlWriter(path=f"data/filtered/{LANG}/"))
+
+# Ejecutar sobre Ray (local o cluster)
+pipeline.run(RayDataExecutor(ignore_head_node=True))</code></pre>
     </div>
 
     <div class="tip"><strong>GPU vs CPU:</strong> Para deduplicación fuzzy de 1T+ tokens, NeMo Curator en GPU es 10-16× más rápido que datasketch en CPU. Para el filtrado de texto puro, la diferencia es menor (~2-4×). La ventaja real es la deduplicación.</div>
@@ -569,12 +598,17 @@ filtered.to_json("data/filtered/", write_to_filename=True)</code></pre>
       <a class="source-link paper" href="https://arxiv.org/abs/2112.11446" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Gopher (Rae et al., 2022)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2406.11794" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>DCLM (Li et al., 2024)</a>
       <a class="source-link" href="https://fasttext.cc/docs/en/language-identification.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>fastText LID</a>
-      <a class="source-link" href="https://github.com/kheafield/kenlm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>KenLM</a>
+      <a class="source-link" href="https://github.com/kpu/kenlm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>KenLM</a>
       <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Datatrove (HuggingFace)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2306.01116" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>RefinedWeb (Penedo et al., 2023)</a>
-      <a class="source-link" href="https://github.com/NVIDIA/NeMo-Curator" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>NeMo Curator (NVIDIA)</a>
+      <a class="source-link" href="https://github.com/NVIDIA-NeMo/Curator" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>NeMo Curator (NVIDIA)</a>
       <a class="source-link" href="https://github.com/allenai/dolma" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Dolma Toolkit (AllenAI)</a>
       <a class="source-link" href="https://github.com/mlfoundations/dclm" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>DCLM (GitHub)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1911.00359" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>CCNet (Wenzek et al., 2019)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2310.16248" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>GlotLID (Kargaran et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.22232" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>JQL (Ali et al., 2025)</a>
+      <a class="source-link" href="jql-filtrado-multilingue.html"><i class="ti ti-book" style="font-size:11px"></i>Guía: JQL filtrado multilingüe</a>
+      <a class="source-link" href="filtrado-toxicidad-pretraining.html"><i class="ti ti-book" style="font-size:11px"></i>Guía: Filtrado de toxicidad en pretraining</a>
     </div>
   </div>
 </main>
@@ -583,18 +617,31 @@ filtered.to_json("data/filtered/", write_to_filename=True)</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

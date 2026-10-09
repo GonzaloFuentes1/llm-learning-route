@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GRPO y RL para razonamiento — LatamGPT</title>
+<meta name="description" content="Guía práctica de GRPO con TRL 1.x: funciones de recompensa verificables, preparación del dataset, entrenamiento con GRPOTrainer y vLLM, y métricas para diagnosticar el colapso de reward.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -70,7 +71,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
     <h1 class="guide-title">GRPO y RL para razonamiento</h1>
     <p class="guide-desc">Group Relative Policy Optimization: el algoritmo que está detrás de DeepSeek-R1 y los modelos de razonamiento modernos. Entrena el modelo con recompensas verificables (matemáticas, código) sin necesitar un reward model aprendido separado.</p>
   </div>
@@ -84,36 +85,43 @@
       <tbody>
         <tr><td>Reward model</td><td>RM aprendido (otro LLM)</td><td>Función determinista (regex, test)</td></tr>
         <tr><td>Baseline</td><td>Value network (otro modelo)</td><td>Media del grupo de respuestas</td></tr>
-        <tr><td>Complejidad</td><td>Alta (3 modelos en memoria)</td><td>Baja (1 modelo + referencia)</td></tr>
-        <tr><td>Reward hacking</td><td>Posible si el RM se satura</td><td>No posible con rewards verificables</td></tr>
+        <tr><td>Complejidad</td><td>Alta (3 modelos en memoria)</td><td>Baja (1 modelo; + referencia solo si beta &gt; 0)</td></tr>
+        <tr><td>Reward hacking</td><td>Posible si el RM se satura</td><td>Menos probable, pero existe (hacking de formato, de tests, de longitud)</td></tr>
         <tr><td>Dominio ideal</td><td>Alineamiento general</td><td>Matemáticas, código, razonamiento formal</td></tr>
       </tbody>
     </table>
 
     <p>En GRPO, para cada prompt se generan <strong>G respuestas</strong> del modelo actual. La recompensa de cada respuesta se normaliza restando la media del grupo y dividiendo por la desviación estándar — este es el "baseline" que en PPO lo hace una value network. Resultado: mismo efecto de reducción de varianza pero sin modelo de valor.</p>
 
-    <div class="tip"><strong>Recompensas verificables:</strong> la clave de DeepSeek-R1 es que las tareas de matemáticas y código tienen respuesta objetivamente correcta o incorrecta. Esto elimina la necesidad de un RM aprendido que puede hackear.</div>
+    <div class="tip"><strong>Recompensas verificables:</strong> la clave de DeepSeek-R1 es que las tareas de matemáticas y código tienen respuesta objetivamente correcta o incorrecta. Esto elimina la necesidad de un RM aprendido que puede hackear. Ojo: el modelo igual puede explotar fallas del verificador (formato sin contenido, tests débiles, respuestas infladas), así que revisa muestras de las generaciones durante el entrenamiento.</div>
   </div>
 
   <!-- 2. Funciones de reward -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-award"></i>2. Funciones de recompensa</h2>
-    <p>Las reward functions toman el prompt + la respuesta generada y devuelven un escalar. Para razonamiento matemático suelen combinarse varias:</p>
+    <p>Las reward functions toman el prompt + la respuesta generada y devuelven un escalar. TRL pasa cada columna del dataset como kwarg con su mismo nombre (aquí <code>answer</code>) y, como el prompt es conversacional, cada completion llega como lista de mensajes (<code>[{"role": "assistant", "content": ...}]</code>). Para razonamiento matemático suelen combinarse varias:</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — reward_functions.py</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">import re
 
+
+def _texts(completions) -&gt; list[str]:
+    """Con prompts conversacionales cada completion es [{"role": "assistant", "content": ...}]."""
+    return [c[0]["content"] if isinstance(c, list) else c for c in completions]
+
+
 # ── Reward 1: respuesta correcta ─────────────────────────────────────────────
-def reward_correctness(completions: list[str], answers: list[str], **kwargs) -> list[float]:
-    """Verifica si la respuesta final dentro de \\boxed{} es correcta."""
+def reward_correctness(completions, answer: list[str], **kwargs) -&gt; list[float]:
+    """Verifica si la respuesta final dentro de \\boxed{} es correcta.
+    `answer` es la columna del dataset (TRL la pasa como kwarg con ese nombre)."""
     rewards = []
-    for completion, answer in zip(completions, answers):
+    for completion, expected_raw in zip(_texts(completions), answer):
         # Extraer número dentro de \boxed{...}
         match = re.search(r"\\boxed\{([^}]+)\}", completion)
         if match:
             predicted = match.group(1).strip().replace(",", "")
-            expected  = str(answer).strip().replace(",", "")
+            expected  = str(expected_raw).strip().replace(",", "")
             rewards.append(2.0 if predicted == expected else 0.0)
         else:
             rewards.append(0.0)   # no hay respuesta formateada
@@ -121,25 +129,25 @@ def reward_correctness(completions: list[str], answers: list[str], **kwargs) -> 
 
 
 # ── Reward 2: formato correcto ────────────────────────────────────────────────
-def reward_format(completions: list[str], **kwargs) -> list[float]:
-    """Premio si el modelo usa el formato <think>...</think> y \\boxed{}."""
+def reward_format(completions, **kwargs) -&gt; list[float]:
+    """Premio si el modelo usa el formato &lt;think&gt;...&lt;/think&gt; y \\boxed{}."""
     rewards = []
-    for completion in completions:
-        has_think = bool(re.search(r"<think>.*?</think>", completion, re.DOTALL))
+    for completion in _texts(completions):
+        has_think = bool(re.search(r"&lt;think&gt;.*?&lt;/think&gt;", completion, re.DOTALL))
         has_boxed = bool(re.search(r"\\boxed\{", completion))
         rewards.append(0.5 if (has_think and has_boxed) else 0.0)
     return rewards
 
 
 # ── Reward 3: longitud razonable (anti-padding) ───────────────────────────────
-def reward_length(completions: list[str], **kwargs) -> list[float]:
+def reward_length(completions, **kwargs) -&gt; list[float]:
     """Penaliza respuestas muy cortas o excesivamente largas."""
     rewards = []
-    for completion in completions:
+    for completion in _texts(completions):
         n = len(completion.split())
-        if 50 <= n <= 800:
+        if 50 &lt;= n &lt;= 800:
             rewards.append(0.1)
-        elif n < 20 or n > 2000:
+        elif n &lt; 20 or n &gt; 2000:
             rewards.append(-0.5)
         else:
             rewards.append(0.0)
@@ -160,17 +168,19 @@ REWARD_FUNCTIONS = [reward_correctness, reward_format, reward_length]</code></pr
       <div class="code-toolbar"><span class="code-lang">python — prepare_dataset.py</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from datasets import load_dataset
 
-# GSM8K en español (o cualquier dataset de matemáticas)
+# GSM8K (en inglés). Para un modelo en español, traduce las preguntas (manteniendo la
+# respuesta numérica) o usa tu propio dataset; MGSM ("juletxara/mgsm", config "es")
+# tiene solo 250 ejemplos de test: úsalo para evaluar, no para entrenar.
 dataset = load_dataset("openai/gsm8k", "main", split="train")
 
-SYSTEM_PROMPT = """Eres un asistente matemático. Razona paso a paso dentro de etiquetas <think> y </think>,
+SYSTEM_PROMPT = """Eres un asistente matemático. Razona paso a paso dentro de etiquetas &lt;think&gt; y &lt;/think&gt;,
 luego da tu respuesta final dentro de \\boxed{}.
 
 Ejemplo:
-<think>
+&lt;think&gt;
 Primero calculo...
 Luego...
-</think>
+&lt;/think&gt;
 La respuesta es \\boxed{42}."""
 
 def format_prompt(example):
@@ -183,7 +193,10 @@ def format_prompt(example):
     }
 
 dataset = dataset.map(format_prompt, remove_columns=dataset.column_names)
-print(dataset[0])</code></pre>
+print(dataset[0])
+
+# Guardar para grpo_train.py
+dataset.to_json("data/gsm8k_prompts.jsonl")</code></pre>
     </div>
   </div>
 
@@ -199,17 +212,17 @@ from peft import LoraConfig
 from trl import GRPOTrainer, GRPOConfig
 from datasets import load_dataset
 
-MODEL = "Qwen/Qwen2.5-3B-Instruct"   # modelo base — necesita capacidad básica de razonamiento
+MODEL = "Qwen/Qwen3-4B-Instruct-2507"   # modelo instruct — necesita capacidad básica de razonamiento
 OUTPUT = "models/grpo-math-es"
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
 model = AutoModelForCausalLM.from_pretrained(
     MODEL,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="auto",
 )
 
-dataset = load_dataset("json", data_files="data/gsm8k_es_prompts.jsonl", split="train")
+dataset = load_dataset("json", data_files="data/gsm8k_prompts.jsonl", split="train")
 
 # Importar reward functions del archivo anterior
 from reward_functions import REWARD_FUNCTIONS
@@ -228,9 +241,12 @@ training_args = GRPOConfig(
     per_device_train_batch_size=1,
     gradient_accumulation_steps=16,
     num_generations=8,          # G: cuántas respuestas genera por prompt (el "grupo")
-    max_prompt_length=512,
     max_completion_length=1024, # espacio para el chain-of-thought
-    beta=0.04,                  # KL penalty contra el modelo de referencia
+    loss_type="dapo",           # default en TRL 1.x; alternativas: "dr_grpo", "grpo" (sesgo de longitud)
+    scale_rewards="group",      # default: normaliza por la std de cada grupo
+    beta=0.0,                   # default: sin KL ni modelo de referencia (R1 usa 0.001)
+    use_vllm=True,              # sin vLLM la generación es muy lenta
+    vllm_mode="colocate",       # o "server" con `trl vllm-serve --model ...` en otra GPU
     temperature=0.9,            # temperatura de sampling — más alta = más diversidad
     bf16=True,
     logging_steps=5,
@@ -254,7 +270,9 @@ trainer.save_model(OUTPUT)</code></pre>
       <strong>Hiperparámetros clave:</strong>
       <ul style="margin-top:6px;padding-left:18px">
         <li><code>num_generations</code> (G): más generaciones = baseline más estable pero más VRAM. Empieza con 8.</li>
-        <li><code>beta</code>: KL penalty. Muy alto = el modelo no se aleja del SFT. Muy bajo = olvida el formato de chat.</li>
+        <li><code>beta</code>: KL penalty contra el modelo de referencia. En TRL 1.x el default es <code>0.0</code> (no carga la referencia, ahorra memoria). Si el modelo se aleja demasiado o pierde el formato de chat, súbelo (p.ej. 0.001–0.04).</li>
+        <li><code>loss_type</code>: el default es <code>"dapo"</code>; <code>"dr_grpo"</code> también evita el sesgo de longitud del <code>"grpo"</code> original.</li>
+        <li><code>use_vllm</code>: con <code>vllm_mode="colocate"</code> vLLM comparte la GPU del entrenamiento (ajusta <code>vllm_gpu_memory_utilization</code>); con <code>"server"</code> corre aparte vía <code>trl vllm-serve</code>.</li>
         <li><code>temperature</code>: necesitas diversidad en el grupo. Si todas las respuestas son idénticas, el gradiente es 0.</li>
       </ul>
     </div>
@@ -267,15 +285,18 @@ trainer.save_model(OUTPUT)</code></pre>
     <table class="model-table">
       <thead><tr><th>Métrica en W&B</th><th>Qué mide</th><th>Señal saludable</th></tr></thead>
       <tbody>
-        <tr><td>reward/mean</td><td>Recompensa promedio del grupo</td><td>Sube gradualmente</td></tr>
-        <tr><td>reward/std</td><td>Diversidad de rewards en el grupo</td><td>No colapsa a 0 (necesitas varianza)</td></tr>
-        <tr><td>kl</td><td>Divergencia KL vs modelo de referencia</td><td>Se estabiliza; no explota</td></tr>
-        <tr><td>completion_length</td><td>Longitud de las respuestas generadas</td><td>Sube (el modelo aprende a razonar más)</td></tr>
-        <tr><td>reward_correctness/mean</td><td>% de respuestas correctas en el grupo</td><td>Sube de ~10% a 50%+</td></tr>
+        <tr><td>reward</td><td>Recompensa promedio (suma de las reward functions)</td><td>Sube gradualmente</td></tr>
+        <tr><td>reward_std</td><td>Diversidad de rewards</td><td>No colapsa a 0 (necesitas varianza)</td></tr>
+        <tr><td>frac_reward_zero_std</td><td>Fracción de grupos donde todas las respuestas tienen el mismo reward</td><td>Baja; si se acerca a 1 no hay señal de gradiente</td></tr>
+        <tr><td>rewards/reward_correctness/mean</td><td>Reward medio de esa función (2.0 = correcta)</td><td>Sube (p.ej. de ~0.2 a 1.0+)</td></tr>
+        <tr><td>completions/mean_length</td><td>Longitud de las respuestas generadas</td><td>Sube (el modelo aprende a razonar más)</td></tr>
+        <tr><td>completions/clipped_ratio</td><td>Fracción truncada por <code>max_completion_length</code></td><td>Baja; si sube, aumenta el límite</td></tr>
+        <tr><td>entropy</td><td>Entropía de la política</td><td>Baja lento; un desplome indica colapso</td></tr>
+        <tr><td>kl</td><td>Divergencia KL vs referencia (solo si <code>beta &gt; 0</code>)</td><td>Se estabiliza; no explota</td></tr>
       </tbody>
     </table>
 
-    <div class="tip"><strong>Colapso de reward:</strong> si <code>reward/std</code> cae a 0, el modelo genera respuestas idénticas — no hay señal de gradiente. Sube la temperatura de sampling o usa más diversas seed prompts.</div>
+    <div class="tip"><strong>Colapso de reward:</strong> si <code>frac_reward_zero_std</code> se acerca a 1 (o <code>reward_std</code> cae a 0), el modelo genera respuestas idénticas — no hay señal de gradiente. Sube la temperatura de sampling o usa más diversas seed prompts.</div>
   </div>
 
   <!-- 6. Verifiable rewards para código -->
@@ -284,15 +305,19 @@ trainer.save_model(OUTPUT)</code></pre>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — code_reward.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import re
+      <pre><code class="language-python">import os
+import re
 import subprocess
+import sys
 import tempfile
-import os
 
-def reward_code_execution(completions: list[str], test_cases: list[str], **kwargs) -> list[float]:
-    """Ejecuta el código generado contra casos de prueba en un proceso aislado."""
+
+def reward_code_execution(completions, test_cases: list[str], **kwargs) -&gt; list[float]:
+    """Ejecuta el código generado contra casos de prueba en un proceso aparte.
+    Requiere una columna `test_cases` en el dataset (string con asserts)."""
     rewards = []
-    for completion, tests in zip(completions, test_cases):
+    texts = [c[0]["content"] if isinstance(c, list) else c for c in completions]
+    for completion, tests in zip(texts, test_cases):
         # Extraer bloque de código Python
         match = re.search(r"```python\n(.*?)```", completion, re.DOTALL)
         if not match:
@@ -302,18 +327,16 @@ def reward_code_execution(completions: list[str], test_cases: list[str], **kwarg
         code = match.group(1)
         full_code = code + "\n\n" + tests   # agregar asserts
 
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(full_code)
+            tmp_path = f.name
         try:
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-                f.write(full_code)
-                tmp_path = f.name
-
             result = subprocess.run(
-                ["python", tmp_path],
+                [sys.executable, tmp_path],   # mismo intérprete del entorno
                 timeout=5,       # timeout por seguridad
                 capture_output=True,
                 text=True,
             )
-            os.unlink(tmp_path)
 
             if result.returncode == 0:
                 rewards.append(2.0)   # código correcto
@@ -323,11 +346,15 @@ def reward_code_execution(completions: list[str], test_cases: list[str], **kwarg
             rewards.append(-0.5)      # timeout
         except Exception:
             rewards.append(-1.0)
+        finally:
+            os.unlink(tmp_path)      # se borra también si hay timeout o excepción
 
     return rewards</code></pre>
     </div>
-    <div class="tip"><strong>Seguridad:</strong> ejecutar código generado por LLMs en el mismo proceso es peligroso. En producción usa sandboxing (contenedores Docker, nsjail, o servicios como E2B). El ejemplo de arriba usa subprocess con timeout como primera línea de defensa.</div>
+    <div class="tip"><strong>Seguridad:</strong> ejecutar código generado por LLMs en el mismo proceso es peligroso. En producción usa sandboxing (contenedores Docker, nsjail, o servicios como E2B). El ejemplo de arriba usa subprocess con timeout solo como primera línea de defensa: no aísla red ni sistema de archivos.</div>
   </div>
+
+  <div class="tip"><strong>Siguientes pasos:</strong> para transferir razonamiento de un modelo grande a uno chico, ve <a href="destilacion-razonamiento.html">Destilación de razonamiento</a>; para RL con herramientas y entornos multi-turno, ve <a href="rl-agentico.html">RL agéntico</a>. Antes de GRPO conviene un buen SFT (<a href="lora-finetuning.html">LoRA fine-tuning</a>); para alineamiento con preferencias, <a href="dpo-alignment.html">DPO</a>.</div>
 
   <div class="sources">
     <div class="sources-title">Fuentes</div>
@@ -345,18 +372,31 @@ def reward_code_execution(completions: list[str], test_cases: list[str], **kwarg
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

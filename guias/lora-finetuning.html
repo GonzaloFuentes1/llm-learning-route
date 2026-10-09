@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LoRA y QLoRA: Fine-tuning eficiente — LatamGPT</title>
+<meta name="description" content="Guía práctica de LoRA y QLoRA con PEFT y TRL 1.x para adaptar LLMs decoder a español y portugués con poca VRAM, incluyendo merge y serving de adaptadores en vLLM.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -70,7 +71,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
     <h1 class="guide-title">LoRA y QLoRA: Fine-tuning eficiente</h1>
     <p class="guide-desc">Adapta modelos decoder grandes (LLaMA, Mistral, Qwen) a tareas en español y portugués sin necesitar el VRAM de un full fine-tune. LoRA congela los pesos base e inyecta matrices de bajo rango; QLoRA agrega cuantización 4-bit al modelo base.</p>
   </div>
@@ -100,7 +101,7 @@
       <pre><code class="language-bash">pip install transformers peft accelerate bitsandbytes trl datasets</code></pre>
     </div>
 
-    <div class="tip"><strong>bitsandbytes en Linux:</strong> funciona out-of-the-box. En Windows usa WSL2 o el cluster. La versión para AMD/ROCm es <code>bitsandbytes-rocm</code>.</div>
+    <div class="tip"><strong>bitsandbytes:</strong> <code>pip install bitsandbytes</code> trae wheels oficiales para Linux y Windows (CUDA), AMD ROCm, Intel XPU y CPU; ya no hace falta WSL2 ni el paquete aparte <code>bitsandbytes-rocm</code>. Para <code>packing=True</code> instala además FlashAttention (<code>pip install flash-attn --no-build-isolation</code>), ver sección 3.</div>
   </div>
 
   <!-- 3. QLoRA completo -->
@@ -113,10 +114,12 @@
       <pre><code class="language-python">import torch
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import LoraConfig, get_peft_model, TaskType
+from peft import LoraConfig, TaskType
 from trl import SFTTrainer, SFTConfig
 
-BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"  # cambia según el modelo base
+# Modelo abierto sin gating. Alternativa: "meta-llama/Llama-3.2-3B-Instruct"
+# (gated: acepta la licencia y exporta HF_TOKEN; usa pad_token="&lt;|finetune_right_pad_id|&gt;")
+BASE_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
 OUTPUT_DIR = "models/lora-es-instruct"
 
 # Cuantización 4-bit para QLoRA
@@ -129,14 +132,18 @@ bnb_config = BitsAndBytesConfig(
 
 # Cargar modelo y tokenizador
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-tokenizer.pad_token = tokenizer.eos_token  # necesario para batch training
+# pad_token debe ser distinto de eos: si pad == eos, el EOS queda enmascarado y el modelo no aprende a parar.
+# Qwen3 ya trae pad_token="&lt;|endoftext|&gt;" (eos es "&lt;|im_end|&gt;"); solo lo fijamos si falta.
+if tokenizer.pad_token is None or tokenizer.pad_token == tokenizer.eos_token:
+    tokenizer.pad_token = "&lt;|endoftext|&gt;"
 tokenizer.padding_side = "right"
 
 model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
     quantization_config=bnb_config,
     device_map="auto",
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,                     # transformers v5: dtype (torch_dtype está deprecado)
+    attn_implementation="flash_attention_2",  # requerido por packing=True (padding-free); sin flash-attn usa packing=False
 )
 model.config.use_cache = False  # incompatible con gradient checkpointing
 
@@ -153,13 +160,10 @@ lora_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
 )
 
-# Dataset en formato chat
+# Dataset en formato chat: columna "messages" (lista de {"role": ..., "content": ...}).
+# No hace falta formatting_func: SFTTrainer aplica el chat template del tokenizer
+# (evita el doble BOS y permite calcular la loss solo sobre las respuestas del asistente).
 dataset = load_dataset("json", data_files={"train": "data/sft_es.jsonl"})
-
-# La función formatea cada ejemplo como string con el chat template del modelo
-def format_chat(example):
-    messages = example["messages"]  # lista de {"role": ..., "content": ...}
-    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
 
 # Entrenamiento
 training_args = SFTConfig(
@@ -170,12 +174,13 @@ training_args = SFTConfig(
     gradient_checkpointing=True,     # ahorra VRAM, 20-30% más lento
     learning_rate=2e-4,
     lr_scheduler_type="cosine",
-    warmup_ratio=0.05,
+    warmup_steps=0.05,               # transformers v5: float &lt; 1 = fracción del total (reemplaza warmup_ratio)
     bf16=True,
     logging_steps=10,
     save_steps=200,
-    max_seq_length=2048,
-    packing=True,                    # sequence packing para eliminar padding
+    max_length=2048,                 # TRL 1.x: max_length (max_seq_length ya no existe)
+    packing=True,                    # packing "bfd" + padding-free: requiere FlashAttention 2/3
+    assistant_only_loss=True,        # loss solo en turnos del asistente (TRL parchea el template de Qwen3/Llama 3)
     report_to="wandb",
 )
 
@@ -183,8 +188,8 @@ trainer = SFTTrainer(
     model=model,
     args=training_args,
     train_dataset=dataset["train"],
+    processing_class=tokenizer,      # sin esto TRL recarga el tokenizer y se pierden los cambios
     peft_config=lora_config,
-    formatting_func=format_chat,
 )
 
 trainer.train()
@@ -230,12 +235,12 @@ trainer.save_model(OUTPUT_DIR)</code></pre>
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
-BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
+BASE_MODEL = "Qwen/Qwen3-4B-Instruct-2507"  # el mismo modelo base del entrenamiento
 ADAPTER_PATH = "models/lora-es-instruct"
 MERGED_PATH  = "models/lora-es-instruct-merged"
 
 # Opción A: cargar con adaptador (para inferencia con peft)
-model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, torch_dtype=torch.bfloat16)
+model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, dtype=torch.bfloat16)
 model = PeftModel.from_pretrained(model, ADAPTER_PATH)
 
 # Opción B: mergear pesos y guardar modelo standalone
@@ -246,7 +251,7 @@ AutoTokenizer.from_pretrained(BASE_MODEL).save_pretrained(MERGED_PATH)
 print("Modelo mergeado guardado en", MERGED_PATH)</code></pre>
     </div>
 
-    <div class="tip"><strong>¿Cuándo mergear?</strong> Mergea antes de subir a HuggingFace Hub o de servir con vLLM — vLLM no carga adaptadores PEFT directamente. Durante desarrollo, usa <code>PeftModel</code> para iterar más rápido sin necesitar espacio extra en disco.</div>
+    <div class="tip"><strong>¿Cuándo mergear?</strong> vLLM sí sirve adaptadores PEFT sin mergear: <code>vllm serve Qwen/Qwen3-4B-Instruct-2507 --enable-lora --lora-modules es-instruct=models/lora-es-instruct --max-lora-rank 16</code> (o <code>LoRARequest</code> en la API offline). El trade-off: mergear da el máximo throughput y un modelo standalone fácil de subir al Hub o cuantizar; servir LoRA en caliente permite varios adaptadores (p.ej. uno para es y otro para pt) sobre un solo modelo base, con algo de overhead por request. Durante desarrollo, usa <code>PeftModel</code> para iterar más rápido sin necesitar espacio extra en disco.</div>
   </div>
 
   <!-- 6. Diagnóstico -->
@@ -258,7 +263,7 @@ print("Modelo mergeado guardado en", MERGED_PATH)</code></pre>
       <tbody>
         <tr><td>Loss no baja de 1.5 tras 1000 pasos</td><td>Rank muy bajo o LR muy pequeño</td><td>Subir r a 64, LR a 3e-4</td></tr>
         <tr><td>Modelo genera en inglés</td><td>Chat template incorrecto o datos mixtos</td><td>Verificar <code>apply_chat_template</code>, filtrar idioma</td></tr>
-        <tr><td>Respuestas truncadas o repetitivas</td><td>max_seq_length corto o packing sin máscara</td><td>Subir max_seq_length, revisar attention mask</td></tr>
+        <tr><td>Respuestas truncadas o repetitivas</td><td><code>max_length</code> corto o packing sin FlashAttention (contaminación entre ejemplos)</td><td>Subir <code>max_length</code>, usar <code>attn_implementation="flash_attention_2"</code> o <code>packing=False</code></td></tr>
         <tr><td>OOM en forward pass</td><td>Batch demasiado grande para VRAM disponible</td><td>Reducir <code>per_device_train_batch_size</code> a 1, subir <code>gradient_accumulation_steps</code></td></tr>
         <tr><td>Tarea requiere conocimiento nuevo</td><td>LoRA no puede inyectar conocimiento factual</td><td>Considerar continual pretraining primero</td></tr>
       </tbody>
@@ -272,7 +277,7 @@ print("Modelo mergeado guardado en", MERGED_PATH)</code></pre>
       <a class="source-link paper" href="https://arxiv.org/abs/2305.14314" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>QLoRA (Dettmers et al., 2023)</a>
       <a class="source-link" href="https://huggingface.co/docs/peft" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>PEFT docs (HuggingFace)</a>
       <a class="source-link" href="https://huggingface.co/docs/trl/sft_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL SFTTrainer docs</a>
-      <a class="source-link" href="https://github.com/TimDettmers/bitsandbytes" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>bitsandbytes</a>
+      <a class="source-link" href="https://github.com/bitsandbytes-foundation/bitsandbytes" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>bitsandbytes</a>
     </div>
   </div>
 </main>
@@ -281,18 +286,31 @@ print("Modelo mergeado guardado en", MERGED_PATH)</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

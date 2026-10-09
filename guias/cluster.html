@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Uso del Cluster HPC — LatamGPT</title>
+<meta name="description" content="Guía de referencia para operar un cluster HPC: llaves SSH, VS Code remoto, transferencia de archivos, monitoreo de CPU/GPU, tmux y jobs SLURM.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -80,7 +81,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Infraestructura</div>
+    <div class="breadcrumb">Guías prácticas → Infraestructura &amp; MLOps</div>
     <h1 class="guide-title">Uso del Cluster HPC</h1>
     <p class="guide-desc">Guía de referencia para conectarse y operar el cluster de cómputo del proyecto: llaves SSH, VS Code remoto, transferencia de archivos, monitoreo de recursos y gestión de jobs SLURM.</p>
   </div>
@@ -120,7 +121,7 @@ cat ~/.ssh/id_ed25519.pub
 # ssh-ed25519 AAAA...clave... tu@email.com</code></pre>
     </div>
 
-    <div class="tip"><strong>Permisos importantes:</strong> El directorio <code>~/.ssh</code> debe tener permisos <code>700</code> y <code>authorized_keys</code> debe tener <code>600</code>. SSH rechaza conexiones si los permisos son demasiado abiertos: <code>chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys</code></div>
+    <div class="tip"><strong>Permisos importantes:</strong> El directorio <code>~/.ssh</code> debe tener permisos <code>700</code> y <code>authorized_keys</code> debe tener <code>600</code>. SSH rechaza conexiones si los permisos son demasiado abiertos: <code>chmod 700 ~/.ssh &amp;&amp; chmod 600 ~/.ssh/authorized_keys</code></div>
   </div>
 
   <!-- 2. Conexión por terminal -->
@@ -146,18 +147,20 @@ ssh -i ~/.ssh/id_ed25519 usuario@cluster.host</code></pre>
       <div class="code-toolbar"><span class="code-lang">ssh config</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash"># ~/.ssh/config
 
-# Cluster principal
+# Cluster principal (reemplaza cluster.example.org por el host real)
 Host latamgpt
-    HostName cluster.cenia.cl
+    HostName cluster.example.org
     User tu_usuario
     IdentityFile ~/.ssh/id_ed25519
     ServerAliveInterval 60
 
-# Con bastion (salto intermedio)
-Host latamgpt
+# Variante con bastion (salto intermedio): usa un alias DISTINTO.
+# Si repites "Host latamgpt", ssh toma el primer valor de cada opción
+# y el HostName/ProxyJump de este bloque nunca se aplican.
+Host latamgpt-bastion
     HostName 10.0.0.50
     User tu_usuario
-    ProxyJump bastion.cenia.cl
+    ProxyJump tu_usuario@bastion.example.org
     IdentityFile ~/.ssh/id_ed25519</code></pre>
     </div>
     <div class="code-block">
@@ -294,13 +297,16 @@ nvidia-smi dmon -s pucvmet -d 2</code></pre>
 # Usa flechas para navegar entre GPUs</code></pre>
     </div>
 
-    <div class="sub-title">rocm-smi (GPUs AMD)</div>
+    <div class="sub-title">amd-smi (GPUs AMD)</div>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">rocm-smi
-# Equivalente a nvidia-smi para tarjetas AMD (MI250, MI300, etc.)
+      <pre><code class="language-bash"># Equivalente a nvidia-smi para tarjetas AMD (MI250, MI300, etc.)
+amd-smi monitor            # utilización, VRAM, temperatura y potencia por GPU
+amd-smi monitor --watch 1  # refresca cada 1 segundo
+amd-smi process            # procesos que usan cada GPU
 
-watch -n 1 rocm-smi</code></pre>
+# rocm-smi sigue instalado en muchos clusters, pero está en modo legacy
+# (solo fixes críticos desde ROCm 7.0); amd-smi es su reemplazo.</code></pre>
     </div>
 
     <div class="tip"><strong>GPU utilization vs MEM utilization:</strong> Durante training el GPU% debería estar cerca del 100%. Si está bajo, el cuello de botella puede ser la carga de datos (DataLoader lento) o que el batch size es muy pequeño. <code>nvtop</code> te muestra qué proceso usa qué GPU.</div>
@@ -329,7 +335,7 @@ CUDA_VISIBLE_DEVICES="" python script.py
 python -c "import torch; print(torch.cuda.device_count())"</code></pre>
     </div>
 
-    <div class="tip"><strong>Importante:</strong> Los índices dentro de <code>CUDA_VISIBLE_DEVICES</code> son re-mapeados. Si usas <code>CUDA_VISIBLE_DEVICES=2,3</code>, dentro de tu código esas GPUs serán cuda:0 y cuda:1 respectivamente.</div>
+    <div class="tip"><strong>Importante:</strong> Los índices dentro de <code>CUDA_VISIBLE_DEVICES</code> son re-mapeados. Si usas <code>CUDA_VISIBLE_DEVICES=2,3</code>, dentro de tu código esas GPUs serán cuda:0 y cuda:1 respectivamente. Dentro de un job SLURM no la sobrescribas: SLURM la define según las GPUs asignadas con <code>--gres</code>.</div>
   </div>
 
   <!-- 8. Procesos en background con tmux -->
@@ -346,7 +352,7 @@ tmux new -s train
 python train.py
 
 # Desconectarse (el proceso sigue corriendo)
-Ctrl+B  d     # → d de "detach"
+# Ctrl+B  d     # → d de "detach"
 
 # Ver sesiones activas
 tmux ls
@@ -355,16 +361,16 @@ tmux ls
 tmux attach -t train
 
 # Crear múltiples ventanas dentro de la misma sesión
-Ctrl+B  c     # nueva ventana
-Ctrl+B  ,     # renombrar ventana
-Ctrl+B  n     # siguiente ventana
-Ctrl+B  p     # ventana anterior
-Ctrl+B  0-9   # ir a ventana por número
+# Ctrl+B  c     # nueva ventana
+# Ctrl+B  ,     # renombrar ventana
+# Ctrl+B  n     # siguiente ventana
+# Ctrl+B  p     # ventana anterior
+# Ctrl+B  0-9   # ir a ventana por número
 
 # Dividir ventana en paneles
-Ctrl+B  %     # split vertical
-Ctrl+B  "     # split horizontal
-Ctrl+B  flechas  # moverse entre paneles
+# Ctrl+B  %     # split vertical
+# Ctrl+B  "     # split horizontal
+# Ctrl+B  flechas  # moverse entre paneles
 
 # Matar sesión
 tmux kill-session -t train</code></pre>
@@ -381,7 +387,8 @@ tmux kill-session -t train</code></pre>
     <div class="sub-title">Comandos básicos</div>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash"># Enviar un job
+      <pre><code class="language-bash"># Enviar un job (crea antes el directorio de logs)
+mkdir -p logs
 sbatch mi_job.sh
 
 # Ver jobs en cola (propios y de todos)
@@ -415,12 +422,15 @@ sinfo</code></pre>
 #SBATCH --mail-type=END,FAIL          # notificación por email
 #SBATCH --mail-user=tu@email.com
 
-# Activar entorno
-source ~/.bashrc
+# El directorio logs/ debe existir ANTES del sbatch (mkdir -p logs),
+# si no SLURM no puede crear los archivos de --output/--error.
+
+# Activar entorno (source ~/.bashrc suele cortar en shells no interactivos)
+eval "$(conda shell.bash hook)"
 conda activate latamgpt
 
 # Variables
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+# No exportes CUDA_VISIBLE_DEVICES: SLURM ya la define según --gres
 export OMP_NUM_THREADS=8
 
 # Lanzar el training
@@ -450,8 +460,8 @@ sstat --format=JobID,AveCPU,AveRSS,MaxRSS -j 12345</code></pre>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash"># Clonar el repositorio del proyecto
-git clone git@github.com:latamgpt/llm-training.git
-cd llm-training
+git clone "git@github.com:&lt;TU_ORG&gt;/&lt;repo&gt;.git"
+cd "&lt;repo&gt;"
 
 # Crear una rama para tu experimento
 git checkout -b exp/tokenizer-v2
@@ -485,7 +495,8 @@ git log --oneline -20</code></pre>
       <a class="source-link" href="https://code.visualstudio.com/docs/remote/ssh" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>VS Code Remote-SSH</a>
       <a class="source-link" href="https://slurm.schedmd.com/documentation.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>SLURM Docs</a>
       <a class="source-link" href="https://developer.nvidia.com/nvidia-system-management-interface" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>NVIDIA System Management Interface</a>
-      <a class="source-link" href="https://github.com/nicowillis/nvtop" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>nvtop (GitHub)</a>
+      <a class="source-link" href="https://rocm.docs.amd.com/projects/amdsmi/en/latest/how-to/amdsmi-cli-tool.html" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>AMD SMI CLI</a>
+      <a class="source-link" href="https://github.com/Syllo/nvtop" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>nvtop (GitHub)</a>
     </div>
   </div>
 </main>
@@ -496,19 +507,31 @@ git log --oneline -20</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓';
-      btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

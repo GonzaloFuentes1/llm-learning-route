@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Continual Pretraining — LatamGPT</title>
+<meta name="description" content="Guía práctica para adaptar un modelo base en inglés a español y portugués latinoamericano mediante continual pretraining: mixture de datos, configuración, prevención de catastrophic forgetting y evaluación intermedia.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -70,7 +71,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Pretraining</div>
+    <div class="breadcrumb">Guías prácticas → Arquitectura &amp; Pretraining</div>
     <h1 class="guide-title">Continual Pretraining: de LLaMA a español/portugués</h1>
     <p class="guide-desc">Adapta un modelo base en inglés (LLaMA 3, Mistral) a español y portugués latinoamericano mediante continual pretraining. Cubre mixture de datos, prevención de catastrophic forgetting, configuración de entrenamiento y evaluación intermedia.</p>
   </div>
@@ -83,9 +84,9 @@
       <thead><tr><th></th><th>Continual Pretraining</th><th>SFT / Fine-tuning</th></tr></thead>
       <tbody>
         <tr><td>Objetivo</td><td>Next-token prediction (causal LM)</td><td>Seguir instrucciones / formato de chat</td></tr>
-        <tr><td>Tokens entrenados</td><td>Billones (1B–100B+)</td><td>Millones (&lt;1B)</td></tr>
+        <tr><td>Tokens entrenados</td><td>Miles de millones (1B–100B+)</td><td>Millones (&lt;1B)</td></tr>
         <tr><td>Tipo de datos</td><td>Texto plano, web crawl, libros</td><td>Pares instrucción-respuesta</td></tr>
-        <tr><td>LR típico</td><td>1e-4 a 5e-5</td><td>1e-5 a 2e-4 (LoRA)</td></tr>
+        <tr><td>LR típico</td><td>1e-4 a 3e-5</td><td>1e-5 a 2e-4 (LoRA)</td></tr>
         <tr><td>Cuándo usarlo</td><td>El modelo base no entiende bien el idioma objetivo</td><td>El modelo ya entiende el idioma; solo necesita seguir instrucciones</td></tr>
       </tbody>
     </table>
@@ -111,42 +112,39 @@
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — data_mixture.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from datatrove.pipeline.readers import ParquetReader
-from datatrove.pipeline.tokens import DocumentTokenizer
-from datatrove.executor import LocalPipelineExecutor
+      <pre><code class="language-python">from datasets import load_dataset, interleave_datasets
 
-# Definir fuentes con sus pesos
+# Fuentes en JSONL (campo "text") y su proporción objetivo en la mezcla
 SOURCES = {
-    "es_web":    ("data/es_web_filtered/",    0.40),
-    "pt_web":    ("data/pt_web_filtered/",    0.22),
-    "en_edu":    ("data/fineweb_edu/",        0.25),
-    "code":      ("data/starcoderdata/",      0.08),
-    "wiki_espt": ("data/wiki_es_pt/",         0.05),
+    "es_web":    ("data/es_web_filtered/*.jsonl", 0.40),
+    "pt_web":    ("data/pt_web_filtered/*.jsonl", 0.22),
+    "en_edu":    ("data/fineweb_edu/*.jsonl",     0.25),
+    "code":      ("data/starcoderdata/*.jsonl",   0.08),
+    "wiki_espt": ("data/wiki_es_pt/*.jsonl",      0.05),
 }
 
-# El mixing se puede hacer durante el training con sample_weights
-# o pre-mezclando los datos con proporciones fijas.
-# Aquí pre-mezclamos (más reproducible):
-import random, json
-from pathlib import Path
+def load_source(name: str, pattern: str):
+    ds = load_dataset("json", data_files=pattern, split="train")
+    ds = ds.select_columns(["text"])  # mismas columnas en todas las fuentes
+    return ds.map(lambda _: {"source": name})
 
-def stream_source(path: str, weight: float, seed: int = 42):
-    """Genera documentos de una fuente con probabilidad proporcional al peso."""
-    rng = random.Random(seed)
-    for jsonl_file in Path(path).glob("*.jsonl"):
-        for line in jsonl_file.open():
-            if rng.random() < weight:
-                yield json.loads(line)
+datasets_, probs = [], []
+for name, (pattern, weight) in SOURCES.items():
+    datasets_.append(load_source(name, pattern))
+    probs.append(weight)
 
-# Guardar mezcla
-with open("data/continual_pretrain_mixture.jsonl", "w") as out:
-    for source_name, (path, weight) in SOURCES.items():
-        count = 0
-        for doc in stream_source(path, weight):
-            doc["source"] = source_name
-            out.write(json.dumps(doc, ensure_ascii=False) + "\n")
-            count += 1
-        print(f"{source_name}: {count} documentos")</code></pre>
+# Cada documento se toma de la fuente i con probabilidad probs[i], así la
+# mezcla respeta los ratios sin importar el tamaño de cada fuente.
+# "first_exhausted" corta cuando se agota una fuente (sin repetir datos);
+# "all_exhausted" sobremuestrea (repite) las fuentes chicas hasta agotar todas.
+mixture = interleave_datasets(
+    datasets_, probabilities=probs, seed=42, stopping_strategy="first_exhausted"
+)
+
+# Nota: los ratios son por documento. Para ratios por token, divide cada peso
+# por el largo promedio (en tokens) de los documentos de esa fuente y renormaliza.
+mixture.to_json("data/continual_pretrain_mixture.jsonl", force_ascii=False)
+print(mixture.to_pandas()["source"].value_counts(normalize=True))</code></pre>
     </div>
   </div>
 
@@ -168,68 +166,94 @@ mixed_precision: bf16</code></pre>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — continual_pretrain.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments, Trainer
-from datasets import load_dataset
+      <pre><code class="language-python">import os
+from itertools import chain
 
+import torch
+from datasets import load_dataset
+from transformers import (AutoModelForCausalLM, AutoTokenizer, Trainer,
+                          TrainingArguments, default_data_collator)
+from transformers.trainer_utils import get_last_checkpoint
+
+# Llama 3.1 es gated: acepta la licencia en HF y exporta HF_TOKEN.
+# Alternativa abierta sin gating: "Qwen/Qwen3-8B-Base".
 BASE_MODEL  = "meta-llama/Llama-3.1-8B"  # modelo base (no-instruct)
 OUTPUT_DIR  = "models/llamagpt-es-pt"
 DATA_FILE   = "data/continual_pretrain_mixture.jsonl"
+BLOCK_SIZE  = 4096
 
 tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
 model = AutoModelForCausalLM.from_pretrained(
     BASE_MODEL,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     attn_implementation="flash_attention_2",  # requiere flash-attn
 )
 
 dataset = load_dataset("json", data_files={"train": DATA_FILE}, split="train")
+# Split held-out pequeño para evaluar durante el entrenamiento
+splits = dataset.train_test_split(test_size=2000, seed=42)
 
 def tokenize(examples):
-    return tokenizer(
-        examples["text"],
-        truncation=True,
-        max_length=4096,
-        return_overflowing_tokens=True,  # divide documentos largos en chunks
-        stride=0,
-    )
+    # Agrega EOS al final de cada documento para separarlos al empaquetar
+    out = tokenizer(examples["text"])
+    out["input_ids"] = [ids + [tokenizer.eos_token_id] for ids in out["input_ids"]]
+    out["attention_mask"] = [m + [1] for m in out["attention_mask"]]
+    return out
 
-tokenized = dataset.map(tokenize, batched=True, remove_columns=dataset.column_names)
+def group_texts(examples):
+    # Packing: concatena y corta en bloques de BLOCK_SIZE (sin padding).
+    # Ojo: sin máscara por documento hay atención entre documentos del mismo
+    # bloque; para evitarlo usa DataCollatorWithFlattening (ver packing.html).
+    concat = {k: list(chain(*examples[k])) for k in examples.keys()}
+    total = (len(concat["input_ids"]) // BLOCK_SIZE) * BLOCK_SIZE
+    result = {k: [v[i:i + BLOCK_SIZE] for i in range(0, total, BLOCK_SIZE)]
+              for k, v in concat.items()}
+    result["labels"] = [ids.copy() for ids in result["input_ids"]]
+    return result
+
+def prepare(ds):
+    ds = ds.map(tokenize, batched=True, remove_columns=ds.column_names)
+    return ds.map(group_texts, batched=True)
+
+train_ds = prepare(splits["train"])
+eval_ds  = prepare(splits["test"])
 
 args = TrainingArguments(
     output_dir=OUTPUT_DIR,
     num_train_epochs=1,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=16,    # effective batch = 64 × num_gpus
-    learning_rate=1e-4,                # warmup desde 0; LR menor que pretraining original
-    lr_scheduler_type="cosine_with_restarts",
-    warmup_steps=500,
+    learning_rate=1e-4,                # ~3x menor que el pico original (3e-4)
+    lr_scheduler_type="cosine",
+    warmup_steps=500,                  # re-warmup desde 0
     weight_decay=0.1,
     bf16=True,
     gradient_checkpointing=True,
     logging_steps=50,
     save_steps=1000,
+    eval_strategy="steps",
     eval_steps=500,
-    evaluation_strategy="steps",
     dataloader_num_workers=4,
     report_to="wandb",
 )
 
-# DataCollator para CLM (sin padding — usar packing para eficiencia)
-from transformers import DataCollatorForLanguageModeling
-collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-
 trainer = Trainer(
     model=model,
     args=args,
-    train_dataset=tokenized,
-    data_collator=collator,
+    train_dataset=train_ds,
+    eval_dataset=eval_ds,
+    data_collator=default_data_collator,  # bloques de largo fijo: no requiere pad_token
 )
-trainer.train(resume_from_checkpoint=True)  # reanuda si hay checkpoint
+
+# Reanuda solo si ya existe un checkpoint (True falla en la primera corrida)
+last_ckpt = get_last_checkpoint(OUTPUT_DIR) if os.path.isdir(OUTPUT_DIR) else None
+trainer.train(resume_from_checkpoint=last_ckpt)
 trainer.save_model(OUTPUT_DIR)</code></pre>
     </div>
 
-    <div class="tip"><strong>Learning rate crítico:</strong> usa un LR de 10–100x menor que el LR original del pretraining. LLaMA 3 fue entrenado con LR pico de 3e-4; para continual pretraining usa 1e-4 a 5e-5. LR muy alto destruye los pesos originales.</div>
+    <div class="tip"><strong>Learning rate crítico:</strong> usa un LR pico menor que el del pretraining original, típicamente 3–10x menor. LLaMA 3 8B fue entrenado con LR pico de 3e-4; para continual pretraining usa 1e-4 a 3e-5, con re-warmup y decaimiento cosine (Ibrahim et al., 2024). Un LR muy alto destruye los pesos originales; uno muy bajo apenas adapta el idioma.</div>
+
+    <div class="tip"><strong>Memorizar no es razonar:</strong> Li &amp; Goyal (2025) muestran con el benchmark KUP que el continual pretraining logra memorizar hechos nuevos, pero los modelos casi no razonan con ellos (&lt;2% en sondas indirectas). Su Memory Conditioned Training (MCT) mejora hasta 25.4% sobre el continual pretraining estándar. Si el objetivo es inyectar conocimiento regional (no solo idioma), evalúa también preguntas indirectas sobre ese conocimiento.</div>
   </div>
 
   <!-- 4. Catastrophic forgetting -->
@@ -251,53 +275,64 @@ trainer.save_model(OUTPUT_DIR)</code></pre>
   <!-- 5. Evaluación -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-chart-bar"></i>5. Evaluación durante el entrenamiento</h2>
-    <p>Evalúa en ambos idiomas (es/pt y en) para detectar forgetting. Monitorea estos benchmarks:</p>
+    <p>Evalúa en ambos idiomas (es/pt y en) para detectar forgetting. Monitorea estos benchmarks (más detalle en <a href="evaluacion-latam.html">Evaluación LatAm</a>):</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash — eval_checkpoint.sh</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash">#!/bin/bash
 # Correr cada N pasos como SLURM job dependency
 CKPT=$1
+NAME=$(basename "$CKPT")
 
-# Español: perplejidad en Wikipedia es + MGSM
+# Español: MGSM (CoT nativo) + Global-MMLU completo
 lm_eval --model vllm \
-  --model_args pretrained=$CKPT \
-  --tasks mgsm_es,global_mmlu_es \
+  --model_args pretrained="$CKPT" \
+  --tasks mgsm_native_cot_es,global_mmlu_full_es \
   --num_fewshot 5 \
-  --output_path eval_logs/$(basename $CKPT)_es.json
+  --output_path "eval_logs/${NAME}_es/"
 
 # Inglés: verificar que no hay forgetting
 lm_eval --model vllm \
-  --model_args pretrained=$CKPT \
+  --model_args pretrained="$CKPT" \
   --tasks mmlu,arc_challenge \
   --num_fewshot 5 \
-  --output_path eval_logs/$(basename $CKPT)_en.json
+  --output_path "eval_logs/${NAME}_en/"
 
-# Comparar con modelo base
+# Comparar con el modelo base (evaluado antes con --output_path eval_logs/base_en/).
+# lm_eval escribe {dir}/{modelo}/results_{fecha}.json; compare_eval.py toma el más reciente
 python compare_eval.py \
-  --base   eval_logs/llama3_base_en.json \
-  --tuned  eval_logs/$(basename $CKPT)_en.json</code></pre>
+  --base   eval_logs/base_en/ \
+  --tuned  "eval_logs/${NAME}_en/"</code></pre>
     </div>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — compare_eval.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import json, argparse
+      <pre><code class="language-python">import argparse, glob, json, os
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--base")
-parser.add_argument("--tuned")
+parser.add_argument("--base",  help="directorio --output_path del modelo base")
+parser.add_argument("--tuned", help="directorio --output_path del checkpoint")
 args = parser.parse_args()
 
-with open(args.base)  as f: base  = json.load(f)["results"]
-with open(args.tuned) as f: tuned = json.load(f)["results"]
+def load_results(output_dir: str) -&gt; dict:
+    # lm_eval guarda {output_dir}/{modelo_sanitizado}/results_{fecha}.json
+    files = glob.glob(os.path.join(output_dir, "**", "results_*.json"), recursive=True)
+    if not files:
+        raise FileNotFoundError(f"No hay results_*.json en {output_dir}")
+    with open(max(files, key=os.path.getmtime)) as f:
+        return json.load(f)["results"]
+
+base, tuned = load_results(args.base), load_results(args.tuned)
 
 print("Benchmark              Base    Tuned   Delta")
 print("-" * 50)
 for task in base:
+    if task not in tuned:
+        continue
     b = base[task].get("acc,none",  base[task].get("acc_norm,none",  0))
     t = tuned[task].get("acc,none", tuned[task].get("acc_norm,none", 0))
     delta = t - b
-    flag = "⚠️ " if delta < -0.03 else "  "
+    flag = "⚠️ " if delta &lt; -0.03 else "  "
     print(f"{flag}{task:22s} {b:.3f}  {t:.3f}  {delta:+.3f}")</code></pre>
     </div>
 
@@ -310,6 +345,12 @@ for task in base:
       <a class="source-link paper" href="https://arxiv.org/abs/2004.10964" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Don't Stop Pretraining (Gururangan et al., 2020)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LLaMA 3 Report (Meta, 2024)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2211.05100" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BLOOM (BigScience, 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2403.08763" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Simple and Scalable Strategies to Continually Pre-train LLMs (Ibrahim et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.12523" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Memorization vs. Reasoning: Updating LLMs with New Knowledge (Li et al., 2025)</a>
+      <a class="source-link" href="https://huggingface.co/docs/datasets/process#interleave" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>interleave_datasets (HF Datasets)</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>lm-evaluation-harness</a>
+      <a class="source-link" href="packing.html"><i class="ti ti-arrow-right" style="font-size:11px"></i>Guía: Packing</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-arrow-right" style="font-size:11px"></i>Guía: Evaluación LatAm</a>
       <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Datatrove (HuggingFace)</a>
       <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>FineWeb (HF)</a>
     </div>
@@ -320,18 +361,31 @@ for task in base:
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

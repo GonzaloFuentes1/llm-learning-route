@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MLOps: W&B + SLURM — LatamGPT</title>
+<title>MLOps: W&amp;B + SLURM — LatamGPT</title>
+<meta name="description" content="Experiment tracking con Weights &amp; Biases y gestión de jobs de entrenamiento con SLURM: métricas, artefactos y scripts para runs individuales y en paralelo.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -63,7 +64,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Infraestructura</div>
+    <div class="breadcrumb">Guías prácticas → Infraestructura &amp; MLOps</div>
     <h1 class="guide-title">MLOps: W&amp;B + SLURM</h1>
     <p class="guide-desc">Experiment tracking con Weights &amp; Biases y gestión de jobs de entrenamiento con SLURM. Cubre logging de métricas, artefactos y scripts para runs individuales y en paralelo.</p>
   </div>
@@ -133,7 +134,8 @@ if step % 10 == 0:
 
         # Paso global y tokens vistos
         "train/step": global_step,
-        "train/tokens_seen": global_step * batch_size * max_seq_len * grad_accum_steps,
+        # batch_size es por GPU: multiplicar por el número de procesos (world size)
+        "train/tokens_seen": global_step * batch_size * max_seq_len * grad_accum_steps * accelerator.num_processes,
     }, step=global_step)
 
 # Métricas de validación (cada 500 steps)
@@ -157,13 +159,16 @@ if step % 500 == 0:
       <pre><code class="language-python">import wandb
 
 # Guardar un checkpoint como artefacto W&B
-def save_checkpoint_artifact(checkpoint_dir: str, step: int):
+def save_checkpoint_artifact(checkpoint_dir: str, step: int, val_loss: float):
     artifact = wandb.Artifact(
         name=f"checkpoint-step-{step}",
         type="model",
         metadata={"step": step, "val_loss": val_loss},
     )
-    artifact.add_dir(checkpoint_dir)
+    # Checkpoints de LLM pesan decenas de GB: registrar una referencia
+    # (filesystem compartido o s3://...) en vez de subir los archivos.
+    # Para checkpoints chicos (p.ej. adapters LoRA) basta artifact.add_dir(checkpoint_dir).
+    artifact.add_reference(f"file://{checkpoint_dir}")
     wandb.log_artifact(artifact)
 
 
@@ -199,14 +204,15 @@ def log_token_distribution(token_counts: dict):
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=tu@email.com
 
-# Environment
-source ~/.bashrc
+# Environment (source ~/.bashrc suele cortar en shells no interactivos)
+eval "$(conda shell.bash hook)"
 conda activate latamgpt
 export WANDB_PROJECT="latamgpt"
-export WANDB_RUN_NAME="pretraining-7b-${SLURM_JOB_ID}"
+export WANDB_NAME="pretraining-7b-${SLURM_JOB_ID}"
+# Si los nodos de cómputo no tienen salida a internet:
+# export WANDB_MODE=offline   # luego, desde el login node: wandb sync wandb/offline-run-*
 
-# Para multi-GPU con accelerate
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+# No exportar CUDA_VISIBLE_DEVICES: SLURM la define según --gres
 export OMP_NUM_THREADS=8
 export TOKENIZERS_PARALLELISM=false
 
@@ -243,7 +249,7 @@ echo "Fin: $(date)"</code></pre>
 LRS=(1e-4 2e-4 3e-4 5e-4 1e-3 2e-3 3e-3 5e-3)
 LR=${LRS[$SLURM_ARRAY_TASK_ID]}
 
-source ~/.bashrc
+eval "$(conda shell.bash hook)"
 conda activate latamgpt
 
 python finetune.py \
@@ -253,7 +259,10 @@ python finetune.py \
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash — enviar y monitorear</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash"># Enviar el job
+      <pre><code class="language-bash"># Crear el directorio de logs (SLURM no lo crea y el job falla sin output)
+mkdir -p logs
+
+# Enviar el job
 sbatch jobs/train_7b.sh
 
 # Ver estado de todos mis jobs
@@ -315,18 +324,31 @@ print(df.to_string(index=False))</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

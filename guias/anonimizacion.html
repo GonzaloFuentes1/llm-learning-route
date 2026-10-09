@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Anonimización de PII — LatamGPT</title>
+<meta name="description" content="Cómo detectar y reemplazar PII en corpus de texto en español y portugués antes del entrenamiento, con Microsoft Presidio, reconocedores para RUT, CUIT y CPF, y el NER multilingüe eu-pii-safeguard.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -74,7 +75,7 @@
   <!-- 1. Qué es PII -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-shield"></i>1. Tipos de PII relevantes para Latam</h2>
-    <p>Los modelos que aprenden de texto con PII pueden "memorizar" y reproducir datos personales. La detección y remoción es un requisito legal (LGPD en Brasil, Ley 19.628 en Chile) y una buena práctica de seguridad.</p>
+    <p>Los modelos que aprenden de texto con PII pueden "memorizar" y reproducir datos personales. La detección y remoción es un requisito legal (LGPD en Brasil; en Chile, la Ley 19.628 modificada por la <a href="https://www.bcn.cl/leychile/navegar?idLey=21719" target="_blank" rel="noopener">Ley 21.719</a>, que crea la Agencia de Protección de Datos Personales y entra en vigencia el 1 de diciembre de 2026) y una buena práctica de seguridad.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">text — categorías de PII</span><button class="copy-btn">Copiar</button></div>
@@ -88,9 +89,9 @@
   - URLs personales
 
 PII específica de Latam:
-  - RUT (Chile):        12.345.678-9
+  - RUT (Chile):        12.345.678-5
   - CUIT/CUIL (Arg):   20-12345678-9
-  - CPF (Brasil):       123.456.789-00
+  - CPF (Brasil):       123.456.789-09
   - DNI (España/Arg):   12345678A
   - Cédula (Colombia):  1.234.567.890
   - Pasaportes</code></pre>
@@ -141,7 +142,7 @@ operators = {
 }
 
 
-def anonymize_text(text: str, lang: str = "es") -> str:
+def anonymize_text(text: str, lang: str = "es") -&gt; str:
     """Anonimiza PII en un texto. Retorna el texto con tokens de reemplazo."""
     results = analyzer.analyze(text=text, language=lang)
     if not results:
@@ -167,64 +168,81 @@ print(anonymize_text(texto))
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — recognizers_latam.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import re
-from presidio_analyzer import PatternRecognizer, Pattern
+      <pre><code class="language-python">from presidio_analyzer import AnalyzerEngine, Pattern, PatternRecognizer
+from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 
-# RUT chileno: 12.345.678-9 o 12345678-9
-rut_pattern = Pattern(
-    name="rut_pattern",
-    regex=r"\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b",
-    score=0.85,
-)
-rut_recognizer = PatternRecognizer(
-    supported_entity="RUT_CL",
-    patterns=[rut_pattern],
-    context=["rut", "run", "cédula", "documento"],
-)
+class RutRecognizer(PatternRecognizer):
+    """RUT chileno: 12.345.678-5 o 12345678-5. Valida el dígito verificador (módulo 11)."""
 
+    def validate_result(self, pattern_text: str):
+        clean = "".join(c for c in pattern_text if c.isdigit() or c in "kK").upper()
+        body, dv = clean[:-1], clean[-1]
+        total, factor = 0, 2
+        for d in reversed(body):
+            total += int(d) * factor
+            factor = 2 if factor == 7 else factor + 1
+        r = 11 - total % 11
+        expected = {10: "K", 11: "0"}.get(r, str(r))
+        return dv == expected
+
+
+class CpfRecognizer(PatternRecognizer):
+    """CPF brasileño: 123.456.789-09. Valida los dos dígitos verificadores."""
+
+    def validate_result(self, pattern_text: str):
+        nums = [int(c) for c in pattern_text if c.isdigit()]
+        if len(nums) != 11 or len(set(nums)) == 1:
+            return False
+        for n in (9, 10):
+            total = sum(nums[i] * (n + 1 - i) for i in range(n))
+            if (total * 10) % 11 % 10 != nums[n]:
+                return False
+        return True
+
+
+# RUT chileno: 12.345.678-5 o 12345678-5
+rut_pattern = Pattern(name="rut_pattern", regex=r"\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b", score=0.85)
 # CUIT/CUIL argentino: 20-12345678-9
-cuit_pattern = Pattern(
-    name="cuit_pattern",
-    regex=r"\b(20|23|24|27|30|33|34)-\d{8}-[0-9]\b",
-    score=0.85,
-)
-cuit_recognizer = PatternRecognizer(
-    supported_entity="CUIT_AR",
-    patterns=[cuit_pattern],
-    context=["cuit", "cuil", "afip"],
-)
-
-# CPF brasileño: 123.456.789-00
-cpf_pattern = Pattern(
-    name="cpf_pattern",
-    regex=r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b",
-    score=0.80,
-)
-cpf_recognizer = PatternRecognizer(
-    supported_entity="CPF_BR",
-    patterns=[cpf_pattern],
-    context=["cpf", "cadastro"],
-)
+cuit_pattern = Pattern(name="cuit_pattern", regex=r"\b(20|23|24|27|30|33|34)-\d{8}-[0-9]\b", score=0.85)
+# CPF brasileño: score bajo porque 11 dígitos sueltos suelen ser teléfonos o códigos;
+# el checksum de validate_result y el contexto ("cpf") filtran los falsos positivos
+cpf_pattern = Pattern(name="cpf_pattern", regex=r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b", score=0.5)
 
 
-# Agregar reconocedores al analyzer
-def build_latam_analyzer():
-    from presidio_analyzer import AnalyzerEngine
-    from presidio_analyzer.nlp_engine import NlpEngineProvider
+def latam_recognizers(lang: str) -&gt; list[PatternRecognizer]:
+    """Una instancia por idioma: PatternRecognizer usa supported_language="en" por defecto
+    y analyze(language=...) solo ejecuta los recognizers de ese idioma."""
+    return [
+        RutRecognizer(supported_entity="RUT_CL", patterns=[rut_pattern], supported_language=lang,
+                      context=["rut", "run", "cédula", "documento"]),
+        PatternRecognizer(supported_entity="CUIT_AR", patterns=[cuit_pattern], supported_language=lang,
+                          context=["cuit", "cuil", "afip"]),
+        CpfRecognizer(supported_entity="CPF_BR", patterns=[cpf_pattern], supported_language=lang,
+                      context=["cpf", "cadastro"]),
+    ]
 
+
+# Agregar reconocedores al analyzer (es + pt)
+def build_latam_analyzer() -&gt; AnalyzerEngine:
     provider = NlpEngineProvider(nlp_configuration={
         "nlp_engine_name": "spacy",
-        "models": [{"lang_code": "es", "model_name": "es_core_news_lg"}],
+        "models": [
+            {"lang_code": "es", "model_name": "es_core_news_lg"},
+            {"lang_code": "pt", "model_name": "pt_core_news_lg"},
+        ],
     })
     engine = provider.create_engine()
-    analyzer = AnalyzerEngine(nlp_engine=engine, supported_languages=["es"])
+    analyzer = AnalyzerEngine(nlp_engine=engine, supported_languages=["es", "pt"])
 
-    # Registrar reconocedores custom
-    analyzer.registry.add_recognizer(rut_recognizer)
-    analyzer.registry.add_recognizer(cuit_recognizer)
-    analyzer.registry.add_recognizer(cpf_recognizer)
+    # Registrar reconocedores custom (una instancia por idioma)
+    for lang in ("es", "pt"):
+        for rec in latam_recognizers(lang):
+            analyzer.registry.add_recognizer(rec)
 
+    # Verificar que RUT/CUIT/CPF quedaron activos en español
+    entities = {e for r in analyzer.get_recognizers(language="es") for e in r.supported_entities}
+    assert {"RUT_CL", "CUIT_AR", "CPF_BR"} &lt;= entities, entities
     return analyzer</code></pre>
     </div>
   </div>
@@ -241,15 +259,19 @@ from pathlib import Path
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
+from recognizers_latam import build_latam_analyzer  # sección 3
+
 anonymizer = AnonymizerEngine()
 analyzer = None  # se inicializa en cada worker
 
 def init_worker():
     global analyzer
-    analyzer = build_latam_analyzer()  # función del paso anterior
+    analyzer = build_latam_analyzer()
 
-def process_document(doc: dict) -> dict:
+def process_document(doc: dict) -&gt; dict | None:
     lang = doc.get("lang", "es")
+    if lang not in ("es", "pt"):
+        return None  # idioma no soportado: no se puede garantizar la anonimización
     try:
         results = analyzer.analyze(text=doc["text"], language=lang)
         if results:
@@ -267,21 +289,27 @@ def process_document(doc: dict) -> dict:
                 },
             )
             return {**doc, "text": anon.text, "pii_detected": len(results)}
-    except Exception:
-        pass
-    return {**doc, "pii_detected": 0}
+        return {**doc, "pii_detected": 0}
+    except Exception as e:
+        # Fallar cerrado: un documento que no se pudo analizar NO pasa sin anonimizar
+        print(f"[cuarentena] doc {doc.get('id', '?')}: {type(e).__name__}: {e}")
+        return None
 
 
 def anonymize_corpus(input_file: str, output_file: str, workers: int = 16):
-    docs = [json.loads(line) for line in open(input_file)]
+    with open(input_file, encoding="utf-8") as f:
+        docs = [json.loads(line) for line in f]
 
     with Pool(workers, initializer=init_worker) as pool:
-        processed = pool.map(process_document, docs)
+        results = pool.map(process_document, docs)
+
+    processed = [d for d in results if d is not None]
+    print(f"Descartados (error o idioma no soportado): {len(docs) - len(processed):,}")
 
     docs_with_pii = sum(1 for d in processed if d.get("pii_detected", 0) > 0)
     print(f"Documentos con PII: {docs_with_pii:,} / {len(docs):,} ({docs_with_pii/len(docs):.1%})")
 
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         for doc in processed:
             f.write(json.dumps(doc, ensure_ascii=False) + "\n")</code></pre>
     </div>
@@ -306,16 +334,19 @@ pii_detector = pipeline(
     device=0,                        # GPU 0; -1 para CPU
 )
 
-text = "Contacta a Ana García en ana.garcia@empresa.cl o al +56 9 8765 4321. Su RUT es 12.345.678-9."
+text = "Contacta a Ana García en ana.garcia@empresa.cl o al +56 9 8765 4321. Su RUT es 12.345.678-5."
 
 entities = pii_detector(text)
 for e in entities:
     print(f"{e['entity_group']:20s} [{e['score']:.2f}]  →  '{e['word']}'")
 
-# Output esperado:
-# PERSON               [0.99]  →  'Ana García'
-# EMAIL_ADDRESS        [0.98]  →  'ana.garcia@empresa.cl'
-# PHONE_NUMBER         [0.97]  →  '+56 9 8765 4321'</code></pre>
+# Etiquetas de model.config.id2label (sin el prefijo B-/I- al agregar).
+# Output ilustrativo (los scores varían):
+# FIRSTNAME            [0.99]  →  'Ana'
+# LASTNAME             [0.99]  →  'García'
+# EMAIL                [0.98]  →  'ana.garcia@empresa.cl'
+# PHONE_NUMBER         [0.97]  →  '+56 9 8765 4321'
+# NATIONAL_ID          [0.95]  →  '12.345.678-5'</code></pre>
     </div>
 
     <div class="code-block">
@@ -329,21 +360,25 @@ pii_detector = pipeline(
     device=0,
 )
 
-# Etiquetas → token de reemplazo
+# Etiquetas reales del modelo (model.config.id2label) → token de reemplazo
+LABELS = {l.split("-", 1)[-1] for l in pii_detector.model.config.id2label.values() if l != "O"}
 REPLACE_MAP = {
-    "PERSON":         "&lt;PERSONA&gt;",
-    "EMAIL_ADDRESS":  "&lt;EMAIL&gt;",
-    "PHONE_NUMBER":   "&lt;TELEFONO&gt;",
-    "IP_ADDRESS":     "&lt;IP&gt;",
-    "IBAN":           "&lt;IBAN&gt;",
-    "CREDIT_CARD":    "&lt;TARJETA&gt;",
-    "NATIONAL_ID":    "&lt;ID_FISCAL&gt;",
-    "TAX_ID":         "&lt;ID_FISCAL&gt;",
-    "PASSWORD":       "&lt;CONTRASENA&gt;",
-    "MEDICAL_CONDITION": "&lt;SALUD&gt;",
+    "FIRSTNAME":          "&lt;PERSONA&gt;",
+    "MIDDLENAME":         "&lt;PERSONA&gt;",
+    "LASTNAME":           "&lt;PERSONA&gt;",
+    "EMAIL":              "&lt;EMAIL&gt;",
+    "PHONE_NUMBER":       "&lt;TELEFONO&gt;",
+    "IP_ADDRESS":         "&lt;IP&gt;",
+    "IBAN":               "&lt;IBAN&gt;",
+    "CREDIT_CARD_NUMBER": "&lt;TARJETA&gt;",
+    "NATIONAL_ID":        "&lt;ID_FISCAL&gt;",
+    "TAX_ID":             "&lt;ID_FISCAL&gt;",
+    "PASSWORD":           "&lt;CONTRASENA&gt;",
+    "HEALTH_CONDITION":   "&lt;SALUD&gt;",
 }
+assert set(REPLACE_MAP) &lt;= LABELS, set(REPLACE_MAP) - LABELS
 
-def anonymize_with_xlmr(text: str, threshold: float = 0.85) -> str:
+def anonymize_with_xlmr(text: str, threshold: float = 0.85) -&gt; str:
     """Reemplaza PII detectado por eu-pii-safeguard."""
     entities = pii_detector(text)
     # Ordenar de derecha a izquierda para no alterar los offsets
@@ -360,16 +395,19 @@ def anonymize_with_xlmr(text: str, threshold: float = 0.85) -> str:
 # Combinar con Presidio para cobertura máxima:
 # 1. Aplicar eu-pii-safeguard (mejor en nombres propios)
 # 2. Aplicar Presidio sobre el resultado (mejor en regex: emails, IPs, RUT)
-def full_anonymization(text: str) -> str:
-    text = anonymize_with_xlmr(text)           # NER neuronal
-    text = anonymize_with_presidio(text)        # Regex + patrones Latam
+#    anonymize_text viene de presidio_pipeline.py (sección 2); para RUT/CUIT/CPF,
+#    construye ahí el analyzer con build_latam_analyzer() (sección 3).
+from presidio_pipeline import anonymize_text
+
+def full_anonymization(text: str, lang: str = "es") -&gt; str:
+    text = anonymize_with_xlmr(text)            # NER neuronal
+    text = anonymize_text(text, lang=lang)      # Regex + patrones Latam
     return text</code></pre>
     </div>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — procesar corpus con batching eficiente</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from transformers import pipeline
-from torch.utils.data import DataLoader
 
 pii_detector = pipeline(
     "token-classification",
@@ -377,19 +415,21 @@ pii_detector = pipeline(
     aggregation_strategy="simple",
     device=0,
     batch_size=32,        # batching en GPU para mayor throughput
+    stride=64,            # textos largos: ventanas solapadas sobre el texto completo
 )
 
-def anonymize_corpus_xlmr(docs: list[dict]) -> list[dict]:
+def anonymize_corpus_xlmr(docs: list[dict]) -&gt; list[dict]:
     texts = [d["text"] for d in docs]
-    # El pipeline acepta listas directamente
-    all_entities = pii_detector(texts, truncation=True, max_length=256)
+    # El pipeline acepta listas directamente. Sin truncar: con stride, los documentos más
+    # largos que model_max_length se procesan por ventanas y los offsets son del texto original
+    all_entities = pii_detector(texts)
     result = []
     for doc, entities in zip(docs, all_entities):
         text = doc["text"]
         for ent in sorted(entities, key=lambda e: e["start"], reverse=True):
             if ent["score"] >= 0.85:
                 label = ent["entity_group"]
-                replacement = REPLACE_MAP.get(label, f"&lt;{label}&gt;")
+                replacement = REPLACE_MAP.get(label, f"&lt;{label}&gt;")  # REPLACE_MAP del bloque anterior
                 text = text[: ent["start"]] + replacement + text[ent["end"] :]
         result.append({**doc, "text": text})
     return result</code></pre>
@@ -413,18 +453,31 @@ def anonymize_corpus_xlmr(docs: list[dict]) -> list[dict]:
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

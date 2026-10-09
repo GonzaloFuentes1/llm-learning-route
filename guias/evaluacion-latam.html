@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Evaluación para español/portugués — LatamGPT</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<meta name="description" content="Cómo evaluar LLMs en español y portugués con lm-evaluation-harness: MGSM, Global-MMLU, FLORES e IFEval, tasks custom como LatamQA, Trueque con LLM-as-a-judge y detección de contaminación."><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
 <style>
@@ -72,7 +72,7 @@
   <div class="guide-header">
     <div class="breadcrumb">Guías prácticas → Evaluación</div>
     <h1 class="guide-title">Evaluación para español/portugués con lm-eval-harness</h1>
-    <p class="guide-desc">Cómo correr benchmarks multilingüe en la práctica: instalación de lm-evaluation-harness, ejecución de MGSM, FLORES-200 e IFEval, creación de tasks personalizados para español/portugués y detección de contaminación.</p>
+    <p class="guide-desc">Cómo correr benchmarks multilingüe en la práctica: instalación de lm-evaluation-harness, ejecución de MGSM, Global-MMLU, FLORES-200 e IFEval, creación de tasks personalizados para español/portugués (LatamQA, Trueque) y detección de contaminación.</p>
   </div>
 
   <!-- 1. Instalación -->
@@ -83,11 +83,12 @@
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash">git clone https://github.com/EleutherAI/lm-evaluation-harness
 cd lm-evaluation-harness
-pip install -e ".[vllm]"    # instala soporte para vLLM (recomendado para velocidad)
-# pip install -e ".[api]"   # si vas a evaluar via API (OpenAI-compatible)</code></pre>
+pip install -e ".[vllm,ifeval]"   # vLLM (recomendado para velocidad) + dependencias de IFEval (langdetect, immutabledict, nltk)
+# pip install -e ".[api]"         # si vas a evaluar via API (OpenAI-compatible)
+# lm_eval ls tasks | grep _es     # verifica los nombres exactos de las tareas disponibles</code></pre>
     </div>
 
-    <div class="tip"><strong>Backend recomendado:</strong> usa <code>--model vllm</code> para modelos locales (3-5x más rápido que HuggingFace estándar). Requiere GPU con suficiente VRAM para el modelo.</div>
+    <div class="tip"><strong>Backend recomendado:</strong> usa <code>--model vllm</code> para modelos locales (3-5x más rápido que HuggingFace estándar). Requiere GPU con suficiente VRAM para el modelo. Para modelos <em>instruct</em> agrega <code>--apply_chat_template</code> (activa <code>fewshot_as_multiturn</code> automáticamente); para modelos base, omítelo.</div>
   </div>
 
   <!-- 2. Benchmarks estándar -->
@@ -104,7 +105,7 @@ lm_eval \
   --tasks mmlu,arc_challenge,hellaswag \
   --num_fewshot 5 \
   --batch_size auto \
-  --output_path resultados/mmlu_run1.json \
+  --output_path resultados/run1/ \
   --log_samples
 
 # IFEval (instruction following — siempre 0-shot)
@@ -114,30 +115,60 @@ lm_eval \
   --tasks ifeval \
   --num_fewshot 0 \
   --batch_size auto \
-  --output_path resultados/ifeval.json</code></pre>
+  --output_path resultados/run1/</code></pre>
     </div>
+
+    <div class="tip"><strong>Dónde quedan los resultados:</strong> con <code>--output_path</code> apuntando a un directorio, lm-eval escribe <code>resultados/run1/&lt;modelo_sanitizado&gt;/results_&lt;fecha&gt;.json</code> (y los <code>samples_*.jsonl</code> si usas <code>--log_samples</code>). Si le pasas un nombre terminado en <code>.json</code>, igual le agrega la fecha al nombre, así que no asumas una ruta fija: búscala con <code>glob</code> (sección 5).</div>
 
     <h3 class="sub-title">Benchmarks multilingüe clave</h3>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash"># MGSM — matemáticas en español (3-shot, chain-of-thought)
+      <pre><code class="language-bash"># MGSM — matemáticas en español (8-shot, chain-of-thought en español)
+# variantes: mgsm_direct_es (sin CoT) y mgsm_en_cot_es (CoT en inglés)
 lm_eval \
   --model vllm \
   --model_args pretrained=models/mi-modelo-es \
-  --tasks mgsm_es \
+  --tasks mgsm_native_cot_es \
   --num_fewshot 8 \
-  --output_path resultados/mgsm_es.json
+  --output_path resultados/mgsm/
 
-# Global-MMLU en español
+# Global-MMLU en español (set completo; global_mmlu_es es la versión Lite)
 lm_eval \
   --model vllm \
   --model_args pretrained=models/mi-modelo-es \
-  --tasks global_mmlu_es \
+  --tasks global_mmlu_full_es \
   --num_fewshot 5 \
-  --output_path resultados/global_mmlu_es.json</code></pre>
+  --output_path resultados/global_mmlu/
+
+# FLORES-200 en→es y es→en (BLEU, TER y chrF). facebook/flores es gated:
+# acepta los términos en HF y exporta HF_TOKEN. Para portugués: grupo flores_pt
+lm_eval \
+  --model vllm \
+  --model_args pretrained=models/mi-modelo-es \
+  --tasks spanish_bench_flores_en-es,spanish_bench_flores_es-en \
+  --num_fewshot 5 \
+  --output_path resultados/flores/</code></pre>
     </div>
 
-    <div class="tip"><strong>FLORES-200:</strong> es un benchmark de traducción, no de generación. Para evaluarlo correctamente necesitas un script dedicado con sacrebleu o chrF. Ver sección 4 de esta guía.</div>
+    <div class="tip"><strong>FLORES-200:</strong> es un benchmark de traducción, así que se mide con métricas de superposición (BLEU, chrF) y no con accuracy. Las tareas <code>flores_*</code> de lm-eval ya calculan chrF con sacrebleu; si generas las traducciones por fuera (p.ej. con vLLM), puntúalas con el script de abajo.</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — chrF++ con sacrebleu sobre FLORES+ (devtest)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># pip install sacrebleu datasets
+# openlanguagedata/flores_plus es gated: acepta los términos en HF y exporta HF_TOKEN
+from datasets import load_dataset
+from sacrebleu.metrics import CHRF
+
+refs = load_dataset("openlanguagedata/flores_plus", "spa_Latn", split="devtest")["text"]
+
+# hipótesis: una traducción en→es por línea, en el mismo orden que el devtest
+with open("resultados/flores_en-es.hyp.txt", encoding="utf-8") as f:
+    hyps = [line.rstrip("\n") for line in f]
+assert len(hyps) == len(refs), f"{len(hyps)} hipótesis vs {len(refs)} referencias"
+
+chrfpp = CHRF(word_order=2)  # word_order=2 → chrF++
+print(chrfpp.corpus_score(hyps, [refs]))</code></pre>
+    </div>
   </div>
 
   <!-- 3. Suite Latam completa -->
@@ -159,7 +190,7 @@ MODEL_PATH=$1   # pasar como argumento: sbatch eval_latam.sh models/checkpoint-1
 OUTPUT_DIR="resultados/$(basename $MODEL_PATH)"
 mkdir -p $OUTPUT_DIR
 
-TASKS="mmlu,arc_challenge,hellaswag,mgsm_es,global_mmlu_es,ifeval"
+TASKS="mmlu,arc_challenge,hellaswag,mgsm_native_cot_es,global_mmlu_full_es"
 
 lm_eval \
   --model vllm \
@@ -167,10 +198,21 @@ lm_eval \
   --tasks $TASKS \
   --num_fewshot 5 \
   --batch_size auto \
-  --output_path $OUTPUT_DIR/results.json \
+  --output_path $OUTPUT_DIR/ \
   --log_samples
 
-echo "Evaluación terminada: $OUTPUT_DIR/results.json"</code></pre>
+# IFEval va aparte: siempre 0-shot (no tiene split para few-shot)
+lm_eval \
+  --model vllm \
+  --model_args pretrained=$MODEL_PATH,dtype=bfloat16,max_model_len=4096 \
+  --tasks ifeval \
+  --num_fewshot 0 \
+  --batch_size auto \
+  --output_path $OUTPUT_DIR/ \
+  --log_samples
+
+# lm_eval escribe $OUTPUT_DIR/&lt;modelo_sanitizado&gt;/results_&lt;fecha&gt;.json
+echo "Evaluación terminada:"; ls -t $OUTPUT_DIR/*/results_*.json</code></pre>
     </div>
 
     <div class="code-block">
@@ -195,18 +237,17 @@ bash eval_latam.sh ${CHECKPOINTS[$SLURM_ARRAY_TASK_ID]}</code></pre>
   <!-- 4. Task custom -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-puzzle"></i>4. Crear un task personalizado</h2>
-    <p>Para benchmarks propios (ej. Trueque, LatamQA) se crea un YAML de configuración. No hace falta tocar código Python.</p>
+    <p>Para benchmarks de opción múltiple (ej. LatamQA) se crea un YAML de configuración; no hace falta tocar código Python. LatamQA (<code>inria-chile/latamqa_mcq_es-la</code>) trae una respuesta correcta y tres distractores escritos como oraciones completas, así que conviene puntuarlo en formato <em>cloze</em>: el modelo asigna log-verosimilitud a cada opción completa y no hay letras A/B/C/D que sesguen por posición.</p>
 
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">yaml — tasks/mi_benchmark_es/mi_benchmark_es.yaml</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-yaml">task: mi_benchmark_es
-dataset_path: huggingface_user/mi-benchmark   # dataset en HF Hub
-dataset_name: es
-test_split: test
+      <div class="code-toolbar"><span class="code-lang">yaml — tasks/latamqa_es/latamqa_es.yaml</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml">task: latamqa_es
+dataset_path: inria-chile/latamqa_mcq_es-la   # LatamQA, español latinoamericano
+test_split: train            # el dataset solo publica el split "train"
 output_type: multiple_choice
-doc_to_text: "Pregunta: {{question}}\nOpciones:\nA. {{choice_a}}\nB. {{choice_b}}\nC. {{choice_c}}\nD. {{choice_d}}\nRespuesta:"
-doc_to_target: "{{answer}}"
-doc_to_choice: ["A", "B", "C", "D"]
+doc_to_text: "Pregunta: {{question}}\nRespuesta:"
+doc_to_choice: "{{[answer, distractor1, distractor2, distractor3]}}"
+doc_to_target: 0             # índice de la opción correcta en doc_to_choice
 metric_list:
   - metric: acc
     aggregation: mean
@@ -214,9 +255,12 @@ metric_list:
   - metric: acc_norm
     aggregation: mean
     higher_is_better: true
-num_fewshot: 5
-fewshot_config:
-  sampler: first_n</code></pre>
+num_fewshot: 0
+# Si tu benchmark tiene otro split y quieres few-shot, define de dónde salen los
+# ejemplos para no sacarlos del propio test (contaminación de la evaluación):
+# fewshot_split: validation
+# fewshot_config:
+#   sampler: first_n</code></pre>
     </div>
 
     <div class="code-block">
@@ -224,10 +268,55 @@ fewshot_config:
       <pre><code class="language-bash">lm_eval \
   --model vllm \
   --model_args pretrained=models/mi-modelo-es \
-  --tasks mi_benchmark_es \
-  --include_path tasks/mi_benchmark_es \
-  --output_path resultados/mi_benchmark.json</code></pre>
+  --tasks latamqa_es \
+  --include_path tasks/latamqa_es \
+  --output_path resultados/latamqa/</code></pre>
     </div>
+
+    <h3 class="sub-title">Trueque: preguntas abiertas con LLM-as-a-judge</h3>
+    <p>Trueque (<code>latam-gpt/Trueque-Benchmark-beta-0.1</code>) no es de opción múltiple: son 500 preguntas abiertas sobre países latinoamericanos con una <code>reference_answer</code>, y se evalúa generando la respuesta (<code>generate_until</code>) y pidiéndole a un juez que la compare con la referencia. El esquema mínimo: generas con vLLM y juzgas con otro modelo servido con <code>vllm serve</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — eval_trueque.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># pip install vllm openai datasets
+# Juez en otra GPU/nodo:  vllm serve Qwen/Qwen3-32B --port 8001
+import json
+from datasets import load_dataset
+from openai import OpenAI
+from vllm import LLM, SamplingParams
+
+ds = load_dataset("latam-gpt/Trueque-Benchmark-beta-0.1", split="train")
+
+# 1) Generar respuestas del modelo evaluado (instruct, con chat template)
+llm = LLM(model="models/mi-modelo-es", dtype="bfloat16", max_model_len=4096)
+convs = [[{"role": "user", "content": q}] for q in ds["question"]]
+outs = llm.chat(convs, SamplingParams(temperature=0.0, max_tokens=512))
+answers = [o.outputs[0].text.strip() for o in outs]
+
+# 2) Juzgar contra la respuesta de referencia
+judge = OpenAI(base_url="http://localhost:8001/v1", api_key="EMPTY")
+PROMPT = """Eres un evaluador estricto de exactitud factual.
+Pregunta: {q}
+Respuesta de referencia: {ref}
+Respuesta del modelo: {ans}
+¿La respuesta del modelo es correcta y consistente con la referencia?
+Responde solo con un JSON: {{"correcta": true}} o {{"correcta": false}}"""
+
+verdicts = []
+for row, ans in zip(ds, answers):
+    r = judge.chat.completions.create(
+        model="Qwen/Qwen3-32B",
+        messages=[{"role": "user", "content": PROMPT.format(q=row["question"], ref=row["reference_answer"], ans=ans)}],
+        temperature=0.0,
+        response_format={"type": "json_object"},
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},  # Qwen3 sin modo thinking
+    )
+    verdicts.append(bool(json.loads(r.choices[0].message.content).get("correcta", False)))
+
+print(f"Trueque (juez, sin corregir): {sum(verdicts) / len(verdicts):.3f}")</code></pre>
+    </div>
+
+    <div class="tip"><strong>El juez también se equivoca:</strong> la tasa cruda del juez está sesgada por sus falsos positivos y negativos. El propio dataset declara seguir a Lee et al. (2025) para corregirlo con un set de calibración anotado por humanos e intervalos de confianza; el paso a paso está en <a href="llm-judge-calibrado.html">LLM-as-a-judge calibrado</a>, y cómo comparar checkpoints con intervalos y tests pareados en <a href="evaluacion-estadistica.html">Evaluación estadísticamente rigurosa</a>.</div>
   </div>
 
   <!-- 5. Interpretación -->
@@ -237,35 +326,50 @@ fewshot_config:
     <h3 class="sub-title">Estructura del JSON de salida</h3>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — leer resultados</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import json
+      <pre><code class="language-python">import glob
+import json
+import os
 
-with open("resultados/mmlu_run1.json") as f:
+def latest_results(run_dir):
+    """Último results_*.json que lm-eval escribió bajo run_dir/&lt;modelo_sanitizado&gt;/."""
+    files = glob.glob(os.path.join(run_dir, "**", "results_*.json"), recursive=True)
+    if not files:
+        raise FileNotFoundError(f"No hay results_*.json bajo {run_dir}")
+    return max(files, key=os.path.getmtime)
+
+with open(latest_results("resultados/run1/")) as f:
     results = json.load(f)
 
 # Accuracy por task
 for task, metrics in results["results"].items():
     acc = metrics.get("acc,none", metrics.get("acc_norm,none"))
+    if acc is None:
+        # tareas generativas usan otras claves, p.ej. MGSM "exact_match,flexible-extract"
+        # e IFEval "prompt_level_strict_acc,none"
+        print(f"{task}: {metrics}")
+        continue
     stderr = metrics.get("acc_stderr,none", metrics.get("acc_norm_stderr,none", 0))
+    stderr = stderr if isinstance(stderr, (int, float)) else float("nan")  # los grupos pueden traer "N/A"
     print(f"{task}: {acc:.3f} ± {stderr:.3f}")
 
 # Comparar dos modelos
 import pandas as pd
 
-def load_results(path):
-    with open(path) as f:
+def load_results(run_dir):
+    with open(latest_results(run_dir)) as f:
         data = json.load(f)
     return {task: m.get("acc,none", m.get("acc_norm,none"))
             for task, m in data["results"].items()}
 
-base   = load_results("resultados/baseline/results.json")
-tuned  = load_results("resultados/finetuned/results.json")
+base   = load_results("resultados/baseline/")
+tuned  = load_results("resultados/finetuned/")
 df = pd.DataFrame({"baseline": base, "finetuned": tuned})
 df["delta"] = df["finetuned"] - df["baseline"]
 print(df.sort_values("delta", ascending=False))</code></pre>
     </div>
 
     <div class="tip">
-      <strong>Errores comunes de reporting</strong> (ver arXiv:2511.21140):
+      <strong>Errores comunes de reporting:</strong>
       <ul style="margin-top:6px;padding-left:18px">
         <li>Reportar solo los mejores resultados entre varias ejecuciones (cherry-picking)</li>
         <li>No reportar el número de few-shot shots usados</li>
@@ -273,43 +377,54 @@ print(df.sort_values("delta", ascending=False))</code></pre>
         <li>Usar <code>acc</code> vs <code>acc_norm</code> inconsistentemente — <code>acc_norm</code> penaliza por longitud de opción</li>
       </ul>
     </div>
+
+    <p>El <code>± stderr</code> de lm-eval es solo el punto de partida: para decidir si un checkpoint realmente mejora necesitas intervalos de confianza y tests pareados por ítem (ver <a href="evaluacion-estadistica.html">Evaluación estadísticamente rigurosa</a>). Si además quieres una suite multilingüe con tareas es/pt listas para usar (incluido PoETa v2 para portugués), revisa <a href="lighteval-multilingue.html">Evaluación multilingüe con lighteval</a>.</p>
   </div>
 
   <!-- 6. Contaminación -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-alert-triangle"></i>6. Detección de contaminación</h2>
-    <p>La contaminación ocurre cuando los datos de evaluación aparecen en el training set. Puede inflar scores 5–15 puntos. Detectarla con n-gram overlap:</p>
+    <p>La contaminación ocurre cuando los datos de evaluación aparecen en el training set. Puede inflar scores 5–15 puntos. Detectarla con n-gram overlap, pero en la dirección correcta: el set pequeño es el del benchmark (decenas de miles de ítems), no el del corpus. Se indexan los n-gramas del benchmark (pregunta + opciones, hasheados) y se recorre el corpus en streaming chequeando pertenencia, con memoria acotada:</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — contamination_check.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from datasets import load_dataset
-from collections import Counter
+      <pre><code class="language-python">import hashlib
 import re
+from collections import defaultdict
+from datasets import load_dataset
 
-def ngrams(text, n=13):
-    tokens = text.lower().split()
-    return set(zip(*[tokens[i:] for i in range(n)]))
+N = 8  # 13 es el estándar en papers, pero muchas preguntas de MMLU tienen menos de 13 palabras
 
-# Cargar benchmark y subset del training data
+def tokens(text):
+    return re.findall(r"\w+", text.lower())
+
+def hashed_ngrams(toks, n=N):
+    for i in range(len(toks) - n + 1):
+        yield hashlib.blake2b(" ".join(toks[i:i + n]).encode(), digest_size=8).digest()
+
+# 1) Índice pequeño: n-grama del benchmark → ítems que lo contienen
 benchmark = load_dataset("cais/mmlu", "all", split="test")
-train_sample = load_dataset("HuggingFaceFW/fineweb", split="train", streaming=True)
+index = defaultdict(set)
+for idx, item in enumerate(benchmark):
+    text = item["question"] + " " + " ".join(item["choices"])
+    for h in hashed_ngrams(tokens(text)):
+        index[h].add(idx)
 
-# Construir set de n-grams del training (muestra de 1M docs)
-train_ngrams = set()
-for i, doc in enumerate(train_sample):
+# 2) Recorrer el corpus en streaming (muestra de 1M docs) sin guardar sus n-gramas
+corpus = load_dataset("HuggingFaceFW/fineweb", name="sample-10BT", split="train", streaming=True)
+contaminated = set()
+for i, doc in enumerate(corpus):
     if i >= 1_000_000:
         break
-    train_ngrams.update(ngrams(doc["text"]))
+    for h in hashed_ngrams(tokens(doc["text"])):
+        if h in index:
+            contaminated.update(index[h])
 
-# Verificar contaminación en el benchmark
-contaminated = 0
-for item in benchmark:
-    q_ngrams = ngrams(item["question"])
-    if q_ngrams & train_ngrams:  # intersección no vacía
-        contaminated += 1
-
-print(f"Posible contaminación: {contaminated}/{len(benchmark)} ({100*contaminated/len(benchmark):.1f}%)")</code></pre>
+print(f"Posible contaminación: {len(contaminated)}/{len(benchmark)} "
+      f"({100 * len(contaminated) / len(benchmark):.1f}%)")</code></pre>
     </div>
+
+    <div class="tip"><strong>Para es/pt:</strong> corre el mismo chequeo contra tus benchmarks locales (LatamQA, Trueque, Global-MMLU es/pt) y contra tu corpus real de pretraining, no solo FineWeb. Los ítems marcados se excluyen del reporte o se reportan aparte; con 8-gramas habrá falsos positivos en frases genéricas, así que revisa una muestra a mano.</div>
   </div>
 
   <div class="sources">
@@ -319,7 +434,14 @@ print(f"Posible contaminación: {contaminated}/{len(benchmark)} ({100*contaminat
       <a class="source-link paper" href="https://arxiv.org/abs/2311.07911" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>IFEval (Zhou et al., 2023)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2210.03057" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>MGSM (Shi et al., 2022)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2207.04672" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FLORES-200 (NLLB Team, 2022)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2511.21140" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LLM-as-a-Judge reporting (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.21140" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>How to Correctly Report LLM-as-a-Judge Evaluations (Lee et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2603.10001" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>LatamQA (Karmim et al., 2026)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/inria-chile/latamqa_mcq_es-la" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>LatamQA MCQ es-LA (HF, inria-chile)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/Trueque-Benchmark-beta-0.1" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Trueque beta v0.1 (HF, latam-gpt)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/openlanguagedata/flores_plus" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>FLORES+ (HF, openlanguagedata)</a>
+      <a class="source-link" href="evaluacion-estadistica.html"><i class="ti ti-book" style="font-size:11px"></i>Guía: Evaluación estadísticamente rigurosa</a>
+      <a class="source-link" href="lighteval-multilingue.html"><i class="ti ti-book" style="font-size:11px"></i>Guía: Evaluación multilingüe con lighteval</a>
+      <a class="source-link" href="llm-judge-calibrado.html"><i class="ti ti-book" style="font-size:11px"></i>Guía: LLM-as-a-judge calibrado</a>
     </div>
   </div>
 </main>
@@ -328,18 +450,31 @@ print(f"Posible contaminación: {contaminated}/{len(benchmark)} ({100*contaminat
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

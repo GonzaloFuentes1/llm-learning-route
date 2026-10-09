@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FineWeb-Edu: etiquetar con LLM y clasificador BERT — LatamGPT</title>
+<meta name="description" content="Cómo replicar la estrategia de FineWeb-Edu en español y portugués: anotar calidad educativa con un LLM, entrenar un clasificador XLM-R y filtrar el corpus completo.">
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -68,7 +70,7 @@
 <header class="site-header">
   <div class="header-inner">
     <a class="logo" href="../index.html">
-      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      <i class="ti ti-brain" aria-hidden="true"></i>
       LatamGPT
       <span class="logo-pill">Engineering Hub</span>
     </a>
@@ -84,14 +86,14 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Datos → Clasificador de Calidad</div>
-    <div class="guide-title">FineWeb-Edu: etiquetar con LLM y entrenar un clasificador BERT</div>
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <h1 class="guide-title">FineWeb-Edu: etiquetar con LLM y entrenar un clasificador BERT</h1>
     <div class="guide-desc">La misma estrategia de HuggingFace para construir FineWeb-Edu, adaptada a español y portugués: pedir a un LLM que puntúe páginas, entrenar un clasificador BERT sobre esas etiquetas y correr inferencia masiva sobre el corpus completo.</div>
   </div>
 
   <!-- 1. Estrategia -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. La estrategia completa</div>
+    <h2 class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. La estrategia completa</h2>
 
     <div class="pipeline-flow">
       <div class="flow-step">~500k páginas web</div>
@@ -100,12 +102,12 @@
       <div class="flow-arrow">→</div>
       <div class="flow-step">Entrenar BERT regresor</div>
       <div class="flow-arrow">→</div>
-      <div class="flow-step">Inferencia en billones de docs</div>
+      <div class="flow-step">Inferencia en cientos de millones de docs</div>
       <div class="flow-arrow">→</div>
       <div class="flow-step">Filtrar score ≥ 3</div>
     </div>
 
-    <p>El problema: un LLM grande (Llama 3 70B) puede puntuar la calidad educativa de un texto con alta precisión, pero es demasiado lento y caro para procesar billones de páginas de CommonCrawl. La solución de FineWeb-Edu: usar el LLM solo sobre una muestra (~500k docs), entrenar un BERT pequeño en esas etiquetas, y correr el BERT —que es 1000× más rápido— sobre el corpus completo.</p>
+    <p>El problema: un LLM grande (Llama 3 70B) puede puntuar la calidad educativa de un texto con alta precisión, pero es demasiado lento y caro para procesar miles de millones de páginas de CommonCrawl. La solución de FineWeb-Edu: usar el LLM solo sobre una muestra (~500k docs), entrenar un BERT pequeño en esas etiquetas, y correr el BERT —que es 1000× más rápido— sobre el corpus completo.</p>
 
     <table class="model-table">
       <tr><th>Etapa</th><th>Modelo</th><th>Velocidad</th><th>Costo</th></tr>
@@ -117,7 +119,7 @@
 
   <!-- 2. Prompt de anotación -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-prompt" aria-hidden="true"></i>2. Prompt de anotación con el LLM</div>
+    <h2 class="section-title"><i class="ti ti-prompt" aria-hidden="true"></i>2. Prompt de anotación con el LLM</h2>
 
     <p>El prompt tiene que ser concreto y forzar una respuesta numérica parseable. La escala 0-5 permite al modelo expresar diferencias sutiles sin generar desacuerdo entre anotadores.</p>
 
@@ -141,7 +143,7 @@ Extracto:
 Responde ÚNICAMENTE con un número entero del 0 al 5. No agregues explicación."""
 
 
-def build_annotation_messages(text: str) -> list[dict]:
+def build_annotation_messages(text: str) -&gt; list[dict]:
     return [
         {"role": "system",  "content": "Eres un evaluador experto de calidad educativa de textos en español y portugués. Solo respondes con un número del 0 al 5."},
         {"role": "user",    "content": ANNOTATION_PROMPT.format(text=text[:2000])},
@@ -156,7 +158,7 @@ from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 from datasets import load_dataset, Dataset
 
-ANNOTATOR_MODEL = "meta-llama/Meta-Llama-3.1-70B-Instruct"
+ANNOTATOR_MODEL = "meta-llama/Llama-3.1-70B-Instruct"   # gated: aceptar licencia y exportar HF_TOKEN
 
 llm = LLM(
     model=ANNOTATOR_MODEL,
@@ -172,13 +174,13 @@ sampling = SamplingParams(
     stop=["\n", " "],
 )
 
-def parse_score(text: str) -> int | None:
+def parse_score(text: str) -&gt; int | None:
     """Extrae el entero 0-5 de la respuesta del LLM."""
     m = re.search(r"[0-5]", text.strip())
     return int(m.group()) if m else None
 
 
-def annotate_batch(texts: list[str]) -> list[int | None]:
+def annotate_batch(texts: list[str]) -&gt; list[int | None]:
     prompts = [
         tok.apply_chat_template(
             build_annotation_messages(t),
@@ -217,7 +219,7 @@ annotation_ds.save_to_disk("annotation_dataset_es")</code></pre>
 
   <!-- 3. Análisis de la distribución -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>3. Inspeccionar la distribución de scores</div>
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>3. Inspeccionar la distribución de scores</h2>
 
     <p>Antes de entrenar el clasificador, hay que verificar que las etiquetas tienen sentido y que la distribución no está colapsada.</p>
 
@@ -263,7 +265,7 @@ for target_score in [0, 2, 3, 5]:
 
   <!-- 4. Entrenar el clasificador -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-topology-star-3" aria-hidden="true"></i>4. Entrenar el clasificador BERT</div>
+    <h2 class="section-title"><i class="ti ti-topology-star-3" aria-hidden="true"></i>4. Entrenar el clasificador BERT</h2>
 
     <p>Entrenamos un modelo de regresión: el BERT produce un score continuo 0-5 que luego usamos para filtrar. Usamos MSE loss sobre los scores del LLM anotador. Para es/pt usamos XLM-RoBERTa-base como backbone — fue entrenado sobre 100 idiomas y es la mejor opción multilingüe.</p>
 
@@ -331,7 +333,7 @@ training_args = TrainingArguments(
     per_device_eval_batch_size=64,
     learning_rate=2e-5,
     lr_scheduler_type="cosine",
-    warmup_ratio=0.06,
+    warmup_steps=0.06,            # v5: float &lt; 1 = fracción del total (reemplaza warmup_ratio)
     bf16=True,
     eval_strategy="epoch",
     save_strategy="epoch",
@@ -362,7 +364,7 @@ tokenizer.save_pretrained("edu-classifier-xlmr-best")</code></pre>
 
   <!-- 5. Calibración del umbral -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>5. Calibrar el umbral de filtrado</div>
+    <h2 class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>5. Calibrar el umbral de filtrado</h2>
 
     <p>El umbral óptimo depende de cuánto corpus queremos retener vs. la calidad deseada. FineWeb-Edu usó score ≥ 3 y retuvo ~9% del corpus original.</p>
 
@@ -386,13 +388,13 @@ test_scores = split["test"]["score"][:5000]
 pred_scores = [r["score"] for r in classifier(test_texts, batch_size=128, truncation=True)]
 
 # Para cada umbral: ¿cuánto corpus retenemos y qué calidad media tiene?
-print(f"{'Umbral':<10} {'% retenido':<15} {'Precision@3+':<15}")
+print(f"{'Umbral':&lt;10} {'% retenido':&lt;15} {'Precision@3+':&lt;15}")
 for threshold in [2.0, 2.5, 3.0, 3.5, 4.0]:
-    kept  = [p >= threshold for p in pred_scores]
-    true_qual = [s >= 3 for p, s in zip(pred_scores, test_scores) if p >= threshold]
+    kept  = [p &gt;= threshold for p in pred_scores]
+    true_qual = [s &gt;= 3 for p, s in zip(pred_scores, test_scores) if p &gt;= threshold]
     pct_kept  = sum(kept) / len(kept) * 100
     precision = sum(true_qual) / len(true_qual) * 100 if true_qual else 0
-    print(f"{threshold:<10.1f} {pct_kept:<15.1f} {precision:<15.1f}")</code></pre>
+    print(f"{threshold:&lt;10.1f} {pct_kept:&lt;15.1f} {precision:&lt;15.1f}")</code></pre>
     </div>
 
     <p>Resultado típico:</p>
@@ -408,9 +410,9 @@ for threshold in [2.0, 2.5, 3.0, 3.5, 4.0]:
 
   <!-- 6. Inferencia masiva -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>6. Inferencia masiva sobre el corpus completo</div>
+    <h2 class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>6. Inferencia masiva sobre el corpus completo</h2>
 
-    <p>Con el clasificador entrenado, lo corremos sobre el corpus completo. El patrón es el mismo que la guía de inferencia con BERT, pero aquí el objetivo es filtrar billones de documentos, así que la eficiencia importa.</p>
+    <p>Con el clasificador entrenado, lo corremos sobre el corpus completo. El patrón es el mismo que en la guía de <a href="bert.html">modelos BERT es/pt</a>, pero aquí el objetivo es filtrar cientos de millones de documentos, así que la eficiencia importa.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
@@ -427,7 +429,7 @@ MAX_LENGTH = 512
 
 tok_inf = AutoTokenizer.from_pretrained(CLASSIFIER_PATH)
 clf = AutoModelForSequenceClassification.from_pretrained(
-    CLASSIFIER_PATH, torch_dtype=torch.bfloat16
+    CLASSIFIER_PATH, dtype=torch.bfloat16
 ).to("cuda").eval()
 
 
@@ -453,7 +455,7 @@ def collate_fn(batch):
 
 
 @torch.no_grad()
-def score_texts(texts: list[str]) -> np.ndarray:
+def score_texts(texts: list[str]) -&gt; np.ndarray:
     ds = TextDataset(texts)
     loader = DataLoader(ds, batch_size=BATCH_SIZE, collate_fn=collate_fn,
                         num_workers=4, pin_memory=True)
@@ -465,30 +467,59 @@ def score_texts(texts: list[str]) -> np.ndarray:
     return np.concatenate(all_scores)
 
 
-# Procesar el corpus completo en shards para no cargar todo en RAM
+# Procesar el corpus completo en shards y escribir cada shard a disco
+# (nada se acumula en RAM: ~200M docs no caben en memoria)
+from pathlib import Path
+import pyarrow as pa
+import pyarrow.parquet as pq
+from huggingface_hub import HfApi
+
+OUT_DIR = Path("culturax-es-edu-filtered/data")
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+REPO_ID = "&lt;TU_ORG&gt;/culturax-es-edu-filtered"   # placeholder: tu org/dataset en HF
+
 corpus = load_dataset("uonlp/CulturaX", "es", split="train", streaming=True)
 
-kept_docs = []
 shard_size = 50_000
 shard = []
+shard_idx = 0
 total_seen, total_kept = 0, 0
+
+
+def flush(texts: list[str], idx: int) -&gt; tuple[int, int]:
+    scores = score_texts(texts)
+    mask = scores &gt;= THRESHOLD
+    kept = [t for t, m in zip(texts, mask) if m]
+    kept_scores = [float(s) for s, m in zip(scores, mask) if m]
+    table = pa.table({"text": kept, "edu_score": kept_scores})
+    pq.write_table(table, OUT_DIR / f"shard-{idx:05d}.parquet")
+    return len(texts), len(kept)
+
 
 for doc in corpus:
     shard.append(doc["text"])
     if len(shard) == shard_size:
-        scores = score_texts(shard)
-        mask = scores >= THRESHOLD
-        kept_docs.extend([t for t, m in zip(shard, mask) if m])
-        total_seen += shard_size
-        total_kept += int(mask.sum())
+        seen, kept = flush(shard, shard_idx)
+        total_seen += seen
+        total_kept += kept
+        shard_idx += 1
         print(f"Procesados: {total_seen:,} | Retenidos: {total_kept:,} "
               f"({total_kept/total_seen*100:.1f}%)")
         shard = []
 
-# Guardar resultado
-from datasets import Dataset
-filtered = Dataset.from_dict({"text": kept_docs})
-filtered.push_to_hub("latamgpt/culturax-es-edu-filtered", private=True)</code></pre>
+# Último shard parcial (&lt; shard_size): sin esto se pierden documentos
+if shard:
+    seen, kept = flush(shard, shard_idx)
+    total_seen += seen
+    total_kept += kept
+
+print(f"Total: {total_seen:,} vistos | {total_kept:,} retenidos")
+
+# Subir todos los parquet al final
+api = HfApi()
+api.create_repo(REPO_ID, repo_type="dataset", private=True, exist_ok=True)
+api.upload_folder(folder_path="culturax-es-edu-filtered", repo_id=REPO_ID,
+                  repo_type="dataset")</code></pre>
     </div>
 
     <div class="tip"><strong>Throughput esperado:</strong> XLM-R-base con batch=512 y bf16 en una A100 procesa ~5,000 documentos/segundo. Un shard de 50M documentos tarda ~2.8 horas. Para el corpus completo de CulturaX en español (~200M docs), ~12 horas en una A100.</div>
@@ -496,7 +527,7 @@ filtered.push_to_hub("latamgpt/culturax-es-edu-filtered", private=True)</code></
 
   <!-- 7. Validar el filtrado -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-check" aria-hidden="true"></i>7. Validar que el filtrado mejoró la calidad</div>
+    <h2 class="section-title"><i class="ti ti-check" aria-hidden="true"></i>7. Validar que el filtrado mejoró la calidad</h2>
 
     <p>Antes de usar el corpus filtrado para pretraining, hay que verificar que el filtro no introdujo sesgos inesperados y que efectivamente la calidad mejoró.</p>
 
@@ -508,7 +539,7 @@ filtered.push_to_hub("latamgpt/culturax-es-edu-filtered", private=True)</code></
 # (entrenar dos modelos pequeños: uno sobre corpus raw, otro sobre filtrado)
 
 # 2. Inspección manual: 50 ejemplos aleatorios del corpus filtrado
-filtered = load_dataset("latamgpt/culturax-es-edu-filtered", split="train")
+filtered = load_dataset("&lt;TU_ORG&gt;/culturax-es-edu-filtered", split="train")  # el dataset subido en la sección 6
 random_sample = filtered.shuffle(seed=42).select(range(50))
 
 for i, ex in enumerate(random_sample):
@@ -520,7 +551,7 @@ for i, ex in enumerate(random_sample):
 # Si el 90% es de un solo dominio, el umbral está muy alto
 
 # 4. Comprobar ratio es vs pt vs otras lenguas
-# (si CulturaX está bien filtrado, debería ser >95% español)
+# (si CulturaX está bien filtrado, debería ser &gt;95% español)
 import langdetect
 sample_texts = filtered.shuffle(seed=1).select(range(2000))["text"]
 langs = []
@@ -537,12 +568,12 @@ for lang, count in lang_dist.most_common(10):
     print(f"  {lang}: {count/len(langs)*100:.1f}%")</code></pre>
     </div>
 
-    <div class="warn"><strong>Sesgo hacia texto formal:</strong> El clasificador entrenado con el prompt de "calidad educativa" tenderá a favorecer textos académicos y noticias sobre lenguaje coloquial, tweets o literatura. Para LatamGPT, si queremos que el modelo maneje bien el español informal latinoamericano, hay que complementar este corpus filtrado con datos de otras fuentes (foros, redes sociales). No todo el corpus de pretraining debe ser edu-filtered.</warn>
+    <div class="warn"><strong>Sesgo hacia texto formal:</strong> El clasificador entrenado con el prompt de "calidad educativa" tenderá a favorecer textos académicos y noticias sobre lenguaje coloquial, tweets o literatura. Para LatamGPT, si queremos que el modelo maneje bien el español informal latinoamericano, hay que complementar este corpus filtrado con datos de otras fuentes (foros, redes sociales). No todo el corpus de pretraining debe ser edu-filtered.</div>
   </div>
 
   <!-- 8. Adaptar para pt-BR -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-globe" aria-hidden="true"></i>8. Adaptar para portugués (pt-BR)</div>
+    <h2 class="section-title"><i class="ti ti-globe" aria-hidden="true"></i>8. Adaptar para portugués (pt-BR)</h2>
 
     <p>El mismo pipeline funciona para pt-BR con cambios mínimos: traducir el prompt de anotación y cambiar el corpus de entrada.</p>
 
@@ -574,6 +605,8 @@ pt_corpus = load_dataset("uonlp/CulturaX", "pt", split="train", streaming=True)
     </div>
 
     <div class="tip"><strong>Clasificador unificado:</strong> Si anotas ~250k docs en español y ~250k en portugués, puedes entrenar un solo clasificador XLM-R que funcione para ambos idiomas. XLM-R-base es suficientemente multilingüe como para transferir entre es y pt sin problemas.</div>
+
+    <div class="tip"><strong>Alternativa multilingüe 2025:</strong> JQL (Judging Quality across Languages) evita fine-tunear el encoder completo: destila las anotaciones de varios LLMs en cabezas de regresión livianas sobre embeddings multilingües congelados y generaliza a 35+ idiomas, incluidos es y pt. Ver la guía <a href="jql-filtrado-multilingue.html">JQL: filtrado multilingüe de calidad para es/pt</a>.</div>
   </div>
 
   <div class="sources">
@@ -584,6 +617,8 @@ pt_corpus = load_dataset("uonlp/CulturaX", "pt", split="train", streaming=True)
       <a class="source-link paper" href="https://arxiv.org/abs/2309.09400" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>CulturaX (Nguyen et al., 2023)</a>
       <a class="source-link" href="https://huggingface.co/HuggingFaceFW/fineweb-edu-classifier" target="_blank" rel="noopener"><i class="ti ti-robot"></i>FineWeb-Edu Classifier (HF)</a>
       <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-Edu Dataset (HF)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.22232" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>JQL (Ali et al., 2025)</a>
+      <a class="source-link" href="jql-filtrado-multilingue.html"><i class="ti ti-language"></i>Guía: JQL filtrado multilingüe</a>
       <a class="source-link" href="bert.html"><i class="ti ti-topology-star-3"></i>Guía: Modelos BERT es/pt</a>
       <a class="source-link" href="filtrado.html"><i class="ti ti-filter"></i>Guía: Filtrado de calidad</a>
       <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
@@ -599,13 +634,27 @@ pt_corpus = load_dataset("uonlp/CulturaX", "pt", split="train", streaming=True)
 <script>
   hljs.highlightAll();
   document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
     btn.addEventListener('click', () => {
-      const code = btn.closest('.code-block').querySelector('code');
-      navigator.clipboard.writeText(code.textContent).then(() => {
-        btn.textContent = '¡Copiado!';
-        btn.classList.add('copied');
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
         setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
-      });
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
 </script>

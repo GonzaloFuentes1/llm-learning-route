@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sequence Packing — LatamGPT</title>
+<meta name="description" content="Guía práctica de sequence packing para pretraining: greedy bin-packing, máscaras de atención por documento y packing sin padding con DataCollatorWithFlattening en Hugging Face.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -96,48 +97,66 @@ Eficiencia real: (120 + 2048 + 350) / (3 * 2048) = 40.5%
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — packing.py</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from typing import Iterator
-import numpy as np
 
 
 def greedy_pack(
     token_sequences: list[list[int]],
     max_seq_len: int,
     eos_token_id: int,
-) -> Iterator[list[int]]:
+    pad_token_id: int,
+) -&gt; Iterator[dict]:
     """
     Combina secuencias de tokens en bloques de max_seq_len.
-    Cada documento termina con eos_token_id.
-    Descarta el exceso si un doc no cabe (trunca al máximo permitido).
+    Cada documento termina con eos_token_id. Los docs más largos que
+    max_seq_len se parten en trozos (no se pierden tokens).
+    El relleno final usa pad_token_id con labels=-100 y attention_mask=0,
+    así el modelo nunca entrena sobre tokens de padding.
     """
     current: list[int] = []
+    doc_lengths: list[int] = []
+
+    def emit() -&gt; dict:
+        n_pad = max_seq_len - len(current)
+        return {
+            "input_ids": current + [pad_token_id] * n_pad,
+            "labels": current + [-100] * n_pad,          # -100: ignorado por la loss
+            "attention_mask": [1] * len(current) + [0] * n_pad,
+            "doc_lengths": doc_lengths,                  # para la máscara por documento (sección 3)
+        }
 
     for seq in token_sequences:
         # Agregar EOS al final del documento
         seq_with_eos = seq + [eos_token_id]
 
-        # Si el doc solo no cabe en una secuencia, truncar
-        if len(seq_with_eos) > max_seq_len:
-            seq_with_eos = seq_with_eos[:max_seq_len]
+        # Partir docs largos en trozos de a lo más max_seq_len
+        for i in range(0, len(seq_with_eos), max_seq_len):
+            piece = seq_with_eos[i : i + max_seq_len]
 
-        # Si no cabe en el bloque actual, emitir el bloque y empezar uno nuevo
-        if len(current) + len(seq_with_eos) > max_seq_len:
-            if current:
-                # Rellenar el resto con padding (solo si es necesario)
-                padded = current + [0] * (max_seq_len - len(current))
-                yield padded
-            current = seq_with_eos
-        else:
-            current.extend(seq_with_eos)
+            # Si no cabe en el bloque actual, emitir el bloque y empezar uno nuevo
+            if len(current) + len(piece) &gt; max_seq_len:
+                yield emit()
+                current, doc_lengths = [], []
+            current.extend(piece)
+            doc_lengths.append(len(piece))
 
     # Emitir el último bloque si tiene contenido
     if current:
-        padded = current + [0] * (max_seq_len - len(current))
-        yield padded
+        yield emit()
 
 
-# Uso:
+# Uso: toma EOS y PAD del tokenizer (no los hardcodees)
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B-Base")
+pad_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else tokenizer.eos_token_id
+
 all_token_sequences = [...]  # lista de listas de token IDs
-packed = list(greedy_pack(all_token_sequences, max_seq_len=2048, eos_token_id=2))</code></pre>
+packed = list(greedy_pack(
+    all_token_sequences,
+    max_seq_len=2048,
+    eos_token_id=tokenizer.eos_token_id,
+    pad_token_id=pad_id,
+))</code></pre>
     </div>
   </div>
 
@@ -152,35 +171,37 @@ packed = list(greedy_pack(all_token_sequences, max_seq_len=2048, eos_token_id=2)
       <pre><code class="language-python">import torch
 
 
-def build_document_attention_mask(
-    doc_lengths: list[int],
-    max_seq_len: int,
-    dtype=torch.bool,
-) -> torch.Tensor:
+def build_document_attention_mask(doc_lengths: list[int], max_seq_len: int) -&gt; torch.Tensor:
     """
     Crea una máscara de atención causal que bloquea el cross-document attention.
     Returns: (max_seq_len, max_seq_len) bool mask. True = permitir atención.
+    Vectorizada: sin loops de Python sobre L x L.
     """
-    mask = torch.zeros(max_seq_len, max_seq_len, dtype=dtype)
-    start = 0
-    for length in doc_lengths:
-        end = start + length
-        # Atención causal dentro del documento (triangulo inferior)
-        for i in range(start, min(end, max_seq_len)):
-            for j in range(start, min(i + 1, max_seq_len)):
-                mask[i, j] = True
-        start = end
-        if start >= max_seq_len:
-            break
-    return mask
+    doc_ids = torch.repeat_interleave(
+        torch.arange(len(doc_lengths)), torch.tensor(doc_lengths)
+    )[:max_seq_len]
+    # Posiciones de padding al final: id -1 (solo se ven entre sí)
+    n_pad = max_seq_len - doc_ids.numel()
+    if n_pad &gt; 0:
+        doc_ids = torch.cat([doc_ids, torch.full((n_pad,), -1)])
+
+    same_doc = doc_ids[:, None] == doc_ids[None, :]
+    causal = torch.ones(max_seq_len, max_seq_len, dtype=torch.bool).tril()
+    return same_doc &amp; causal
+
+
+# Uso en tu propio modelo (SDPA acepta máscaras bool, True = atender):
+#   out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask[None, None])
+# Ojo: los modelos de transformers NO aceptan esta máscara L x L como attention_mask;
+# ahí usa position_ids / DataCollatorWithFlattening (sección 4).
 
 
 # Para FlashAttention-2: usar cu_seqlens directamente
-def get_cu_seqlens(doc_lengths: list[int]) -> torch.Tensor:
+def get_cu_seqlens(doc_lengths: list[int]) -&gt; torch.Tensor:
     """Cumulative sequence lengths para flash_attn_varlen_func."""
     cumsum = [0]
-    for l in doc_lengths:
-        cumsum.append(cumsum[-1] + l)
+    for length in doc_lengths:
+        cumsum.append(cumsum[-1] + length)
     return torch.tensor(cumsum, dtype=torch.int32)</code></pre>
     </div>
 
@@ -189,21 +210,20 @@ def get_cu_seqlens(doc_lengths: list[int]) -> torch.Tensor:
 
   <!-- 4. HuggingFace DataCollator -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-packages"></i>4. Integración con HuggingFace</html>
-    <p>Si usas el ecosistema HuggingFace, la forma más simple es pre-procesar tu dataset con packing antes del entrenamiento:</p>
+    <h2 class="section-title"><i class="ti ti-packages"></i>4. Integración con HuggingFace</h2>
+    <p>Si usas el ecosistema HuggingFace, la forma más simple es pre-procesar tu dataset con packing antes del entrenamiento (concatenar y cortar, estilo GPT). Ojo: esta variante <strong>no</strong> aísla documentos; los tokens de un documento atienden al anterior dentro del bloque (el EOS solo marca el límite).</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — dataset con packing</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from datasets import Dataset
-from transformers import AutoTokenizer, DataCollatorForLanguageModeling
-import numpy as np
+from transformers import AutoTokenizer, default_data_collator
 
 
 def pack_dataset(
     examples: dict,
     tokenizer,
     max_seq_len: int = 2048,
-) -> dict:
+) -&gt; dict:
     """Función de map para empacar un dataset de HuggingFace."""
     all_tokens = []
     for text in examples["text"]:
@@ -223,7 +243,7 @@ def pack_dataset(
 
 
 # Usar en el pipeline de training
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-0.6B-Base")
 raw_dataset = Dataset.from_json("data/raw/es_sample.jsonl")
 
 packed = raw_dataset.map(
@@ -234,9 +254,52 @@ packed = raw_dataset.map(
     num_proc=16,
 )
 
-collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+# Todos los bloques miden max_seq_len y ya traen labels: no hace falta padding.
+# (DataCollatorForLanguageModeling exigiría pad_token y, si pad == eos,
+#  pondría labels=-100 en todos los EOS.)
+collator = default_data_collator
 print(f"Sequences packed: {len(packed):,}")</code></pre>
     </div>
+
+    <p>Para packing <strong>sin contaminación entre documentos</strong> y sin padding, usa <code>DataCollatorWithFlattening</code>: concatena el mini-batch en una sola fila, reinicia <code>position_ids</code> en cada documento y pone <code>-100</code> en el primer label de cada uno. Con <code>attn_implementation="flash_attention_2"</code>, transformers deriva los límites de documento (<code>cu_seqlens</code>) de los <code>position_ids</code> y aplica la máscara por documento de la sección 3.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — packing sin padding (padding-free)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from datasets import Dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer, DataCollatorWithFlattening
+
+MODEL = "Qwen/Qwen3-0.6B-Base"
+MAX_SEQ_LEN = 2048
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL)
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL,
+    dtype=torch.bfloat16,
+    attn_implementation="flash_attention_2",  # requiere pip install flash-attn
+)
+
+
+def tokenize_docs(examples: dict) -&gt; dict:
+    """Un ejemplo por documento (+EOS); los docs largos se parten en trozos."""
+    out = []
+    for text in examples["text"]:
+        ids = tokenizer(text, add_special_tokens=False)["input_ids"] + [tokenizer.eos_token_id]
+        out.extend(ids[i : i + MAX_SEQ_LEN] for i in range(0, len(ids), MAX_SEQ_LEN))
+    return {"input_ids": out}
+
+
+raw_dataset = Dataset.from_json("data/raw/es_sample.jsonl")
+tokenized = raw_dataset.map(
+    tokenize_docs, batched=True, remove_columns=raw_dataset.column_names, num_proc=16
+)
+
+# Devuelve input_ids, labels y position_ids con forma [1, total_tokens], sin padding
+collator = DataCollatorWithFlattening()
+# trainer = Trainer(model=model, args=training_args, train_dataset=tokenized, data_collator=collator)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Con TRL:</strong> <code>SFTConfig(packing=True)</code> usa por defecto la estrategia <code>"bfd"</code> (best-fit decreasing) y activa padding-free, que requiere FlashAttention 2 o 3. Usa <code>packing_strategy="bfd_split"</code> si no quieres truncar los documentos que exceden <code>max_length</code>.</div>
   </div>
 
   <!-- 5. Comparativa -->
@@ -247,33 +310,49 @@ print(f"Sequences packed: {len(packed):,}")</code></pre>
       <div class="code-toolbar"><span class="code-lang">python — medir eficiencia</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">import numpy as np
 
-def measure_packing_efficiency(doc_lengths: list[int], max_seq_len: int) -> dict:
-    """Compara tokens útiles con vs sin packing."""
-    # Sin packing: cada doc se trunca/rellena a max_seq_len
-    total_tokens_without = len(doc_lengths) * max_seq_len
-    useful_tokens = sum(min(l, max_seq_len) for l in doc_lengths)
-    efficiency_without = useful_tokens / total_tokens_without
+def measure_packing_efficiency(doc_lengths: list[int], max_seq_len: int) -&gt; dict:
+    """Compara la fracción de tokens reales (no padding) con vs sin packing."""
+    real_tokens = sum(l + 1 for l in doc_lengths)  # +1 para EOS
 
-    # Con packing: cuántas secuencias llenas obtenemos
-    total_tokens_raw = sum(min(l + 1, max_seq_len) for l in doc_lengths)  # +1 para EOS
-    n_sequences = total_tokens_raw // max_seq_len
-    total_tokens_with = n_sequences * max_seq_len
-    efficiency_with = (total_tokens_raw - (total_tokens_with - total_tokens_raw % max_seq_len)) / total_tokens_with
+    # Sin packing: cada doc (partido en trozos de max_seq_len) se rellena hasta max_seq_len
+    n_rows_without = sum(-(-(l + 1) // max_seq_len) for l in doc_lengths)  # ceil
+    efficiency_without = real_tokens / (n_rows_without * max_seq_len)
+
+    # Con greedy packing (sección 2): docs largos se parten, el resto del bloque es padding
+    n_blocks, used = 0, 0
+    for l in doc_lengths:
+        remaining = l + 1  # +1 para EOS
+        while remaining &gt; 0:
+            piece = min(remaining, max_seq_len)
+            if used + piece &gt; max_seq_len:
+                n_blocks += 1
+                used = 0
+            used += piece
+            remaining -= piece
+    if used:
+        n_blocks += 1
+    efficiency_greedy = real_tokens / (n_blocks * max_seq_len)
+
+    # Concatenar + cortar (sección 4): todos los bloques son tokens reales (100%);
+    # solo se descarta el resto final (&lt; max_seq_len tokens).
+    efficiency_concat = 1.0
 
     return {
         "sin_packing": f"{efficiency_without:.1%}",
-        "con_packing": f"{min(efficiency_with, 1.0):.1%}",
-        "mejora": f"{min(efficiency_with, 1.0) / efficiency_without:.1f}x",
+        "greedy": f"{efficiency_greedy:.1%}",
+        "concat": f"{efficiency_concat:.1%}",
+        "mejora": f"{efficiency_greedy / efficiency_without:.2f}x",
     }
 
-# Simular distribución típica de documentos web en español
+# Simular documentos web: distribución de cola larga (muchos docs cortos, pocos muy largos)
 rng = np.random.default_rng(42)
-doc_lengths = rng.integers(50, 5000, size=100_000).tolist()
+doc_lengths = np.maximum(rng.lognormal(mean=6.0, sigma=1.2, size=100_000), 1).astype(int).tolist()
 
 resultado = measure_packing_efficiency(doc_lengths, max_seq_len=2048)
-print(f"Sin packing: {resultado['sin_packing']}")
-print(f"Con packing: {resultado['con_packing']}")
-print(f"Mejora:      {resultado['mejora']}")</code></pre>
+print(f"Sin packing:     {resultado['sin_packing']}")
+print(f"Greedy packing:  {resultado['greedy']}")
+print(f"Concat + cortar: {resultado['concat']}")
+print(f"Mejora (greedy): {resultado['mejora']}")</code></pre>
     </div>
   </div>
 
@@ -283,6 +362,7 @@ print(f"Mejora:      {resultado['mejora']}")</code></pre>
       <a class="source-link paper" href="https://arxiv.org/abs/2307.08691" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FlashAttention-2 (Dao, 2023)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FineWeb (Penedo et al., 2024)</a>
       <a class="source-link" href="https://huggingface.co/docs/transformers/main_classes/data_collator" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF DataCollator Docs</a>
+      <a class="source-link" href="https://huggingface.co/blog/packing-with-FA2" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF Blog: Packing with FlashAttention 2</a>
       <a class="source-link" href="https://github.com/Dao-AILab/flash-attention" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>flash-attention (varlen)</a>
     </div>
   </div>
@@ -292,18 +372,31 @@ print(f"Mejora:      {resultado['mejora']}")</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

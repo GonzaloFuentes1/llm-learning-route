@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Debugging de Entrenamiento — LatamGPT</title>
+<meta name="description" content="Diagnóstico y resolución de loss spikes, gradient norms, NaN/Inf, OOM y memory profiling con torch.profiler en pretraining y fine-tuning de LLMs.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -66,7 +67,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Entrenamiento</div>
+    <div class="breadcrumb">Guías prácticas → Arquitectura &amp; Pretraining</div>
     <h1 class="guide-title">Debugging de Entrenamiento</h1>
     <p class="guide-desc">Diagnóstico y resolución de los problemas más comunes en pretraining y fine-tuning: loss spikes, gradient norms, NaN/Inf, OOM errors y memory profiling con torch.profiler.</p>
   </div>
@@ -78,56 +79,59 @@
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — métricas de diagnóstico</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import torch
+      <pre><code class="language-python">import math
+
+import torch
 import wandb
-import math
 
 
 def log_training_step(
-    accelerator, model, loss, optimizer, scheduler, global_step, log_every=10
+    accelerator, loss, grad_norm, scheduler, global_step, log_every=10
 ):
-    if global_step % log_every != 0:
+    """grad_norm: el valor que devuelve accelerator.clip_grad_norm_(...).
+
+    Es la norma L2 total de los gradientes ANTES del clipping. Funciona con
+    DDP, FSDP y DeepSpeed (con ZeRO los gradientes no viven en p.grad, así
+    que recorrer model.parameters() daría 0). Evita además un .item() por
+    parámetro: cientos de sincronizaciones GPU→CPU por paso.
+    """
+    if global_step % log_every != 0 or grad_norm is None:
         return
 
-    # Gradient norm total
-    total_norm = 0.0
-    for p in model.parameters():
-        if p.grad is not None:
-            total_norm += p.grad.data.norm(2).item() ** 2
-    total_norm = total_norm ** 0.5
-
-    # Detectar NaN/Inf en gradientes
-    has_nan_grad = any(
-        p.grad is not None and torch.isnan(p.grad).any()
-        for p in model.parameters()
-    )
-    has_inf_grad = any(
-        p.grad is not None and torch.isinf(p.grad).any()
-        for p in model.parameters()
-    )
+    total_norm = torch.as_tensor(grad_norm, dtype=torch.float32)
+    # Un único chequeo: si algún gradiente es NaN/Inf, la norma total también lo es
+    grad_is_finite = bool(torch.isfinite(total_norm))
+    total_norm = total_norm.item()
 
     if accelerator.is_main_process:
+        loss_val = loss.item()
         wandb.log({
-            "train/loss": loss.item(),
-            "train/perplexity": min(math.exp(loss.item()), 1e6),
+            "train/loss": loss_val,
+            "train/perplexity": math.exp(min(loss_val, 20.0)),
             "train/grad_norm": total_norm,
             "train/lr": scheduler.get_last_lr()[0],
-            "debug/nan_grad": int(has_nan_grad),
-            "debug/inf_grad": int(has_inf_grad),
+            "debug/nonfinite_grad": int(not grad_is_finite),
         }, step=global_step)
 
         # Alerta en consola si hay problema
-        if has_nan_grad or has_inf_grad:
-            print(f"⚠️  Step {global_step}: {'NaN' if has_nan_grad else 'Inf'} en gradientes!")
-        if total_norm > 10.0:
-            print(f"⚠️  Step {global_step}: Gradient norm alta ({total_norm:.2f})")</code></pre>
+        if not grad_is_finite:
+            print(f"⚠️  Step {global_step}: NaN/Inf en gradientes!")
+        elif total_norm &gt; 10.0:
+            print(f"⚠️  Step {global_step}: Gradient norm alta ({total_norm:.2f})")
+
+
+# Uso dentro del loop (ver sección 2):
+#   if accelerator.sync_gradients:
+#       grad_norm = accelerator.clip_grad_norm_(model.parameters(), max_norm=1.0)
+#       log_training_step(accelerator, loss, grad_norm, scheduler, global_step)
+# Para localizar QUÉ capa tiene NaN, usa find_nan_parameters() de la sección 3.</code></pre>
     </div>
   </div>
 
   <!-- 2. Loss spikes -->
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-trending-up"></i>2. Loss spikes</h2>
-    <p>Una subida brusca de la loss (>0.3 en pocos steps) interrumpe el training. Las causas más comunes:</p>
+    <p>Una subida brusca de la loss (&gt;0.3 en pocos steps) interrumpe el training. Las causas más comunes:</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">text — diagnóstico de loss spikes</span><button class="copy-btn">Copiar</button></div>
@@ -143,8 +147,8 @@ Causa 2: Learning rate muy alto
   Solución: reducir LR a 1/3 o usar un warmup más largo
 
 Causa 3: Overflow numérico en bf16
-  Síntoma: gradients nan/inf reportados en debug/nan_grad
-  Diagnóstico: aparece junto con grad_norm -> inf
+  Síntoma: gradients nan/inf reportados en debug/nonfinite_grad
+  Diagnóstico: aparece junto con grad_norm -&gt; inf
   Solución: reducir max_grad_norm, verificar que usas bf16 (no fp16)
             bf16 tiene mayor rango que fp16 para LLMs
 
@@ -156,7 +160,10 @@ Causa 4: Gradient clipping insuficiente
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — recovery tras loss spike</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">SPIKE_THRESHOLD = 0.5   # subida de loss que consideramos spike
+# Continúa el loop de Accelerate (model, optimizer, scheduler y
+# train_dataloader ya pasados por accelerator.prepare)
 prev_loss = None
+global_step = 0   # cuenta pasos de optimizer (no micro-batches)
 
 for step, batch in enumerate(train_dataloader):
     with accelerator.accumulate(model):
@@ -168,21 +175,23 @@ for step, batch in enumerate(train_dataloader):
             grad_norm = accelerator.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
             # Detectar spike y saltar el step
-            if prev_loss is not None and (loss.item() - prev_loss) > SPIKE_THRESHOLD:
+            if prev_loss is not None and (loss.item() - prev_loss) &gt; SPIKE_THRESHOLD:
                 print(f"⚠️  Loss spike en step {global_step}: {prev_loss:.3f} → {loss.item():.3f}")
                 optimizer.zero_grad()  # descartar gradientes malos
                 continue              # no actualizar pesos
 
+            global_step += 1
+            prev_loss = loss.item()
+
         optimizer.step()
         scheduler.step()
-        optimizer.zero_grad()
-        prev_loss = loss.item()</code></pre>
+        optimizer.zero_grad()</code></pre>
     </div>
   </div>
 
   <!-- 3. NaN/Inf -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-math-x-divide"></i>3. NaN e Inf en gradientes</h2>
+    <h2 class="section-title"><i class="ti ti-math-function"></i>3. NaN e Inf en gradientes</h2>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — detectar y localizar NaN</span><button class="copy-btn">Copiar</button></div>
@@ -194,7 +203,7 @@ torch.autograd.set_detect_anomaly(True)
 # IMPORTANTE: desactivar después de debuggear, impacto severo en performance
 
 
-def find_nan_parameters(model) -> list[str]:
+def find_nan_parameters(model) -&gt; list[str]:
     """Encuentra capas con NaN en sus pesos o gradientes."""
     bad_params = []
     for name, param in model.named_parameters():
@@ -205,7 +214,7 @@ def find_nan_parameters(model) -> list[str]:
     return bad_params
 
 
-def check_batch_for_nan(batch: dict) -> bool:
+def check_batch_for_nan(batch: dict) -&gt; bool:
     """Detecta NaN en el batch de entrada."""
     for key, tensor in batch.items():
         if isinstance(tensor, torch.Tensor) and torch.isnan(tensor).any():
@@ -240,7 +249,8 @@ Cómo leer esto:
 Estrategias de reducción de memoria (en orden de impacto):
   1. Reducir batch_size (más gradient_accumulation_steps para compensar)
   2. Habilitar gradient checkpointing:
-       model.gradient_checkpointing_enable()
+       model.gradient_checkpointing_enable(
+           gradient_checkpointing_kwargs={"use_reentrant": False})
      → intercambia memoria por recompute en backward pass
   3. Usar DeepSpeed ZeRO-2 o ZeRO-3 (distribuye optimizer states)
   4. Usar bf16 (si no lo estás usando)
@@ -251,9 +261,8 @@ Estrategias de reducción de memoria (en orden de impacto):
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — gradient checkpointing + memory tracking</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">import torch
+from transformers import AutoModelForCausalLM
 
-# Habilitar gradient checkpointing (recomendado para modelos grandes)
-model.gradient_checkpointing_enable()
 
 # Ver uso de memoria GPU antes y después de cargar el modelo
 def print_gpu_memory(label: str = ""):
@@ -263,8 +272,17 @@ def print_gpu_memory(label: str = ""):
     print(f"[{label}] Allocated: {allocated:.1f}GB | Reserved: {reserved:.1f}GB | Peak: {max_alloc:.1f}GB")
 
 print_gpu_memory("before model load")
-model = load_model(...)
+model = AutoModelForCausalLM.from_pretrained(
+    "&lt;TU_ORG&gt;/&lt;modelo&gt;",   # o un modelo abierto, p.ej. "Qwen/Qwen3-1.7B"
+    dtype=torch.bfloat16,
+    device_map="cuda",
+)
 print_gpu_memory("after model load")
+
+# Habilitar gradient checkpointing (recomendado para modelos grandes)
+model.gradient_checkpointing_enable(
+    gradient_checkpointing_kwargs={"use_reentrant": False}
+)
 
 # Limpiar caché entre evaluaciones
 torch.cuda.empty_cache()</code></pre>
@@ -321,9 +339,9 @@ def profile_training_step(model, batch, optimizer):
       <div class="code-toolbar"><span class="code-lang">text — pre-launch checklist</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-text">□ Run de 100 steps en datos reales (no toy data) sin errores
 □ Loss curve baja en los primeros 50 steps (confirma que el modelo aprende)
-□ Gradient norm estable (< 2.0) durante warmup
-□ No hay NaN/Inf en debug/nan_grad ni debug/inf_grad
-□ GPU utilization > 90% (revisar con nvidia-smi)
+□ Gradient norm estable (&lt; 2.0) durante warmup
+□ No hay NaN/Inf (debug/nonfinite_grad = 0)
+□ GPU utilization &gt; 90% (revisar con nvidia-smi)
 □ DataLoader no es el cuello de botella (GPU no espera datos)
 □ Checkpoint de prueba guardado y cargado correctamente
 □ W&B run inicializado y recibiendo métricas
@@ -347,18 +365,31 @@ def profile_training_step(model, batch, optimizer):
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

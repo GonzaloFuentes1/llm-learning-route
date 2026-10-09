@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Speculative Decoding — LatamGPT</title>
+<meta name="description" content="Guía práctica de speculative decoding para acelerar la inferencia de LLMs 2-3× con draft models, n-gramas, EAGLE-3 y MTP en vLLM y transformers, sin cambiar la distribución de salida.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -65,30 +66,30 @@
 <header class="site-header">
   <div class="header-inner">
     <a class="logo" href="../index.html">
-      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      <i class="ti ti-brain" aria-hidden="true"></i>
       LatamGPT
-      <span class="logo-pill">Engineering Hub</span>
+      <span class="logo-pill">Guías prácticas</span>
     </a>
     <div class="header-spacer"></div>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-home" aria-hidden="true"></i> Hub
+    </a>
     <a class="nav-link" href="../latamgpt-roadmap.html">
       <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
-    </a>
-    <a class="nav-link" href="../index.html">
-      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
     </a>
   </div>
 </header>
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Deployment & Evaluación → Speculative Decoding</div>
-    <div class="guide-title">Speculative Decoding: 2-3× más rápido sin perder calidad</div>
+    <div class="breadcrumb">Guías prácticas → Inferencia &amp; Deployment</div>
+    <h1 class="guide-title">Speculative Decoding: 2-3× más rápido sin perder calidad</h1>
     <div class="guide-desc">Un modelo pequeño (draft) propone tokens, el modelo grande (target) los verifica en paralelo. La distribución de salida es idéntica al modelo original — sin ninguna degradación de calidad.</div>
   </div>
 
   <!-- 1. Cómo funciona -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-cpu-2" aria-hidden="true"></i>1. Cómo funciona</div>
+    <h2 class="section-title"><i class="ti ti-cpu-2" aria-hidden="true"></i>1. Cómo funciona</h2>
 
     <p>La observación clave: el cuello de botella de LLM inference no es la computación, sino la latencia de memoria (leer pesos del modelo en cada paso). Speculative decoding amortiza esto verificando K tokens en un solo forward pass del modelo grande.</p>
 
@@ -106,85 +107,88 @@
       <tr><th>Situación</th><th>Speedup</th><th>Por qué</th></tr>
       <tr><td>Draft muy alineado con target (texto repetitivo, código)</td><td>2-4×</td><td>Casi todos los tokens se aceptan</td></tr>
       <tr><td>Texto creativo / aleatorio</td><td>1.2-1.8×</td><td>Muchos rechazos</td></tr>
-      <tr><td>Batch grande (≥16 requests)</td><td>~1× o menos</td><td>El target ya está saturado; no gana</td></tr>
+      <tr><td>Batch grande (≥16 requests)</td><td>~1× o menos (draft clásico)</td><td>El target pasa a estar limitado por cómputo; EAGLE-3/MTP conservan algo de ganancia a batch moderado</td></tr>
     </table>
 
-    <div class="warn"><strong>Speculative decoding es solo útil para batch size pequeño</strong> (1-4 requests). En servidores con alto throughput (muchas requests simultáneas) no da ventaja — el modelo target ya está ocupado. Úsalo para latency-sensitive applications, no para throughput máximo.</div>
+    <div class="warn"><strong>La ganancia es máxima con batch size pequeño</strong> (1-4 requests) y decrece al aumentar la concurrencia: con muchas requests simultáneas el target deja de estar limitado por memoria y verificar tokens rechazados cuesta cómputo. Con un draft model clásico, a batch grande suele no dar ventaja; métodos livianos como EAGLE-3 o MTP mantienen ganancias a batch moderado. Mide siempre con tu carga real antes de activarlo en producción.</div>
   </div>
 
   <!-- 2. Con vLLM -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>2. Speculative Decoding con vLLM (producción)</div>
+    <h2 class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>2. Speculative Decoding con vLLM (producción)</h2>
 
-    <p>vLLM tiene soporte nativo. Solo hay que especificar el draft model y el número de tokens especulativos por paso.</p>
+    <p>vLLM (V1) tiene soporte nativo y se configura con un único flag <code>--speculative-config</code> (JSON) cuyo campo <code>method</code> elige la técnica: <code>draft_model</code>, <code>ngram</code>, <code>eagle3</code>, <code>mtp</code>, entre otros. Los flags antiguos (<code>--speculative-model</code>, <code>--num-speculative-tokens</code>) ya no existen. Para el resto de la configuración de serving ver la guía <a href="serving-produccion.html">Serving en producción</a>.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">python -m vllm.entrypoints.openai.api_server \
-  --model latamgpt/llama3-8b-sft-v1 \
-  --speculative-model latamgpt/llama3-68m-draft \
-  --num-speculative-tokens 5 \
-  --speculative-draft-tensor-parallel-size 1 \
+      <pre><code class="language-bash"># Draft model clásico (mismo tokenizer que el target, p.ej. un SFT sobre Llama 3.1 8B)
+vllm serve &lt;TU_ORG&gt;/&lt;modelo-8b-sft&gt; \
   --dtype bfloat16 \
-  --max-model-len 8192</code></pre>
+  --max-model-len 8192 \
+  --speculative-config '{"method": "draft_model", "model": "meta-llama/Llama-3.2-1B-Instruct", "num_speculative_tokens": 5, "draft_tensor_parallel_size": 1}'
+
+# N-gramas (prompt lookup): sin segundo modelo
+vllm serve &lt;TU_ORG&gt;/&lt;modelo-8b-sft&gt; \
+  --speculative-config '{"method": "ngram", "num_speculative_tokens": 4, "prompt_lookup_min": 2, "prompt_lookup_max": 5}'</code></pre>
     </div>
 
-    <div class="sub-title">Draft models compatibles con LLaMA 3 8B</div>
+    <h3 class="sub-title">Draft models compatibles con Llama 3.x 8B</h3>
     <table class="model-table">
       <tr><th>Draft model</th><th>Parámetros</th><th>Aceptación típica</th></tr>
-      <tr><td>meta-llama/Llama-3.2-1B</td><td>1B</td><td>~75-80%</td></tr>
-      <tr><td>TinyLlama/TinyLlama-1.1B-Chat-v1.0</td><td>1.1B</td><td>~65-70%</td></tr>
+      <tr><td>meta-llama/Llama-3.2-1B-Instruct</td><td>1B</td><td>~75-80%</td></tr>
+      <tr><td>Cabeza EAGLE-3 (p.ej. RedHatAI/Llama-3.1-8B-Instruct-speculator.eagle3, ver sección 4)</td><td>~1 capa</td><td>alta; depende del dominio</td></tr>
       <tr><td>Draft entrenado en destilación del target</td><td>68M-1B</td><td>~85%+</td></tr>
     </table>
 
-    <div class="tip"><strong>Draft model propio:</strong> El mayor speedup se logra con un draft model <em>entrenado especialmente para el target</em> (destilado del mismo). Si LatamGPT tiene un modelo 8B y uno 1B con el mismo vocabulario y arquitectura, son compatibles automáticamente.</div>
+    <div class="tip"><strong>Draft model propio:</strong> El mayor speedup se logra con un draft model <em>entrenado especialmente para el target</em> (destilado del mismo). Si LatamGPT tiene un modelo 8B y uno 1B con el mismo vocabulario y arquitectura, son compatibles automáticamente. Un draft con otro vocabulario (p.ej. TinyLlama, con el vocabulario de 32k de Llama 2) <em>no</em> sirve para Llama 3 (128k) salvo activando <code>use_heterogeneous_vocab</code>.</div>
   </div>
 
   <!-- 3. Con transformers -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-code" aria-hidden="true"></i>3. Con transformers (prototipado)</div>
+    <h2 class="section-title"><i class="ti ti-code" aria-hidden="true"></i>3. Con transformers (prototipado)</h2>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
-TARGET_MODEL = "latamgpt/llama3-8b-sft-v1"
+TARGET_MODEL = "&lt;TU_ORG&gt;/&lt;modelo-8b-sft&gt;"  # basado en Llama 3.x (mismo tokenizer que el draft)
 DRAFT_MODEL  = "meta-llama/Llama-3.2-1B-Instruct"
 
 target_tok = AutoTokenizer.from_pretrained(TARGET_MODEL)
 target = AutoModelForCausalLM.from_pretrained(
-    TARGET_MODEL, torch_dtype=torch.bfloat16, device_map="cuda:0"
+    TARGET_MODEL, dtype=torch.bfloat16, device_map="cuda:0"
 )
 
 draft = AutoModelForCausalLM.from_pretrained(
-    DRAFT_MODEL, torch_dtype=torch.bfloat16, device_map="cuda:0"
+    DRAFT_MODEL, dtype=torch.bfloat16, device_map="cuda:0"
 )
 
 messages = [{"role": "user", "content": "Explica la atención multi-cabeza."}]
-input_ids = target_tok.apply_chat_template(
-    messages, add_generation_prompt=True, return_tensors="pt"
-).to("cuda")
+enc = target_tok.apply_chat_template(
+    messages, add_generation_prompt=True, return_dict=True, return_tensors="pt"
+).to("cuda:0")
+input_ids = enc["input_ids"]
 
 # Speculative decoding: assistant_model = draft model
 output = target.generate(
-    input_ids,
+    **enc,
     assistant_model=draft,        # ← activa speculative decoding
     max_new_tokens=256,
     do_sample=False,
-    temperature=1.0,
 )
 
 print(target_tok.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True))</code></pre>
     </div>
 
-    <div class="sub-title">Prompt lookup decoding (sin draft model separado)</div>
+    <h3 class="sub-title">Prompt lookup decoding (sin draft model separado)</h3>
     <p>Una variante más sencilla: buscar n-gramas en el prompt que coincidan con los últimos tokens y usarlos como "draft". Útil para documentos largos con repeticiones (código, JSON, traducciones).</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">output = target.generate(
-    input_ids,
+      <pre><code class="language-python"># Continúa el bloque anterior (target, enc)
+output = target.generate(
+    **enc,
     prompt_lookup_num_tokens=10,  # ← sin draft model, busca en el prompt
     max_new_tokens=256,
     do_sample=False,
@@ -192,44 +196,34 @@ print(target_tok.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True
     </div>
   </div>
 
-  <!-- 4. Medusa Heads -->
+  <!-- 4. EAGLE-3 y MTP -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-topology-star" aria-hidden="true"></i>4. Medusa Heads (sin modelo draft separado)</div>
+    <h2 class="section-title"><i class="ti ti-topology-star" aria-hidden="true"></i>4. EAGLE-3 y MTP (sin modelo draft separado)</h2>
 
-    <p>Medusa añade K cabezas de predicción al propio modelo target, cada una predice el token en la posición t+k. No requiere un segundo modelo, pero sí requiere fine-tuning para entrenar las cabezas.</p>
+    <p>En vez de un segundo LLM completo, estos métodos usan cabezas livianas que reutilizan las representaciones internas del target para proponer tokens. Son hoy la opción por defecto en serving y conservan ganancias a batch moderado.</p>
+
+    <ul style="font-size:14px;color:var(--text2);padding-left:20px;line-height:1.9;margin-bottom:12px;">
+      <li><strong>EAGLE-3</strong>: una cabeza de draft (~1 capa de decoder) que se alimenta de features de varias capas del target. Requiere entrenar la cabeza para el modelo concreto; para modelos públicos suele haber cabezas ya publicadas (p.ej. <code>RedHatAI/Llama-3.1-8B-Instruct-speculator.eagle3</code>).</li>
+      <li><strong>MTP (Multi-Token Prediction)</strong>: el modelo se preentrena con módulos que predicen varios tokens futuros (DeepSeek-V3, MiMo, etc.); vLLM los reutiliza como draft. Solo funciona en familias de modelos con cabezas MTP soportadas por vLLM.</li>
+    </ul>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">pip install medusa-llm</code></pre>
+      <pre><code class="language-bash"># EAGLE-3: target Llama 3.1 8B Instruct + cabeza EAGLE-3 publicada
+vllm serve meta-llama/Llama-3.1-8B-Instruct \
+  --speculative-config '{"method": "eagle3", "model": "RedHatAI/Llama-3.1-8B-Instruct-speculator.eagle3", "num_speculative_tokens": 3}'
+
+# MTP: modelo con cabezas MTP nativas
+vllm serve XiaomiMiMo/MiMo-7B-Base \
+  --speculative-config '{"method": "mtp", "num_speculative_tokens": 1}'</code></pre>
     </div>
 
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from medusa.model.medusa_model import MedusaModel
-
-# Cargar un modelo con cabezas Medusa ya entrenadas
-# (o usar FasterDecoding/medusa-vicuna-7b-v1.3 como referencia)
-model = MedusaModel.from_pretrained(
-    "FasterDecoding/medusa-vicuna-7b-v1.3",
-    torch_dtype=torch.float16,
-    device_map="cuda",
-)
-
-# La API de generación es la misma — Medusa opera internamente
-output = model.generate(
-    input_ids,
-    medusa_choices=[[0], [0, 0], [1], [0, 1], [2]],  # árbol de candidatos
-    max_new_tokens=256,
-    temperature=0.0,
-)</code></pre>
-    </div>
-
-    <p>Para LatamGPT: si se tiene un checkpoint SFT, se pueden entrenar las cabezas Medusa sobre datos en español/portugués (~1 época, muy rápido) y conseguir 1.5-2× speedup sin cambiar el modelo base.</p>
+    <div class="tip"><strong>Contexto histórico — Medusa:</strong> Medusa (Cai et al., 2024) fue la primera propuesta popular de cabezas de predicción sobre el propio target (cada cabeza predice la posición t+k, con verificación en árbol). El proyecto FasterDecoding/Medusa está inactivo y fue superado por EAGLE-3 y MTP, que vLLM soporta nativamente. Para LatamGPT: si se tiene un checkpoint SFT propio, se puede entrenar una cabeza EAGLE-3 sobre datos en español/portugués (p.ej. con el proyecto <code>speculators</code> de vLLM) y servirla con <code>method: eagle3</code>.</div>
   </div>
 
   <!-- 5. Benchmarking -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>5. Medir el speedup real</div>
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>5. Medir el speedup real</h2>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
@@ -247,8 +241,7 @@ def benchmark_generate(model, tokenizer, prompt: str,
 
     # Warmup
     with torch.no_grad():
-        model.generate(**input_ids._asdict() if hasattr(input_ids, '_asdict')
-                       else {"input_ids": input_ids}, max_new_tokens=10)
+        model.generate(input_ids=input_ids, **{**kwargs, "max_new_tokens": 10})
 
     torch.cuda.synchronize()
     t0 = time.perf_counter()
@@ -260,6 +253,7 @@ def benchmark_generate(model, tokenizer, prompt: str,
     n_gen = out.shape[1] - input_ids.shape[1]
     return {"tok/s": n_gen / elapsed, "elapsed": elapsed, "n_tokens": n_gen}
 
+# Continúa el bloque de la sección 3 (target, target_tok, draft)
 PROMPT = "Explica detalladamente cómo funciona el algoritmo Transformer, incluyendo la atención multi-cabeza, las capas feed-forward y la normalización de capas."
 
 r_baseline = benchmark_generate(target, target_tok, PROMPT)
@@ -272,7 +266,7 @@ print(f"Speedup:     {r_speculative['tok/s'] / r_baseline['tok/s']:.2f}×")</cod
 
     <table class="model-table">
       <tr><th>Configuración</th><th>Tokens/s</th><th>Speedup</th></tr>
-      <tr><td>LLaMA 3 8B baseline (A100)</td><td>~90</td><td>1×</td></tr>
+      <tr><td>Llama 3 8B baseline (A100)</td><td>~90</td><td>1×</td></tr>
       <tr><td>+ Speculative (1B draft, K=5)</td><td>~200</td><td>2.2×</td></tr>
       <tr><td>+ Speculative (1B draft, K=10)</td><td>~220</td><td>2.4×</td></tr>
       <tr><td>+ Prompt lookup decoding</td><td>~130</td><td>1.4×</td></tr>
@@ -281,14 +275,14 @@ print(f"Speedup:     {r_speculative['tok/s'] / r_baseline['tok/s']:.2f}×")</cod
 
   <!-- 6. Cuándo usar -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-help-circle" aria-hidden="true"></i>6. Cuándo usar y cuándo no</div>
+    <h2 class="section-title"><i class="ti ti-help-circle" aria-hidden="true"></i>6. Cuándo usar y cuándo no</h2>
 
     <table class="model-table">
       <tr><th>Caso de uso</th><th>Recomendación</th><th>Por qué</th></tr>
       <tr><td>Chat interactivo (batch=1)</td><td>Speculative decoding ✓</td><td>Latencia percibida mejora ~2×</td></tr>
       <tr><td>Evaluación de modelos (lm-eval)</td><td>Prompt lookup ✓</td><td>Sin segundo modelo, gain moderado</td></tr>
-      <tr><td>Servidor con 50+ requests/s</td><td>No usar</td><td>Target saturado; overhead del draft</td></tr>
-      <tr><td>Generación de datos sintéticos</td><td>No usar</td><td>Necesitas temperatura > 0; gain es bajo</td></tr>
+      <tr><td>Servidor con 50+ requests/s</td><td>Evitar draft clásico; medir EAGLE-3/MTP</td><td>Target saturado; el overhead del draft pesa más</td></tr>
+      <tr><td>Generación de datos sintéticos</td><td>Depende del batch</td><td>Con temperatura &gt; 0 el muestreo por rechazo preserva la distribución, pero baja la aceptación; en generación masiva (batch grande) la ganancia suele ser baja</td></tr>
       <tr><td>Código / texto repetitivo</td><td>Muy recomendado</td><td>Draft acierta mucho → aceptación alta</td></tr>
     </table>
   </div>
@@ -296,31 +290,48 @@ print(f"Speedup:     {r_speculative['tok/s'] / r_baseline['tok/s']:.2f}×")</cod
   <div class="sources">
     <div class="sources-title">Referencias</div>
     <div class="source-list">
-      <a class="source-link paper" href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Speculative Decoding (Chen et al., 2023)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2401.10774" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Medusa (Cai et al., 2024)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2310.07177" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SpecInfer (Miao et al., 2023)</a>
-      <a class="source-link" href="https://github.com/FasterDecoding/Medusa" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Medusa (GitHub)</a>
-      <a class="source-link" href="inferencia.html"><i class="ti ti-server-bolt"></i>Guía: Serving con vLLM</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Speculative Decoding (Leviathan et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2302.01318" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Speculative Sampling (Chen et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>EAGLE-3 (Li et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2401.10774" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Medusa (Cai et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2305.09781" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>SpecInfer (Miao et al., 2023)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/speculative_decoding/" target="_blank" rel="noopener"><i class="ti ti-book"></i>vLLM: Speculative Decoding</a>
+      <a class="source-link" href="serving-produccion.html"><i class="ti ti-rocket"></i>Guía: Serving en producción</a>
+      <a class="source-link" href="inferencia.html"><i class="ti ti-server-bolt"></i>Guía: Inferencia con vLLM</a>
       <a class="source-link" href="quantization.html"><i class="ti ti-database-cog"></i>Guía: Quantización</a>
     </div>
   </div>
 </main>
 
 <footer>
-  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a>
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
   hljs.highlightAll();
   document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
     btn.addEventListener('click', () => {
-      const code = btn.closest('.code-block').querySelector('code');
-      navigator.clipboard.writeText(code.textContent).then(() => {
-        btn.textContent = '¡Copiado!';
-        btn.classList.add('copied');
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
         setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
-      });
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
 </script>

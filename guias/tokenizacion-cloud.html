@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tokenización en Cloud — LatamGPT</title>
+<meta name="description" content="Cómo convertir un corpus de texto crudo en archivos de token IDs listos para pretraining a gran escala, usando Datatrove en local o SLURM y verificando la fertilidad del tokenizador en español y portugués.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -74,7 +75,7 @@
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-info-circle"></i>1. El problema de escala</h2>
     <p>Un corpus típico para pretraining tiene entre 100B y 15T tokens. Tokenizar secuencialmente con un solo proceso tardaría días. La solución es distribuir el trabajo: cada worker tokeniza un subconjunto de archivos en paralelo.</p>
-    <p>FineWeb (2024) tokeniznó ~15T tokens usando Datatrove con cientos de workers en paralelo. El resultado son archivos <code>.ds</code> (DatasetDocument Sequence), memory-mapped, que se pueden leer directamente durante el entrenamiento sin cargar todo a RAM.</p>
+    <p>FineWeb (2024) tokenizó ~15T tokens usando Datatrove con cientos de workers en paralelo. El resultado son archivos binarios <code>.ds</code> (token IDs concatenados en uint16, o uint32 si el vocabulario supera 65 535 tokens) con un índice de documentos, memory-mapped, que se pueden leer directamente durante el entrenamiento sin cargar todo a RAM.</p>
     <div class="tip"><strong>Flujo típico:</strong> texto crudo (JSONL) → DocumentTokenizer → archivos <code>.ds</code> → DataLoader durante training.</div>
   </div>
 
@@ -112,7 +113,7 @@ def get_pipeline(input_folder: str, output_folder: str, tokenizer_name: str):
         DocumentTokenizer(
             output_folder=output_folder,
             tokenizer_name_or_path=tokenizer_name,
-            eos_token="&lt;/s&gt;",
+            eos_token="&lt;|endoftext|&gt;",  # EOS del tokenizador elegido (Qwen3: &lt;|endoftext|&gt;)
             max_tokens_per_file=1_000_000_000,  # 1B tokens por archivo .ds
         ),
     ]
@@ -123,7 +124,7 @@ if __name__ == "__main__":
         pipeline=get_pipeline(
             input_folder="data/raw/es/",
             output_folder="data/tokens/es/",
-            tokenizer_name="meta-llama/Llama-2-7b-hf",
+            tokenizer_name="Qwen/Qwen3-0.6B-Base",  # abierto, sin gating; vocab ~151k
         ),
         tasks=64,    # número de shards/tareas
         workers=16,  # procesos en paralelo (ajustar a CPUs disponibles)
@@ -131,6 +132,8 @@ if __name__ == "__main__":
     )
     executor.run()</code></pre>
     </div>
+
+    <div class="tip"><strong>Tokenizador y EOS:</strong> usamos <code>Qwen/Qwen3-0.6B-Base</code> porque no requiere aceptar licencia. Si usas un tokenizador gated (Llama 3, Gemma 3), exporta <code>HF_TOKEN</code> antes de lanzar y ajusta <code>eos_token</code> al de ese tokenizador. Datatrove elige solo el tamaño de token: 2 bytes si el vocabulario cabe en uint16, 4 bytes si no.</div>
 
     <div class="tip"><strong>tasks vs workers:</strong> <code>tasks</code> divide los datos en N partes; <code>workers</code> define cuántas corren en paralelo. Con <code>tasks=64, workers=16</code>, se procesan 16 shards simultáneamente hasta completar las 64.</div>
   </div>
@@ -155,8 +158,8 @@ executor = SlurmPipelineExecutor(
         ),
         DocumentTokenizer(
             output_folder="/data/tokens/",
-            tokenizer_name_or_path="meta-llama/Llama-2-7b-hf",
-            eos_token="&lt;/s&gt;",
+            tokenizer_name_or_path="Qwen/Qwen3-0.6B-Base",
+            eos_token="&lt;|endoftext|&gt;",
             max_tokens_per_file=2_000_000_000,
         ),
     ],
@@ -186,32 +189,43 @@ from pathlib import Path
 from multiprocessing import Pool
 from transformers import AutoTokenizer
 
-TOKENIZER_PATH = "meta-llama/Llama-2-7b-hf"
+TOKENIZER_PATH = "Qwen/Qwen3-0.6B-Base"
 INPUT_DIR = Path("data/raw/")
 OUTPUT_DIR = Path("data/tokens/")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+FLUSH_EVERY = 10_000_000  # tokens en RAM antes de escribir a disco
 
 tokenizer = None  # se inicializa en cada worker
+dtype = None
 
 def init_worker():
-    global tokenizer
+    global tokenizer, dtype
     tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH)
+    # len(tokenizer) incluye los tokens especiales agregados
+    dtype = np.uint16 if len(tokenizer) &lt;= 65535 else np.uint32
 
-def tokenize_file(jsonl_path: Path) -> dict:
-    all_ids = []
-    with open(jsonl_path) as f:
+def tokenize_file(jsonl_path: Path) -&gt; dict:
+    # Ruta relativa en el nombre: evita que archivos homónimos de subcarpetas se pisen
+    rel = jsonl_path.relative_to(INPUT_DIR).with_suffix("")
+    out_path = OUTPUT_DIR / ("__".join(rel.parts) + f".{np.dtype(dtype).name}.bin")
+    n_tokens, buffer = 0, []
+    with open(jsonl_path, encoding="utf-8") as f, open(out_path, "wb") as out:
         for line in f:
             doc = json.loads(line)
             ids = tokenizer.encode(doc["text"], add_special_tokens=False)
             ids.append(tokenizer.eos_token_id)
-            all_ids.extend(ids)
-
-    out_path = OUTPUT_DIR / jsonl_path.with_suffix(".npy").name
-    np.save(out_path, np.array(all_ids, dtype=np.uint16))
-    return {"file": str(jsonl_path), "tokens": len(all_ids)}
+            buffer.extend(ids)
+            if len(buffer) &gt;= FLUSH_EVERY:  # escritura incremental, RAM acotada
+                np.asarray(buffer, dtype=dtype).tofile(out)
+                n_tokens += len(buffer)
+                buffer = []
+        if buffer:
+            np.asarray(buffer, dtype=dtype).tofile(out)
+            n_tokens += len(buffer)
+    return {"file": str(jsonl_path), "tokens": n_tokens}
 
 if __name__ == "__main__":
-    files = list(INPUT_DIR.glob("**/*.jsonl"))
+    files = sorted(INPUT_DIR.glob("**/*.jsonl"))
     print(f"Tokenizando {len(files)} archivos...")
 
     with Pool(processes=16, initializer=init_worker) as pool:
@@ -221,7 +235,7 @@ if __name__ == "__main__":
     print(f"Total: {total:,} tokens ({total/1e9:.2f}B)")</code></pre>
     </div>
 
-    <div class="tip"><strong>uint16 vs int32:</strong> Si tu vocabulario tiene ≤ 65535 tokens usa <code>uint16</code> (2 bytes/token). Vocabularios más grandes (como los de 128k tokens de LLaMA-3) requieren <code>int32</code> (4 bytes/token).</div>
+    <div class="tip"><strong>uint16 vs int32:</strong> Si tu vocabulario tiene ≤ 65535 tokens usa <code>uint16</code> (2 bytes/token). Vocabularios más grandes (Llama 3: 128k, Qwen3: ~151k, Gemma 3: ~262k) requieren <code>uint32</code> (4 bytes/token); forzar <code>uint16</code> lanza <code>OverflowError</code> en NumPy 2 o corrompe los IDs en silencio en NumPy 1. Para leer los <code>.bin</code>: <code>np.memmap(path, dtype=np.uint32, mode="r")</code> (el dtype va en el nombre del archivo).</div>
   </div>
 
   <!-- 6. Verificar cobertura -->
@@ -233,30 +247,40 @@ if __name__ == "__main__":
       <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from transformers import AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+# Tokenizadores abiertos (sin gating). Llama 3 y Gemma 3 requieren aceptar licencia + HF_TOKEN:
+#   "meta-llama/Llama-3.1-8B" (128k), "google/gemma-3-1b-pt" (~262k)
+TOKENIZERS = {
+    "Qwen3 (~151k)": "Qwen/Qwen3-0.6B-Base",
+    "Salamandra (256k)": "BSC-LT/salamandra-2b",
+    "GPT-2 (50k, solo inglés)": "openai-community/gpt2",
+}
 
 # Textos de prueba en es/pt
-texts_es = [
-    "La tokenización es fundamental para el rendimiento en español.",
-    "Los modelos de lenguaje grande requieren datos de alta calidad.",
-    "El procesamiento del lenguaje natural en latinoamérica es un reto.",
-]
+texts = {
+    "es": [
+        "La tokenización es fundamental para el rendimiento en español.",
+        "Los modelos de lenguaje grande requieren datos de alta calidad.",
+        "El procesamiento del lenguaje natural en latinoamérica es un reto.",
+    ],
+    "pt": [
+        "A tokenização é fundamental para o desempenho em português.",
+        "Os modelos de linguagem precisam de dados de alta qualidade.",
+    ],
+}
 
-# Medir fertilidad: tokens / palabras
-for text in texts_es:
-    words = len(text.split())
-    tokens = len(tokenizer.encode(text, add_special_tokens=False))
-    fertility = tokens / words
-    print(f"Fertilidad: {fertility:.2f} tokens/palabra  |  '{text[:40]}...'")
+# Fertilidad = tokens / palabras, agregada por idioma
+for name, repo in TOKENIZERS.items():
+    tok = AutoTokenizer.from_pretrained(repo)
+    for lang, sents in texts.items():
+        words = sum(len(t.split()) for t in sents)
+        tokens = sum(len(tok.encode(t, add_special_tokens=False)) for t in sents)
+        print(f"{name:26s} {lang}: {tokens / words:.2f} tokens/palabra  (vocab={len(tok):,})")
 
-# Comparar contra tokenizador nativo es/pt
-from transformers import AutoTokenizer
-tok_es = AutoTokenizer.from_pretrained("dccuchile/bert-base-spanish-wwm-cased")
-# Un tokenizador para español debería tener fertilidad ~1.2-1.5x
-# El tokenizador inglés puede tener 2-3x para texto en español</code></pre>
+# Referencia: un tokenizador con buena cobertura de es/pt queda en ~1.2-1.5;
+# uno centrado en inglés puede llegar a 2-3 en texto en español.</code></pre>
     </div>
 
-    <div class="tip"><strong>Regla de oro:</strong> Para un LLM Latam de calidad, la fertilidad en español/portugués debería ser ≤ 1.5x la fertilidad en inglés para el mismo texto. Si es mayor, considera entrenar un tokenizador propio o usar uno multilingüe como el de mGPT o BLOOM.</div>
+    <div class="tip"><strong>Regla de oro:</strong> Para un LLM Latam de calidad, la fertilidad en español/portugués debería ser ≤ 1.5x la fertilidad en inglés para el mismo texto. Si es mayor, considera entrenar un tokenizador propio (ver <a href="tokenizer-training.html">Entrenar tokenizadores</a>) o partir de uno multilingüe moderno con buena cobertura de es/pt: Gemma 3 (~262k), Salamandra (256k), Qwen3 (~151k) o Llama 3 (128k). Mide la fertilidad sobre tu propio corpus antes de decidir: un vocabulario más grande baja la fertilidad pero agranda la matriz de embeddings.</div>
   </div>
 
   <div class="sources">
@@ -265,7 +289,7 @@ tok_es = AutoTokenizer.from_pretrained("dccuchile/bert-base-spanish-wwm-cased")
       <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Datatrove (HuggingFace)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>FineWeb (Penedo et al., 2024)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/1808.06226" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>SentencePiece (Kudo & Richardson, 2018)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2012.15613" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Fertility Analysis (Rust et al., 2021)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2012.15613" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>How Good is Your Tokenizer? (Rust et al., 2021)</a>
       <a class="source-link" href="https://huggingface.co/docs/tokenizers" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF Tokenizers Docs</a>
     </div>
   </div>
@@ -275,18 +299,31 @@ tok_es = AutoTokenizer.from_pretrained("dccuchile/bert-base-spanish-wwm-cased")
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

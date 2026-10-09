@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reward Models — LatamGPT</title>
+<meta name="description" content="Cómo entrenar un reward model Bradley-Terry con TRL RewardTrainer, usarlo para puntuar respuestas en español y construir pares DPO con best-of-N y margen de score.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -70,7 +71,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
     <h1 class="guide-title">Reward Models: entrenamiento y uso</h1>
     <p class="guide-desc">Un Reward Model (RM) es un LLM ajustado para puntuar respuestas en una escala escalar. Base del pipeline RLHF clásico y herramienta clave para filtrar datos sintéticos. Cubre entrenamiento con Bradley-Terry, scoring de respuestas y best-of-N.</p>
   </div>
@@ -109,31 +110,22 @@
     </div>
 
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python — cargar datos para RewardTrainer</span><button class="copy-btn">Copiar</button></div>
+      <div class="code-toolbar"><span class="code-lang">python — preparar datos para RewardTrainer</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from datasets import load_dataset
-from transformers import AutoTokenizer
 
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
-
-def tokenize_pair(example):
-    """RewardTrainer espera input_ids_chosen / input_ids_rejected."""
-    chosen_msgs  = [{"role": "user", "content": example["prompt"]},
-                    {"role": "assistant", "content": example["chosen"]}]
-    rejected_msgs = [{"role": "user", "content": example["prompt"]},
-                     {"role": "assistant", "content": example["rejected"]}]
-
-    chosen  = tokenizer.apply_chat_template(chosen_msgs,  tokenize=True, truncation=True, max_length=2048)
-    rejected = tokenizer.apply_chat_template(rejected_msgs, tokenize=True, truncation=True, max_length=2048)
-
+def to_conversational(example):
+    """RewardTrainer (TRL 1.x) espera columnas chosen/rejected y tokeniza internamente.
+    Formato conversacional con prompt implícito: el turno del usuario va en ambas."""
+    user = {"role": "user", "content": example["prompt"]}
     return {
-        "input_ids_chosen":   chosen,
-        "attention_mask_chosen":  [1] * len(chosen),
-        "input_ids_rejected": rejected,
-        "attention_mask_rejected": [1] * len(rejected),
+        "chosen":   [user, {"role": "assistant", "content": example["chosen"]}],
+        "rejected": [user, {"role": "assistant", "content": example["rejected"]}],
     }
 
 dataset = load_dataset("json", data_files="data/preference_pairs.jsonl", split="train")
-dataset = dataset.map(tokenize_pair, remove_columns=dataset.column_names)</code></pre>
+dataset = dataset.map(to_conversational, remove_columns=dataset.column_names)
+# El chat template se aplica dentro del trainer; los pares que superan
+# RewardConfig.max_length se descartan (no se truncan).</code></pre>
     </div>
   </div>
 
@@ -151,19 +143,23 @@ from peft import LoraConfig
 BASE_MODEL = "meta-llama/Llama-3.2-3B-Instruct"
 OUTPUT_DIR = "models/reward-model-es"
 
+# Modelo gated: acepta la licencia en el Hub y exporta HF_TOKEN
+tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
+# Llama 3.x trae un token de padding reservado; no uses EOS como pad
+# (eos_token_id del config puede ser una lista y rompe el pooling del último token)
+tokenizer.pad_token = "&lt;|finetune_right_pad_id|&gt;"
+
 # AutoModelForSequenceClassification con num_labels=1 → scalar output
 model = AutoModelForSequenceClassification.from_pretrained(
     BASE_MODEL,
     num_labels=1,           # score escalar
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="auto",
 )
-model.config.pad_token_id = model.config.eos_token_id
-
-tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
-tokenizer.pad_token = tokenizer.eos_token
+model.config.pad_token_id = tokenizer.pad_token_id
 
 lora_config = LoraConfig(
+    task_type="SEQ_CLS",    # entrena también la cabeza "score" (recién inicializada)
     r=32,
     lora_alpha=64,
     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],
@@ -175,10 +171,10 @@ training_args = RewardConfig(
     num_train_epochs=1,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,
-    learning_rate=1e-5,
+    learning_rate=1e-4,     # con LoRA conviene un LR mayor que en full fine-tuning
     bf16=True,
     max_length=2048,
-    remove_unused_columns=False,
+    center_rewards_coefficient=0.01,  # mantiene los scores centrados en 0
     logging_steps=20,
     save_steps=200,
     report_to="wandb",
@@ -187,13 +183,17 @@ training_args = RewardConfig(
 trainer = RewardTrainer(
     model=model,
     args=training_args,
-    train_dataset=dataset,    # dataset ya tokenizado arriba
-    tokenizer=tokenizer,
+    train_dataset=dataset,    # dataset chosen/rejected del bloque anterior
+    processing_class=tokenizer,
     peft_config=lora_config,
 )
 
 trainer.train()
-trainer.save_model(OUTPUT_DIR)</code></pre>
+
+# Fusionar el adaptador LoRA para cargar el RM como modelo normal en el paso 4
+merged = trainer.model.merge_and_unload()
+merged.save_pretrained(OUTPUT_DIR)
+tokenizer.save_pretrained(OUTPUT_DIR)</code></pre>
     </div>
 
     <div class="tip"><strong>¿Cuántos datos necesito?</strong> Un RM útil para filtrado básico puede entrenarse con 10K–50K pares de alta calidad. Para RLHF/PPO estable necesitas 100K+. Empieza con UltraFeedback (64K pares) y añade datos propios del dominio.</div>
@@ -214,7 +214,7 @@ tokenizer = AutoTokenizer.from_pretrained(RM_PATH)
 rm = AutoModelForSequenceClassification.from_pretrained(
     RM_PATH,
     num_labels=1,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="cuda",
 )
 rm.eval()
@@ -226,12 +226,12 @@ def score(prompt: str, response: str) -> float:
         {"role": "user",      "content": prompt},
         {"role": "assistant", "content": response},
     ]
-    tokens = tokenizer.apply_chat_template(
-        messages, tokenize=True, return_tensors="pt", max_length=2048, truncation=True
+    enc = tokenizer.apply_chat_template(
+        messages, return_dict=True, return_tensors="pt", max_length=2048, truncation=True
     ).to(rm.device)
 
     with torch.no_grad():
-        output = rm(input_ids=tokens)
+        output = rm(**enc)
     return output.logits[0, 0].item()
 
 
@@ -257,11 +257,11 @@ print(f"Mejor respuesta (score={best_score:.3f}):\n{best}")</code></pre>
 
   <!-- 5. Best-of-N para sintéticos -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-layers-intersect"></i>5. Generación sintética con RM (best-of-N + delta DPO)</h2>
-    <p>Técnica usada en Tülu 3 / OLMo 3: generar N respuestas por prompt, puntuar con RM, y construir pares DPO filtrando por diferencia de score (δ).</p>
+    <h2 class="section-title"><i class="ti ti-layers-intersect"></i>5. Generación sintética con RM (best-of-N con margen de score)</h2>
+    <p>Receta práctica para armar datos de preferencia on-policy: generar N respuestas por prompt, puntuar con el RM y construir pares DPO (mejor vs. peor) solo cuando la diferencia de score supera un margen δ. Está inspirada en las recetas de preferencias de Tülu 3 (pares on-policy calificados por un juez) y en la idea de <em>Delta Learning</em> que usa Olmo 3 (lo que enseña es el contraste entre chosen y rejected), pero no es la receta exacta de ninguno de los dos.</p>
 
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python — online_dpo_data.py</span><button class="copy-btn">Copiar</button></div>
+      <div class="code-toolbar"><span class="code-lang">python — best_of_n_dpo_data.py (continúa score_responses.py)</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">import json
 from openai import OpenAI
 
@@ -272,16 +272,15 @@ N     = 8     # respuestas generadas por prompt
 
 
 def generate_n_responses(prompt: str, n: int) -> list[str]:
-    responses = []
-    for _ in range(n):
-        resp = client.chat.completions.create(
-            model="models/sft-checkpoint",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.9,
-            max_tokens=1024,
-        )
-        responses.append(resp.choices[0].message.content)
-    return responses
+    # Una sola request con n=N: vLLM comparte el prefill del prompt entre las N muestras
+    resp = client.chat.completions.create(
+        model="models/sft-checkpoint",
+        messages=[{"role": "user", "content": prompt}],
+        n=n,
+        temperature=0.9,
+        max_tokens=1024,
+    )
+    return [c.message.content for c in resp.choices]
 
 
 def build_dpo_pairs(prompts: list[str], delta: float = DELTA) -> list[dict]:
@@ -309,16 +308,16 @@ def build_dpo_pairs(prompts: list[str], delta: float = DELTA) -> list[dict]:
 
 
 # Cargar prompts y generar dataset
-prompts = [line.strip() for line in open("data/prompts_es.txt")]
+prompts = [line.strip() for line in open("data/prompts_es.txt", encoding="utf-8") if line.strip()]
 dpo_data = build_dpo_pairs(prompts)
 
-with open("data/online_dpo_delta_filtered.jsonl", "w") as f:
+with open("data/dpo_best_of_n_margin.jsonl", "w", encoding="utf-8") as f:
     for pair in dpo_data:
         f.write(json.dumps(pair, ensure_ascii=False) + "\n")
 
 print(f"Pares DPO generados: {len(dpo_data)} / {len(prompts)} prompts ({100*len(dpo_data)/len(prompts):.0f}%)")</code></pre>
     </div>
-    <div class="tip"><strong>El truco del delta (δ):</strong> si el RM puntúa casi igual el chosen y el rejected, el par no aporta señal útil al DPO. Filtrar por δ ≥ 1.0–2.0 mejora la calidad del dataset a costa de reducir cantidad. OLMo 3 / Tülu 3 usan este pipeline en múltiples iteraciones (<em>online DPO</em>).</div>
+    <div class="tip"><strong>El truco del delta (δ):</strong> si el RM puntúa casi igual el chosen y el rejected, el par no aporta señal útil al DPO. Filtrar por δ ≥ 1.0–2.0 mejora la calidad del dataset a costa de reducir cantidad. El umbral depende de la escala del RM: calíbralo mirando la distribución de márgenes. Repetir el ciclo con el modelo ya alineado (generar → puntuar → DPO) da una variante iterativa de DPO on-policy.</div>
   </div>
 
   <!-- 6. Reward hacking -->
@@ -342,7 +341,9 @@ print(f"Pares DPO generados: {len(dpo_data)} / {len(prompts)} prompts ({100*len(
     <div class="source-list">
       <a class="source-link paper" href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>InstructGPT / RLHF (Ouyang et al., 2022)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2210.10760" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Scaling Laws for RM Overoptimization (Gao et al., 2023)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2411.15124" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Tülu 3 / OLMo 3 (AllenAI, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.15124" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Tülu 3 (AllenAI, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2512.13961" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>Olmo 3 (AllenAI, 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2507.06187" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>The Delta Learning Hypothesis (Geng et al., 2025)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2406.08673" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>HelpSteer2 (NVIDIA, 2024)</a>
       <a class="source-link" href="https://huggingface.co/docs/trl/reward_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>TRL RewardTrainer docs</a>
       <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceH4/ultrafeedback_binarized" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>UltraFeedback binarized</a>
@@ -354,18 +355,31 @@ print(f"Pares DPO generados: {len(dpo_data)} / {len(prompts)} prompts ({100*len(
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

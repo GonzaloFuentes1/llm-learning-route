@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quantización para inferencia — LatamGPT</title>
+<meta name="description" content="Cuantiza un LLM a FP8, INT4 (W4A16) y NVFP4 con llm-compressor calibrando en español y portugués, sírvelo con vLLM, mide recovery en benchmarks es/pt y genera GGUF con imatrix para llama.cpp.">
+<title>Cuantización para inferencia: FP8, INT4 y NVFP4 con llm-compressor, y GGUF — LatamGPT</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -49,6 +50,9 @@
   .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
   .model-table tr:last-child td { border-bottom:none; }
   .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
   .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
   .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
   .source-list { display:flex; flex-wrap:wrap; gap:8px; }
@@ -65,7 +69,7 @@
 <header class="site-header">
   <div class="header-inner">
     <a class="logo" href="../index.html">
-      <i class="ti ti-brand-llama" aria-hidden="true"></i>
+      <i class="ti ti-brain" aria-hidden="true"></i>
       LatamGPT
       <span class="logo-pill">Engineering Hub</span>
     </a>
@@ -81,290 +85,629 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Deployment & Evaluación → Quantización</div>
-    <div class="guide-title">Quantización para inferencia eficiente</div>
-    <div class="guide-desc">GPTQ, AWQ y GGUF: cuándo usar cada uno, cómo quantizar modelos LatamGPT y cuánta calidad se pierde con cada método.</div>
+    <div class="breadcrumb">Guías prácticas → Inferencia &amp; Deployment</div>
+    <h1 class="guide-title">Cuantización para inferencia: FP8, INT4 y NVFP4 con llm-compressor, y GGUF</h1>
+    <div class="guide-desc">El flujo vigente a 2026: llm-compressor genera un checkpoint compressed-tensors que vLLM sirve sin flags extra. Elegimos el formato según la GPU, calibramos con texto en español y portugués, medimos VRAM, throughput y recovery en benchmarks es/pt, y cerramos con GGUF + imatrix para llama.cpp en CPU, Mac o GPUs chicas.</div>
   </div>
 
-  <!-- 1. Comparación -->
+  <!-- 1. Panorama -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-table" aria-hidden="true"></i>1. Comparación de métodos</div>
+    <h2 class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. Qué cambió y el mapa de formatos</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Modelo BF16 (HF)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Calibración es/pt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">llm-compressor oneshot</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">compressed-tensors</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">vllm serve</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Recovery + throughput</div>
+    </div>
+
+    <p>AutoAWQ y AutoGPTQ, que eran la base de esta guía, están <strong>archivados</strong>: AutoAWQ fue absorbido por <code>llm-compressor</code> (proyecto de vLLM) y transformers ya no soporta AutoGPTQ (su backend GPTQ ahora es GPTQModel). Además, instalar <code>autoawq</code> degradaba transformers a la serie 4.x. Hoy el camino recomendado para servir en GPU es: <strong>llm-compressor → checkpoint compressed-tensors → vLLM</strong>, que detecta el método desde <code>quantization_config</code> y elige el kernel (Marlin, CUTLASS, Machete) sin <code>--quantization</code>.</p>
 
     <table class="model-table">
-      <tr><th>Método</th><th>Approach</th><th>Hardware</th><th>Integración</th><th>Calidad</th></tr>
-      <tr><td>BitsAndBytes (NF4)</td><td>Quantización en tiempo de carga</td><td>GPU CUDA</td><td>transformers nativo</td><td>Muy buena (training)</td></tr>
-      <tr><td>GPTQ</td><td>Post-training, calibración offline</td><td>GPU CUDA</td><td>AutoGPTQ / transformers</td><td>Buena</td></tr>
-      <tr><td>AWQ</td><td>Activation-aware, calibración offline</td><td>GPU CUDA</td><td>AutoAWQ / vLLM</td><td>Excelente</td></tr>
-      <tr><td>GGUF / llama.cpp</td><td>Quantización flexible (Q2-Q8)</td><td>CPU / Metal / CUDA</td><td>llama.cpp / Ollama</td><td>Depende del nivel Q</td></tr>
+      <tr><th>Esquema</th><th>Qué cuantiza</th><th>GPU donde acelera</th><th>Calibración</th><th>Cuándo usarlo</th></tr>
+      <tr><td>FP8_DYNAMIC (W8A8)</td><td>Pesos FP8 por canal, activaciones FP8 por token</td><td>Ada, Hopper, Blackwell (L40S, H100, B200). En Ampere corre como weight-only</td><td>No</td><td>Default en H100/L40S: casi sin pérdida, ~2× menos VRAM</td></tr>
+      <tr><td>FP8_BLOCK</td><td>Pesos FP8 en bloques 128×128</td><td>Hopper, Blackwell</td><td>No</td><td>Modelos que se publican así (DeepSeek, Qwen3 FP8)</td></tr>
+      <tr><td>W4A16 (GPTQ / AWQ)</td><td>Pesos INT4 en grupos de 128, activaciones BF16</td><td>Turing en adelante (kernels Marlin)</td><td>Sí, 256-512 muestras</td><td>Latencia con batch chico, GPUs medianas (L4, A10, RTX)</td></tr>
+      <tr><td>W8A8 INT8</td><td>Pesos y activaciones INT8 (SmoothQuant + GPTQ)</td><td>Ampere en adelante</td><td>Sí</td><td>A100 sin FP8 con alto throughput</td></tr>
+      <tr><td>NVFP4 (W4A4)</td><td>FP4 E2M1, grupos de 16 con escala FP8</td><td>Blackwell</td><td>Sí, 20-64 muestras bastan</td><td>Máximo throughput en B200/RTX PRO 6000</td></tr>
+      <tr><td>MXFP4</td><td>FP4, grupos de 32 con escala E8M0 (Microscaling)</td><td>Blackwell</td><td>Sí</td><td>Formato de gpt-oss (expertos MoE en MXFP4)</td></tr>
+      <tr><td>KV cache FP8</td><td>Claves y valores de atención</td><td>Ada, Hopper, Blackwell</td><td>Opcional (escalas)</td><td>Contexto largo y más concurrencia</td></tr>
+      <tr><td>GGUF (llama.cpp)</td><td>K-quants e i-quants de 2 a 8 bits</td><td>CPU, Apple Metal, CUDA, Vulkan</td><td>imatrix recomendada</td><td>Local, edge, laptops, despliegues sin GPU</td></tr>
     </table>
 
-    <p><strong>Regla de elección:</strong> AWQ para producción en GPU (mejor throughput en vLLM), GGUF para desarrollo local o hardware sin GPU, BitsAndBytes para fine-tuning (no para inferencia en producción), GPTQ si AWQ no está disponible para tu modelo.</p>
+    <p>El estudio más completo sobre qué formato conviene es <em>Give Me BF16 or Give Me Death</em> (Kurtic et al.): FP8 W8A8 es prácticamente sin pérdida en todos los tamaños, INT8 W8A8 pierde 1-3% bien afinado y W4A16 queda muy competitivo. En costo, W4A16 gana en despliegues síncronos (latencia, pocas peticiones) y en GPUs medianas; W8A8 gana con batching continuo y muchas peticiones concurrentes en GPUs de gama alta.</p>
+
+    <div class="tip"><strong>Regla rápida:</strong> ¿H100/L40S/B200 y tráfico alto? FP8_DYNAMIC primero (5 minutos, sin datos). ¿L4/A10/RTX o latencia de un usuario? W4A16 con GPTQ o AWQ. ¿Blackwell y quieres exprimirla? NVFP4. ¿Sin GPU o en Mac? GGUF Q4_K_M con imatrix. BitsAndBytes (NF4) queda para QLoRA, no para servir (ver la guía de LoRA).</div>
   </div>
 
-  <!-- 2. AWQ -->
+  <!-- 2. Entorno -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-cpu" aria-hidden="true"></i>2. AWQ: Activation-Aware Weight Quantization</div>
+    <h2 class="section-title"><i class="ti ti-terminal-2" aria-hidden="true"></i>2. Entorno y hardware</h2>
 
-    <p>AWQ identifica los pesos más importantes para la activación y los protege durante la quantización. Resultado: menor degradación que GPTQ al mismo número de bits.</p>
+    <p>llm-compressor y vLLM fijan versiones distintas de <code>compressed-tensors</code> (a octubre 2026, llm-compressor 0.14 fija 0.19.0 y vLLM 0.31 fija 0.17.0), así que conviene usar <strong>dos entornos</strong>: uno para cuantizar y otro para servir y evaluar. El checkpoint en disco es el contrato entre ambos.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">pip install autoawq</code></pre>
+      <pre><code class="language-bash"># Entorno 1: cuantizar (trae torch, transformers v5 y compressed-tensors compatibles)
+uv venv .venv-quant --python 3.12
+source .venv-quant/bin/activate
+uv pip install llmcompressor datasets
+deactivate
+
+# Entorno 2: servir y evaluar
+uv venv .venv-serve --python 3.12
+source .venv-serve/bin/activate
+uv pip install vllm "lm-eval[vllm]" pandas
+deactivate</code></pre>
     </div>
 
+    <table class="model-table">
+      <tr><th>Tarea (modelo 8B)</th><th>Hardware</th><th>Tiempo aproximado</th></tr>
+      <tr><td>FP8_DYNAMIC</td><td>1 GPU de 24 GB o más (o incluso CPU con RAM suficiente)</td><td>Minutos</td></tr>
+      <tr><td>GPTQ / AWQ W4A16, 512 muestras × 2048 tokens</td><td>1× A100/H100/L40S (40-80 GB); en 24 GB funciona con onloading secuencial, más lento</td><td>15-60 min</td></tr>
+      <tr><td>NVFP4</td><td>Cuantizar en cualquier GPU; servir con aceleración solo en Blackwell</td><td>10-20 min</td></tr>
+      <tr><td>Evaluar cada variante con lm-eval</td><td>1 GPU por variante</td><td>1-3 h según tasks</td></tr>
+      <tr><td>GGUF + imatrix</td><td>CPU con 32 GB de RAM; una GPU acelera el imatrix</td><td>20-60 min</td></tr>
+    </table>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> repite todo con <code>Qwen/Qwen3-1.7B</code> o un modelo de 1-3B en una T4/L4 (16-24 GB) o en Colab. El flujo es idéntico y te sirve para validar la calibración es/pt antes de gastar GPU grande. Si solo necesitas un checkpoint ya hecho, RedHatAI publica variantes listas, por ejemplo <code>RedHatAI/Qwen3-8B-FP8-dynamic</code>, <code>RedHatAI/Qwen3-8B-quantized.w4a16</code> y <code>RedHatAI/Qwen3-8B-NVFP4</code>.</div>
+  </div>
+
+  <!-- 3. Calibración es/pt -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-language" aria-hidden="true"></i>3. Dataset de calibración en español y portugués</h2>
+
+    <p>GPTQ, AWQ y NVFP4 ajustan los pesos para minimizar el error en las activaciones que ven durante la calibración. Los datasets por defecto de los ejemplos (<code>perfectblend</code>, <code>ultrachat_200k</code>) son mayormente en inglés; si el modelo se va a usar en es/pt, conviene que la calibración lo refleje. Mezclamos instrucciones humanas de <code>CohereLabs/aya_dataset</code> (formateadas con el chat template) y texto web de <code>HuggingFaceFW/fineweb-2</code> (<code>spa_Latn</code> y <code>por_Latn</code>).</p>
+
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from awq import AutoAWQForCausalLM
+      <div class="code-toolbar"><span class="code-lang">python · build_calib.py (entorno 1)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import Dataset, concatenate_datasets, load_dataset
 from transformers import AutoTokenizer
 
-MODEL_PATH = "latamgpt/llama3-8b-sft-v1"   # tu modelo fino-tuneado
+MODEL_ID = "Qwen/Qwen3-8B"        # o tu checkpoint: "&lt;TU_ORG&gt;/&lt;modelo&gt;"
+N_SAMPLES = 512                   # 50% instrucciones, 50% web
+MAX_LEN = 2048
 
-# 1. Cargar modelo y tokenizador
-model = AutoAWQForCausalLM.from_pretrained(MODEL_PATH, safetensors=True)
-tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+tok = AutoTokenizer.from_pretrained(MODEL_ID)
 
-# 2. Dataset de calibración: textos representativos del uso final
-calib_data = [
-    "Hola, ¿cómo puedo ayudarte hoy?",
-    "El modelo de lenguaje grande es una red neuronal que...",
-    "Para calcular la derivada de x², aplicamos la regla de la potencia...",
-    # añadir ~100-200 ejemplos representativos en es/pt
-]
+# 1. Instrucciones humanas es/pt (aya_dataset: columnas inputs, targets, language)
+aya = load_dataset("CohereLabs/aya_dataset", split="train")
+aya = aya.filter(lambda ex: ex["language"] in ("Spanish", "Portuguese"))
+aya = aya.shuffle(seed=0).select(range(N_SAMPLES // 2))
 
-# 3. Configurar quantización
-quant_config = {
-    "zero_point": True,
-    "q_group_size": 128,   # granularidad de los grupos
-    "w_bit": 4,            # 4 bits por peso
-    "version": "GEMM",     # GEMM = más rápido en batch grande; GEMV = mejor en batch=1
-}
 
-# 4. Quantizar (requiere GPU, ~30 min para 8B)
-model.quantize(tokenizer, quant_config=quant_config, calib_data=calib_data)
+def chat_to_text(ex):
+    messages = [
+        {"role": "user", "content": ex["inputs"]},
+        {"role": "assistant", "content": ex["targets"]},
+    ]
+    return {"text": tok.apply_chat_template(messages, tokenize=False)}
 
-# 5. Guardar
-model.save_quantized("latamgpt-llama3-8b-awq-4bit")
-tokenizer.save_pretrained("latamgpt-llama3-8b-awq-4bit")</code></pre>
+
+aya_text = aya.map(chat_to_text, remove_columns=aya.column_names)
+
+# 2. Texto web es/pt de FineWeb-2 en streaming (no descarga el dataset completo)
+web_rows = []
+for config in ("spa_Latn", "por_Latn"):
+    stream = load_dataset("HuggingFaceFW/fineweb-2", name=config, split="train", streaming=True)
+    for ex in stream.shuffle(seed=0, buffer_size=10_000).take(N_SAMPLES // 4):
+        web_rows.append({"text": ex["text"]})
+web_text = Dataset.from_list(web_rows)
+
+calib = concatenate_datasets([aya_text, web_text]).shuffle(seed=0)
+
+# 3. Versión texto plano: la reutilizamos para el imatrix de llama.cpp (sección 10)
+with open("calib_es_pt.txt", "w", encoding="utf-8") as f:
+    for text in calib["text"]:
+        f.write(text.strip() + "\n\n")
+
+# 4. Versión tokenizada para llm-compressor
+#    add_special_tokens=False: el chat template ya incluye los tokens especiales
+def tokenize(ex):
+    return tok(ex["text"], max_length=MAX_LEN, truncation=True,
+               padding=False, add_special_tokens=False)
+
+
+calib_tok = calib.map(tokenize, remove_columns=["text"])
+calib_tok.save_to_disk("calib_es_pt")
+print(calib_tok)</code></pre>
     </div>
 
-    <div class="sub-title">Servir con vLLM (producción)</div>
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash"># vLLM detecta AWQ automáticamente por los metadatos del modelo
-python -m vllm.entrypoints.openai.api_server \
-  --model latamgpt-llama3-8b-awq-4bit \
-  --quantization awq \
-  --dtype bfloat16 \
-  --max-model-len 8192 \
-  --gpu-memory-utilization 0.9</code></pre>
-    </div>
-
-    <div class="tip"><strong>Memoria AWQ 4-bit:</strong> Un modelo de 8B en bfloat16 ocupa ~16 GB; en AWQ-4bit ocupa ~5-6 GB. Permite servir LLaMA 3 8B en una GPU de 8 GB como la RTX 3070.</div>
+    <div class="tip"><strong>Calibración que refleje el uso real:</strong> si tienes logs de prompts de tu despliegue (anonimizados, ver la guía de anonimización) o tu propio dataset SFT, úsalos en lugar de aya. Con 256-512 muestras de 2048 tokens es suficiente para GPTQ/AWQ; más muestras rara vez mejoran el recovery y alargan la calibración.</div>
   </div>
 
-  <!-- 3. GPTQ -->
+  <!-- 4. FP8 -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-bolt" aria-hidden="true"></i>3. GPTQ con transformers</div>
+    <h2 class="section-title"><i class="ti ti-bolt" aria-hidden="true"></i>4. FP8 en cinco minutos</h2>
 
-    <p>GPTQ está integrado directamente en <code>transformers</code> desde la versión 4.35. No requiere librería externa para cuantizar modelos ya publicados en HF Hub.</p>
-
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">pip install optimum auto-gptq</code></pre>
-    </div>
+    <p><code>FP8_DYNAMIC</code> cuantiza pesos a FP8 por canal y calcula la escala de las activaciones por token en tiempo de inferencia, así que no necesita datos. Es el primer formato que deberías probar en Ada/Hopper/Blackwell.</p>
 
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer, GPTQConfig
-
-tokenizer = AutoTokenizer.from_pretrained("latamgpt/llama3-8b-sft-v1")
-
-# Dataset de calibración (mínimo 128 ejemplos)
-calib_dataset = [
-    tokenizer(text, return_tensors="pt").input_ids
-    for text in calib_data[:128]
-]
-
-gptq_config = GPTQConfig(
-    bits=4,
-    dataset=calib_dataset,
-    group_size=128,
-    desc_act=True,   # activar para mejor calidad (más lento)
-)
-
-model = AutoModelForCausalLM.from_pretrained(
-    "latamgpt/llama3-8b-sft-v1",
-    quantization_config=gptq_config,
-    device_map="auto",
-)
-
-model.save_pretrained("latamgpt-llama3-8b-gptq-4bit")
-tokenizer.save_pretrained("latamgpt-llama3-8b-gptq-4bit")
-
-# Subir a HF Hub
-model.push_to_hub("latamgpt/llama3-8b-gptq-4bit")
-tokenizer.push_to_hub("latamgpt/llama3-8b-gptq-4bit")</code></pre>
-    </div>
-
-    <div class="sub-title">Cargar un modelo GPTQ ya quantizado</div>
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <div class="code-toolbar"><span class="code-lang">python · quant_fp8.py (entorno 1)</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# transformers detecta GPTQ por los metadatos en config.json
-model = AutoModelForCausalLM.from_pretrained(
-    "latamgpt/llama3-8b-gptq-4bit",
-    device_map="auto",
-)
-tokenizer = AutoTokenizer.from_pretrained("latamgpt/llama3-8b-gptq-4bit")</code></pre>
+from llmcompressor import oneshot
+from llmcompressor.modifiers.quantization import QuantizationModifier
+
+MODEL_ID = "Qwen/Qwen3-8B"
+SAVE_DIR = "Qwen3-8B-FP8-dynamic"
+
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+
+# lm_head queda en BF16: es sensible y pesa poco frente al resto
+recipe = QuantizationModifier(targets="Linear", scheme="FP8_DYNAMIC", ignore=["lm_head"])
+
+oneshot(model=model, recipe=recipe)   # sin dataset: no hay calibración
+
+model.save_pretrained(SAVE_DIR, save_compressed=True)
+tokenizer.save_pretrained(SAVE_DIR)</code></pre>
     </div>
+
+    <p>Para modelos que se distribuyen con FP8 por bloques (típico en MoE grandes) usa <code>scheme="FP8_BLOCK"</code>. En Ampere (A100) vLLM carga el checkpoint FP8 igual, pero lo ejecuta como weight-only (W8A16 con Marlin): ahorras VRAM, no cómputo.</p>
   </div>
 
-  <!-- 4. GGUF / llama.cpp -->
+  <!-- 5. W4A16 -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-device-laptop" aria-hidden="true"></i>4. GGUF con llama.cpp (CPU / hardware limitado)</div>
+    <h2 class="section-title"><i class="ti ti-cpu" aria-hidden="true"></i>5. INT4 weight-only (W4A16): GPTQ y AWQ</h2>
 
-    <p>GGUF es el formato de llama.cpp. Permite correr modelos cuantizados en CPU, Apple Silicon (Metal) y GPU con CUDA. Ideal para desarrollo local y prototipado sin GPU dedicada.</p>
+    <p>Los dos algoritmos producen el mismo tipo de checkpoint (pesos INT4 en grupos de 128) y vLLM los sirve con kernels Marlin. GPTQ corrige el error capa por capa usando información de segundo orden; AWQ escala los canales más importantes según las activaciones antes de redondear. En llm-compressor ambos calibran capa por capa con onloading secuencial, así que un 8B cabe en una GPU de 24 GB.</p>
 
-    <div class="sub-title">Convertir a GGUF</div>
+    <div class="sub-title">GPTQ</div>
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash"># 1. Clonar llama.cpp y compilar
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp
-cmake -B build -DGGML_CUDA=ON    # añadir -DGGML_METAL=ON para Mac
-cmake --build build --config Release -j
-
-pip install -r requirements.txt
-
-# 2. Convertir modelo HuggingFace a GGUF (F16 = sin quantizar)
-python convert_hf_to_gguf.py latamgpt-llama3-8b-sft-v1 \
-  --outtype f16 \
-  --outfile models/llama3-8b-f16.gguf
-
-# 3. Quantizar el GGUF
-./build/bin/llama-quantize \
-  models/llama3-8b-f16.gguf \
-  models/llama3-8b-Q4_K_M.gguf \
-  Q4_K_M</code></pre>
-    </div>
-
-    <table class="model-table">
-      <tr><th>Nivel GGUF</th><th>Bits/peso</th><th>Tamaño 8B</th><th>Calidad relativa</th><th>Cuándo usar</th></tr>
-      <tr><td>Q2_K</td><td>~2.6</td><td>~3 GB</td><td>Degradación notable</td><td>RAM muy limitada (&lt;4GB)</td></tr>
-      <tr><td>Q4_K_M</td><td>~4.5</td><td>~5 GB</td><td>Muy buena</td><td>Recomendado para uso general</td></tr>
-      <tr><td>Q5_K_M</td><td>~5.5</td><td>~6 GB</td><td>Excelente</td><td>Si tienes RAM suficiente</td></tr>
-      <tr><td>Q8_0</td><td>~8.5</td><td>~9 GB</td><td>Casi idéntica a F16</td><td>Máxima calidad, todavía < F16</td></tr>
-      <tr><td>F16</td><td>16</td><td>~16 GB</td><td>Referencia</td><td>Solo para comparar</td></tr>
-    </table>
-
-    <div class="sub-title">Inferencia con llama.cpp</div>
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash"># Servidor OpenAI-compatible (igual que vLLM pero en CPU)
-./build/bin/llama-server \
-  --model models/llama3-8b-Q4_K_M.gguf \
-  --n-gpu-layers 0 \   # 0 = solo CPU; aumentar para offloading parcial a GPU
-  --ctx-size 4096 \
-  --threads 8 \
-  --port 8080</code></pre>
-    </div>
-
-    <div class="sub-title">Con Python (llama-cpp-python)</div>
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from llama_cpp import Llama
-
-llm = Llama(
-    model_path="models/llama3-8b-Q4_K_M.gguf",
-    n_ctx=4096,
-    n_threads=8,
-    n_gpu_layers=0,   # aumentar si tienes GPU parcial
-    verbose=False,
-)
-
-response = llm.create_chat_completion(
-    messages=[
-        {"role": "system",    "content": "Eres un asistente en español."},
-        {"role": "user",      "content": "Explica qué es el gradiente descendente."},
-    ],
-    temperature=0.7,
-    max_tokens=512,
-)
-print(response["choices"][0]["message"]["content"])</code></pre>
-    </div>
-  </div>
-
-  <!-- 5. Benchmark -->
-  <div class="guide-section">
-    <div class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>5. Benchmarking: calidad vs rendimiento</div>
-
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import time
-import torch
+      <div class="code-toolbar"><span class="code-lang">python · quant_gptq.py (entorno 1)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from compressed_tensors.offload import dispatch_model
+from datasets import load_from_disk
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-def benchmark_throughput(model, tokenizer, prompt: str, n_tokens: int = 200) -> dict:
-    """Mide tokens/segundo y VRAM usada."""
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+from llmcompressor import oneshot
+from llmcompressor.modifiers.gptq import GPTQModifier
 
-    # Warmup
-    with torch.no_grad():
-        model.generate(**inputs, max_new_tokens=10)
+MODEL_ID = "Qwen/Qwen3-8B"
+SAVE_DIR = "Qwen3-8B-W4A16-gptq-es-pt"
 
-    # Medición
-    torch.cuda.synchronize()
-    t0 = time.perf_counter()
-    with torch.no_grad():
-        out = model.generate(**inputs, max_new_tokens=n_tokens, do_sample=False)
-    torch.cuda.synchronize()
-    t1 = time.perf_counter()
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+ds = load_from_disk("calib_es_pt")          # generado por build_calib.py
 
-    n_generated = out.shape[1] - inputs["input_ids"].shape[1]
-    tps = n_generated / (t1 - t0)
+recipe = GPTQModifier(targets="Linear", scheme="W4A16", ignore=["lm_head"])
 
-    vram_mb = torch.cuda.max_memory_allocated() / 1e6
+oneshot(
+    model=model,
+    dataset=ds,
+    recipe=recipe,
+    max_seq_length=2048,
+    num_calibration_samples=512,
+)
 
-    return {"tokens_per_sec": tps, "vram_mb": vram_mb, "n_tokens": n_generated}
+# Prueba de humo en español antes de guardar
+dispatch_model(model)
+messages = [{"role": "user", "content": "¿Cuál es la capital de Uruguay? Responde en una frase."}]
+inputs = tokenizer.apply_chat_template(
+    messages, add_generation_prompt=True, return_dict=True, return_tensors="pt",
+    enable_thinking=False,   # Qwen3: sin bloque &lt;think&gt; para una respuesta corta
+).to(model.device)
+out = model.generate(**inputs, max_new_tokens=60)
+print(tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
 
-# Comparar
-PROMPT = "Explica en detalle qué es el pretraining de modelos de lenguaje y por qué es importante."
-models_to_test = {
-    "BF16 original":   "latamgpt/llama3-8b-sft-v1",
-    "AWQ 4-bit":       "latamgpt/llama3-8b-awq-4bit",
-    "GPTQ 4-bit":      "latamgpt/llama3-8b-gptq-4bit",
-}
-
-for name, path in models_to_test.items():
-    tok = AutoTokenizer.from_pretrained(path)
-    m   = AutoModelForCausalLM.from_pretrained(path, device_map="auto", torch_dtype=torch.bfloat16)
-    res = benchmark_throughput(m, tok, PROMPT)
-    print(f"{name}: {res['tokens_per_sec']:.1f} tok/s, {res['vram_mb']:.0f} MB VRAM")</code></pre>
+model.save_pretrained(SAVE_DIR, save_compressed=True)
+tokenizer.save_pretrained(SAVE_DIR)</code></pre>
     </div>
 
-    <p>Resultados típicos en una A100 80GB para LLaMA 3 8B, batch=1:</p>
+    <div class="sub-title">AWQ</div>
+    <p>AWQ vive ahora en <code>llmcompressor.modifiers.transform.awq</code> y se combina con un <code>QuantizationModifier</code> que fija el esquema (asimétrico, con zero point, como el AWQ original).</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · quant_awq.py (entorno 1)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from llmcompressor import oneshot
+from llmcompressor.modifiers.quantization import QuantizationModifier
+from llmcompressor.modifiers.transform.awq import AWQModifier
+
+MODEL_ID = "Qwen/Qwen3-8B"
+SAVE_DIR = "Qwen3-8B-W4A16-awq-es-pt"
+
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+ds = load_from_disk("calib_es_pt")
+
+recipe = [
+    AWQModifier(duo_scaling="both"),
+    QuantizationModifier(targets=["Linear"], scheme="W4A16_ASYM", ignore=["lm_head"]),
+]
+
+oneshot(
+    model=model,
+    dataset=ds,
+    recipe=recipe,
+    max_seq_length=2048,
+    num_calibration_samples=512,
+)
+
+model.save_pretrained(SAVE_DIR, save_compressed=True)
+tokenizer.save_pretrained(SAVE_DIR)</code></pre>
+    </div>
+
+    <div class="sub-title">Control: misma receta con la calibración por defecto</div>
+    <p>Para saber si la calibración es/pt vale la pena, genera una variante idéntica con el dataset registrado en inglés y compara el recovery en la sección 9. Esto continúa <code>quant_gptq.py</code>: cambia solo la llamada a <code>oneshot</code> y el <code>SAVE_DIR</code>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · continúa quant_gptq.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">SAVE_DIR = "Qwen3-8B-W4A16-gptq-default"
+
+# Partir de nuevo desde BF16: el modelo anterior ya quedó cuantizado
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto")
+
+oneshot(
+    model=model,
+    dataset="perfectblend",
+    splits="train[:512]",
+    recipe=recipe,
+    max_seq_length=2048,
+    num_calibration_samples=512,
+)
+model.save_pretrained(SAVE_DIR, save_compressed=True)
+tokenizer.save_pretrained(SAVE_DIR)</code></pre>
+    </div>
+
+    <div class="warn"><strong>MoE:</strong> en modelos Mixture of Experts deja fuera los routers (son pequeños y muy sensibles), p. ej. <code>ignore=["lm_head", "re:.*mlp.gate$"]</code>, y carga el modelo dentro de <code>with load_context():</code> (de <code>llmcompressor.utils</code>), que convierte los expertos fusionados en capas <code>Linear</code> cuantizables y habilita offloading. <code>oneshot</code> calibra por defecto todos los expertos con todos los tokens (<code>moe_calibrate_all_experts=True</code>), así que expertos poco elegidos por el router también reciben estadísticas. Revisa los ejemplos de <code>examples/quantizing_moe</code> del repo para tu arquitectura.</div>
+  </div>
+
+  <!-- 6. NVFP4 -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-stack-2" aria-hidden="true"></i>6. NVFP4 y MXFP4 para Blackwell</h2>
+
+    <p>NVFP4 cuantiza pesos <em>y</em> activaciones a FP4 (E2M1) con grupos de 16 elementos y una escala FP8 por grupo, más una escala global por tensor que se calibra. Las Tensor Cores de Blackwell lo ejecutan nativamente, así que reduce memoria y cómputo. MXFP4 (estándar OCP Microscaling) usa grupos de 32 con escala E8M0; es el formato en que se publicaron los expertos de gpt-oss.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · quant_nvfp4.py (entorno 1)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from llmcompressor import oneshot
+from llmcompressor.modifiers.quantization import QuantizationModifier
+
+MODEL_ID = "Qwen/Qwen3-8B"
+SAVE_DIR = "Qwen3-8B-NVFP4-es-pt"
+
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+ds = load_from_disk("calib_es_pt")
+
+# Para MXFP4 usa scheme="MXFP4"; para solo pesos en FP4, scheme="NVFP4A16"
+recipe = QuantizationModifier(targets="Linear", scheme="NVFP4", ignore=["lm_head"])
+
+oneshot(
+    model=model,
+    dataset=ds,
+    recipe=recipe,
+    max_seq_length=2048,
+    num_calibration_samples=64,    # la escala global converge con pocas muestras
+)
+
+model.save_pretrained(SAVE_DIR, save_compressed=True)
+tokenizer.save_pretrained(SAVE_DIR)</code></pre>
+    </div>
+
+    <div class="warn"><strong>Sin Blackwell no hay ganancia de cómputo:</strong> en Hopper o Ampere, según la versión de vLLM, un checkpoint FP4 se rechaza o se ejecuta como weight-only, sin la aceleración W4A4. Además, W4A4 pierde más calidad que W4A16 en tareas de razonamiento: evalúa siempre (sección 9). Una opción intermedia en MoE es la precisión mixta: expertos en FP4 y atención en FP8, con varios <code>config_groups</code> en la receta.</div>
+  </div>
+
+  <!-- 7. KV cache -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-box" aria-hidden="true"></i>7. KV cache en FP8</h2>
+
+    <p>Con contexto largo (RAG con documentos legales, historiales clínicos) la KV cache puede pesar más que los pesos. Guardarla en FP8 la reduce a la mitad y duplica las secuencias concurrentes. Hay dos caminos: calibrar escalas en la receta (<code>kv_cache_scheme</code>) o activarla solo al servir con <code>--kv-cache-dtype fp8</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · quant_fp8_kv.py (entorno 1)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from llmcompressor import oneshot
+
+MODEL_ID = "Qwen/Qwen3-8B"
+SAVE_DIR = "Qwen3-8B-FP8-KV-es-pt"
+
+# Pesos y activaciones FP8 estáticos + KV cache FP8 con escalas calibradas
+RECIPE = """
+quant_stage:
+    quant_modifiers:
+        QuantizationModifier:
+            ignore: ["lm_head"]
+            config_groups:
+                group_0:
+                    weights:
+                        num_bits: 8
+                        type: float
+                        strategy: tensor
+                        dynamic: false
+                        symmetric: true
+                    input_activations:
+                        num_bits: 8
+                        type: float
+                        strategy: tensor
+                        dynamic: false
+                        symmetric: true
+                    targets: ["Linear"]
+            kv_cache_scheme:
+                num_bits: 8
+                type: float
+                strategy: tensor
+                dynamic: false
+                symmetric: true
+"""
+
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype="auto")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+ds = load_from_disk("calib_es_pt")
+
+oneshot(model=model, dataset=ds, recipe=RECIPE,
+        max_seq_length=2048, num_calibration_samples=512)
+
+model.save_pretrained(SAVE_DIR, save_compressed=True)
+tokenizer.save_pretrained(SAVE_DIR)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash (entorno 2)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Con escalas calibradas en el checkpoint
+vllm serve Qwen3-8B-FP8-KV-es-pt --kv-cache-dtype fp8 --max-model-len 32768
+
+# Sobre cualquier checkpoint, dejando en BF16 capas sensibles (índices o tipos de capa)
+vllm serve Qwen3-8B-W4A16-gptq-es-pt --kv-cache-dtype fp8 --kv-cache-dtype-skip-layers 0 1</code></pre>
+    </div>
+  </div>
+
+  <!-- 8. Servir y medir -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>8. Servir con vLLM y medir throughput</h2>
+
+    <p>vLLM lee <code>quantization_config</code> del <code>config.json</code> y elige el kernel: no pases <code>--quantization</code> (forzarlo puede impedir que use Marlin). El script levanta cada variante, espera a <code>/health</code>, corre <code>vllm bench serve</code> a varias concurrencias y apaga el servidor.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash · bench_all.sh (entorno 2)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+MODELS=(Qwen/Qwen3-8B Qwen3-8B-FP8-dynamic Qwen3-8B-W4A16-gptq-es-pt Qwen3-8B-W4A16-awq-es-pt)
+mkdir -p bench
+
+for M in "${MODELS[@]}"; do
+  NAME=$(basename "$M")
+  vllm serve "$M" --max-model-len 4096 --gpu-memory-utilization 0.90 --port 8000 \
+    &gt; "bench/${NAME}.server.log" 2&gt;&amp;1 &amp;
+  PID=$!
+  until curl -sf http://localhost:8000/health &gt; /dev/null; do sleep 5; done
+
+  for C in 1 16 64; do
+    vllm bench serve \
+      --model "$M" \
+      --base-url http://localhost:8000 \
+      --dataset-name random \
+      --random-input-len 1024 \
+      --random-output-len 256 \
+      --num-prompts $((C * 8)) \
+      --max-concurrency "$C" \
+      --percentile-metrics ttft,tpot,itl \
+      --save-result --result-dir bench \
+      --result-filename "${NAME}_c${C}.json"
+  done
+
+  grep -i "memory" "bench/${NAME}.server.log" | head -n 5
+  kill "$PID"; wait "$PID" || true
+done</code></pre>
+    </div>
+
+    <p>Valores orientativos para un 8B en una H100 80 GB (mídelos en tu hardware; dependen de la versión de vLLM y del largo de contexto):</p>
     <table class="model-table">
-      <tr><th>Método</th><th>Throughput</th><th>VRAM</th><th>PPL (WikiText-2)</th></tr>
-      <tr><td>BF16 original</td><td>~90 tok/s</td><td>~16 GB</td><td>referencia</td></tr>
-      <tr><td>AWQ 4-bit</td><td>~150 tok/s</td><td>~5.5 GB</td><td>+0.3 PPL</td></tr>
-      <tr><td>GPTQ 4-bit</td><td>~130 tok/s</td><td>~5.5 GB</td><td>+0.5 PPL</td></tr>
-      <tr><td>GGUF Q4_K_M (CPU)</td><td>~15 tok/s</td><td>RAM ~5 GB</td><td>+0.4 PPL</td></tr>
+      <tr><th>Variante</th><th>Pesos en VRAM</th><th>Concurrencia 1 (latencia)</th><th>Concurrencia 64 (throughput)</th></tr>
+      <tr><td>BF16</td><td>~16 GB</td><td>referencia</td><td>referencia</td></tr>
+      <tr><td>FP8_DYNAMIC</td><td>~9 GB</td><td>~1.3-1.5× más rápido</td><td>~1.3-1.6× más tokens/s</td></tr>
+      <tr><td>W4A16 (GPTQ/AWQ)</td><td>~6 GB</td><td>~1.8-2.5× más rápido</td><td>similar o algo menor que FP8</td></tr>
+      <tr><td>NVFP4 (solo Blackwell)</td><td>~6 GB</td><td>no comparable en H100: mídelo en B200 contra FP8</td><td>en B200 suele ser el más alto, por usar Tensor Cores FP4</td></tr>
+    </table>
+    <p>Con batch chico la decodificación está limitada por el ancho de banda de memoria, así que menos bits por peso equivale a más velocidad; con mucha concurrencia pasa a dominar el cómputo y ahí ganan los formatos que cuantizan también las activaciones (FP8, NVFP4). La VRAM liberada se convierte en KV cache: más usuarios simultáneos con el mismo hardware.</p>
+  </div>
+
+  <!-- 9. Evaluación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>9. Evaluar la calidad en español y portugués</h2>
+
+    <p>La degradación por cuantización no es uniforme: tiende a concentrarse en idiomas y tareas menos representados, y la perplexity en inglés no la detecta. Medimos <strong>recovery</strong> (score de la variante / score BF16) en tasks es/pt de lm-eval. MGSM no incluye portugués, así que para pt usamos Global-MMLU-Lite y Belebele (para más tasks pt, ver la guía de evaluación).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash · eval_all.sh (entorno 2)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+set -euo pipefail
+TASKS="mgsm_native_cot_es,global_mmlu_es,global_mmlu_pt,belebele_spa_Latn,belebele_por_Latn,ifeval"
+MODELS=(Qwen/Qwen3-8B Qwen3-8B-FP8-dynamic Qwen3-8B-W4A16-gptq-es-pt Qwen3-8B-W4A16-gptq-default Qwen3-8B-W4A16-awq-es-pt)
+
+for M in "${MODELS[@]}"; do
+  NAME=$(basename "$M")
+  lm_eval --model vllm \
+    --model_args "pretrained=${M},gpu_memory_utilization=0.8,max_model_len=4096,enable_thinking=False" \
+    --tasks "$TASKS" \
+    --apply_chat_template \
+    --batch_size auto \
+    --output_path "results/${NAME}"
+done</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · report.py (entorno 2)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import glob
+import json
+
+import pandas as pd
+
+BASE = "Qwen3-8B"
+VARIANTS = ["Qwen3-8B", "Qwen3-8B-FP8-dynamic", "Qwen3-8B-W4A16-gptq-es-pt",
+            "Qwen3-8B-W4A16-gptq-default", "Qwen3-8B-W4A16-awq-es-pt"]
+# Métrica principal por task (prefijo de la clave "métrica,filtro" de lm-eval)
+PREFERRED = ["exact_match,flexible-extract", "acc,none", "prompt_level_strict_acc,none"]
+
+
+def load_scores(name: str) -> dict[str, float]:
+    files = sorted(glob.glob(f"results/{name}/**/results_*.json", recursive=True))
+    results = json.load(open(files[-1], encoding="utf-8"))["results"]
+    scores = {}
+    for task, metrics in results.items():
+        for key in PREFERRED:
+            if key in metrics:
+                scores[task] = float(metrics[key])
+                break
+    return scores
+
+
+table = pd.DataFrame({v: load_scores(v) for v in VARIANTS})
+recovery = table.div(table[BASE], axis=0) * 100
+print("Scores:\n", table.round(4))
+print("\nRecovery (% de BF16):\n", recovery.round(1))
+print("\nRecovery medio:\n", recovery.mean().round(1))
+
+# Criterio de aceptación sugerido: recovery medio &gt;= 99% y ningún task &lt; 97%
+ok = (recovery.mean() &gt;= 99) &amp; (recovery.min() &gt;= 97)
+print("\nAprobados para producción:", list(ok[ok].index))</code></pre>
+    </div>
+
+    <div class="tip"><strong>Qué mirar:</strong> compara <code>gptq-es-pt</code> contra <code>gptq-default</code>. Si la calibración es/pt sube el recovery en MGSM-es y Global-MMLU-pt aunque baje un poco en IFEval (inglés), confirmaste que conviene calibrar en el idioma de uso. Publica el checkpoint con una model card en español que incluya esta tabla por idioma: otras instituciones de la región podrán decidir si les sirve en sus GPUs.</div>
+
+    <div class="warn"><strong>No confíes en una sola métrica:</strong> diferencias menores a ~1 punto en benchmarks de cientos de ejemplos suelen estar dentro del ruido. Corre con varias semillas cuando la tarea es generativa y revisa a mano 20-30 respuestas largas en español: la cuantización agresiva suele notarse primero en coherencia y en mezcla de idiomas, no en multiple choice.</div>
+  </div>
+
+  <!-- 10. GGUF -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-device-laptop" aria-hidden="true"></i>10. GGUF con llama.cpp (CPU, Mac, GPUs chicas)</h2>
+
+    <p>GGUF es el formato de llama.cpp (repo <code>ggml-org/llama.cpp</code>) y de las herramientas que lo usan (Ollama, LM Studio). Corre en CPU, Apple Silicon (Metal), CUDA y Vulkan, con offloading parcial de capas a GPU. La <em>importance matrix</em> (imatrix) cumple el rol de la calibración: mide qué pesos importan más según activaciones reales, y conviene calcularla con texto es/pt.</p>
+
+    <div class="sub-title">Compilar, convertir y calcular la imatrix</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Compilar (en Mac Metal se activa por defecto; para NVIDIA agrega -DGGML_CUDA=ON)
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+cmake -B build -DGGML_CUDA=ON
+cmake --build build --config Release -j
+python -m pip install -r requirements.txt
+
+# 1. HF -&gt; GGUF en BF16 (directorio local o --remote &lt;org&gt;/&lt;modelo&gt; del Hub)
+python convert_hf_to_gguf.py /ruta/a/Qwen3-8B --outtype bf16 --outfile models/qwen3-8b-bf16.gguf
+
+# 2. imatrix con el texto es/pt de build_calib.py (salida en formato GGUF)
+./build/bin/llama-imatrix -m models/qwen3-8b-bf16.gguf -f ../calib_es_pt.txt -o models/imatrix-es-pt.gguf -ngl 99
+
+# 3. Cuantizar usando la imatrix
+./build/bin/llama-quantize --imatrix models/imatrix-es-pt.gguf models/qwen3-8b-bf16.gguf models/qwen3-8b-Q4_K_M.gguf Q4_K_M</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Tipo GGUF</th><th>Bits/peso</th><th>Tamaño 8B</th><th>Calidad</th><th>Cuándo usar</th></tr>
+      <tr><td>Q2_K</td><td>~3.2</td><td>~3.3 GB</td><td>Degradación notable</td><td>Solo si la RAM no alcanza para otra cosa</td></tr>
+      <tr><td>Q3_K_M</td><td>~4.0</td><td>~4.1 GB</td><td>Aceptable con imatrix</td><td>Laptops de 8 GB</td></tr>
+      <tr><td>IQ4_XS</td><td>~4.5</td><td>~4.6 GB</td><td>Muy buena (requiere imatrix)</td><td>Mejor relación calidad/tamaño en 4 bits</td></tr>
+      <tr><td>Q4_K_M</td><td>~4.9</td><td>~5.0 GB</td><td>Muy buena</td><td>Default recomendado</td></tr>
+      <tr><td>Q5_K_M</td><td>~5.7</td><td>~5.9 GB</td><td>Excelente</td><td>Si sobra memoria</td></tr>
+      <tr><td>Q8_0</td><td>~8.5</td><td>~8.7 GB</td><td>Casi idéntica a BF16</td><td>Referencia práctica de calidad</td></tr>
     </table>
 
-    <div class="warn"><strong>No confiar en perplexity sola:</strong> PPL no captura degradación en tareas de razonamiento o seguimiento de instrucciones. Siempre evaluar el modelo quantizado con <code>lm-eval-harness</code> en los benchmarks del proyecto (MGSM, IFEval) antes de desplegar en producción.</div>
+    <div class="sub-title">Medir la pérdida con KL divergence</div>
+    <p>Más fino que la perplexity: guarda los logits del modelo BF16 sobre un texto es/pt y mide cuánto se aleja la distribución del cuantizado. Usa un texto de evaluación distinto al de la imatrix.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Logits de referencia (el archivo .kld puede pesar decenas de GB con textos largos)
+./build/bin/llama-perplexity -m models/qwen3-8b-bf16.gguf -f eval_es_pt.txt --kl-divergence-base models/base-es-pt.kld -ngl 99
+
+# KL divergence y perplexity del cuantizado contra esa referencia
+./build/bin/llama-perplexity -m models/qwen3-8b-Q4_K_M.gguf --kl-divergence-base models/base-es-pt.kld --kl-divergence -ngl 99</code></pre>
+    </div>
+
+    <div class="sub-title">Servir: llama-server (API compatible con OpenAI)</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># -ngl 0 = solo CPU; súbelo (o "all") para descargar capas a la GPU
+./build/bin/llama-server -m models/qwen3-8b-Q4_K_M.gguf -ngl 0 -c 8192 -t 8 --host 127.0.0.1 --port 8080
+
+# También puede descargar un GGUF publicado en el Hub: -hf &lt;org&gt;/&lt;repo-gguf&gt;:Q4_K_M</code></pre>
+    </div>
+
+    <p>El endpoint <code>/v1/chat/completions</code> es compatible con el cliente <code>openai</code>, así que el mismo código que usas contra vLLM funciona cambiando <code>base_url</code> a <code>http://127.0.0.1:8080/v1</code>. Prueba con prompts en español y portugués, incluyendo variantes regionales (voseo, pt-BR coloquial).</p>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> un 8B en Q4_K_M corre en un notebook con 16 GB de RAM a varios tokens por segundo en CPU, y bastante más en un Mac con Apple Silicon. Es la vía para pilotos en universidades o servicios públicos sin GPU, y para que el equipo pruebe prompts en español sin tocar el cluster.</div>
+  </div>
+
+  <!-- 11. Alternativas -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-tools" aria-hidden="true"></i>11. Alternativas: GPTQModel y torchao</h2>
+
+    <p><strong>GPTQModel</strong> es el backend GPTQ de transformers (reemplaza a AutoGPTQ). Sirve si quieres cuantizar desde <code>from_pretrained</code> sin instalar llm-compressor; el checkpoint resultante también lo carga vLLM. Recibe la calibración como lista de textos más el tokenizer.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · pip install optimum accelerate &amp;&amp; pip install gptqmodel --no-build-isolation</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoModelForCausalLM, AutoTokenizer, GPTQConfig
+
+MODEL_ID = "Qwen/Qwen3-8B"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+
+# Textos de calibración es/pt (por ejemplo, los bloques de calib_es_pt.txt)
+with open("calib_es_pt.txt", encoding="utf-8") as f:
+    calib_texts = [t for t in f.read().split("\n\n") if t.strip()][:256]
+
+gptq_config = GPTQConfig(bits=4, group_size=128, dataset=calib_texts, tokenizer=tokenizer)
+
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_ID, device_map="auto", quantization_config=gptq_config
+)
+model.save_pretrained("Qwen3-8B-gptqmodel-4bit")
+tokenizer.save_pretrained("Qwen3-8B-gptqmodel-4bit")</code></pre>
+    </div>
+
+    <p><strong>torchao</strong> es la opción PyTorch-nativa (<code>quantize_</code> con configs como <code>Float8DynamicActivationFloat8WeightConfig</code>), útil para experimentar dentro de PyTorch o con <code>torch.compile</code>, y es la misma librería que se usa para entrenar en FP8/MXFP8. Para servir en producción con vLLM, llm-compressor sigue siendo el camino con más cobertura de formatos y kernels.</p>
+  </div>
+
+  <!-- 12. Checklist -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-checklist" aria-hidden="true"></i>12. Checklist antes de desplegar</h2>
+    <table class="model-table">
+      <tr><th>Paso</th><th>Criterio</th></tr>
+      <tr><td>Formato según GPU</td><td>FP8 en Ada/Hopper, W4A16 en GPUs medianas o latencia, NVFP4 solo con Blackwell, GGUF sin GPU</td></tr>
+      <tr><td>Calibración</td><td>256-512 muestras es/pt que se parezcan al tráfico real, con chat template</td></tr>
+      <tr><td>Capas excluidas</td><td><code>lm_head</code> siempre; routers en MoE</td></tr>
+      <tr><td>Prueba de humo</td><td>Generación coherente en español y portugués antes de guardar</td></tr>
+      <tr><td>Calidad</td><td>Recovery medio ≥ 99% y ningún task es/pt &lt; 97% (ajusta a tu caso)</td></tr>
+      <tr><td>Rendimiento</td><td><code>vllm bench serve</code> a la concurrencia esperada; TTFT y TPOT p99 dentro del SLO</td></tr>
+      <tr><td>Publicación</td><td>Model card en español con receta, dataset de calibración y tabla de recovery por idioma</td></tr>
+    </table>
   </div>
 
   <div class="sources">
-    <div class="sources-title">Referencias</div>
+    <h2 class="sources-title">Referencias</h2>
     <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.02355" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Give Me BF16 or Give Me Death (Kurtic et al., 2024)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>GPTQ (Frantar et al., 2022)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>AWQ (Lin et al., 2023)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2208.07339" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SqueezeLLM (Kim et al., 2023)</a>
-      <a class="source-link" href="https://github.com/ggerganov/llama.cpp" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>llama.cpp</a>
-      <a class="source-link" href="https://github.com/casper-hansen/AutoAWQ" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>AutoAWQ</a>
-      <a class="source-link" href="inferencia.html"><i class="ti ti-server-bolt"></i>Guía: Serving con vLLM</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2211.10438" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SmoothQuant (Xiao et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2310.10537" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Microscaling Data Formats (Rouhani et al., 2023)</a>
+      <a class="source-link" href="https://github.com/vllm-project/llm-compressor" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>llm-compressor</a>
+      <a class="source-link" href="https://docs.vllm.ai/projects/llm-compressor/en/latest/" target="_blank" rel="noopener"><i class="ti ti-book"></i>LLM Compressor Docs</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/quantization/" target="_blank" rel="noopener"><i class="ti ti-book"></i>Cuantización en vLLM</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/quantization/quantized_kvcache/" target="_blank" rel="noopener"><i class="ti ti-book"></i>KV cache cuantizado en vLLM</a>
+      <a class="source-link" href="https://huggingface.co/docs/transformers/main/en/quantization/gptq" target="_blank" rel="noopener"><i class="ti ti-book"></i>GPTQ en transformers (GPTQModel)</a>
+      <a class="source-link" href="https://github.com/ggml-org/llama.cpp" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>llama.cpp</a>
+      <a class="source-link" href="https://github.com/pytorch/ao" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>torchao</a>
+      <a class="source-link" href="https://huggingface.co/datasets/CohereLabs/aya_dataset" target="_blank" rel="noopener"><i class="ti ti-database"></i>Aya Dataset (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/RedHatAI/Qwen3-8B-quantized.w4a16" target="_blank" rel="noopener"><i class="ti ti-cube"></i>RedHatAI/Qwen3-8B-quantized.w4a16</a>
+      <a class="source-link" href="inferencia.html"><i class="ti ti-server-bolt"></i>Guía: Inferencia con vLLM</a>
+      <a class="source-link" href="speculative-decoding.html"><i class="ti ti-gauge"></i>Guía: Speculative decoding</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-line"></i>Guía: Evaluación en es/pt</a>
       <a class="source-link" href="lora-finetuning.html"><i class="ti ti-adjustments-horizontal"></i>Guía: LoRA/QLoRA (BitsAndBytes)</a>
+      <a class="source-link" href="anonimizacion.html"><i class="ti ti-filter"></i>Guía: Anonimización de datos</a>
     </div>
   </div>
 </main>
@@ -377,13 +720,27 @@ for name, path in models_to_test.items():
 <script>
   hljs.highlightAll();
   document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
     btn.addEventListener('click', () => {
-      const code = btn.closest('.code-block').querySelector('code');
-      navigator.clipboard.writeText(code.textContent).then(() => {
-        btn.textContent = '¡Copiado!';
-        btn.classList.add('copied');
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
         setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
-      });
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
 </script>

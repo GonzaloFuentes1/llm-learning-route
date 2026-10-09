@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Modelos BERT es/pt — LatamGPT</title>
+<meta name="description" content="Cómo elegir, ajustar y servir encoders para español y portugués en 2026: BETO y BERTimbau como baseline, mmBERT, MrBERT-es, BERTomelo y EuroBERT para clasificación, toxicidad, NER y contexto largo con transformers v5.">
+<title>Encoders para español y portugués en 2026 — LatamGPT</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -41,11 +42,17 @@
   .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
   .tip strong { color:var(--text); }
   @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
   .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
   .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
   .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
   .model-table tr:last-child td { border-bottom:none; }
-  .model-table td:first-child { font-weight:500; color:var(--text); font-family:monospace; font-size:12px; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
   .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
   .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
   .source-list { display:flex; flex-wrap:wrap; gap:8px; }
@@ -61,460 +68,582 @@
 
 <header class="site-header">
   <div class="header-inner">
-    <a class="logo" href="../index.html"><i class="ti ti-brain"></i> LatamGPT <span class="logo-pill">Guías prácticas</span></a>
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
     <div class="header-spacer"></div>
-    <a class="nav-link" href="../index.html"><i class="ti ti-home"></i> Hub</a>
-    <a class="nav-link" href="../latamgpt-roadmap.html"><i class="ti ti-map-2"></i> Roadmap</a>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
   </div>
 </header>
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Entrenamiento</div>
-    <h1 class="guide-title">Modelos BERT para es/pt</h1>
-    <p class="guide-desc">Fine-tuning de modelos encoder (BETO, BERTimbau, RoBERTa-BNE) para tareas discriminativas en español y portugués: clasificación de texto y reconocimiento de entidades nombradas (NER).</p>
+    <div class="breadcrumb">Guías prácticas → Aplicaciones: RAG, agentes y encoders</div>
+    <div class="guide-title">Encoders para español y portugués en 2026: de BETO a mmBERT</div>
+    <div class="guide-desc">Cómo elegir, ajustar y servir encoders para español y portugués en 2026: BETO y BERTimbau como baseline, mmBERT, MrBERT-es, BERTomelo y EuroBERT para clasificación, toxicidad, NER y contexto largo con transformers v5. Todo el código usa las APIs vigentes (<code>processing_class</code>, <code>eval_strategy</code>, <code>dtype</code>) y datasets que cargan sin loading scripts.</div>
   </div>
 
-  <!-- 1. Cuándo usar BERT -->
+  <!-- 1. Encoder vs LLM -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-help-circle"></i>1. ¿Cuándo usar BERT vs un LLM causal?</h2>
-    <p>Los modelos encoder como BERT son <strong>mucho más baratos y rápidos</strong> para tareas discriminativas. No uses un LLM de 7B para clasificar sentimientos si un BERT de 110M parámetros lo hace igual de bien.</p>
+    <div class="section-title"><i class="ti ti-help-circle" aria-hidden="true"></i>1. ¿Cuándo usar un encoder y no un LLM?</div>
+    <p>Un encoder bidireccional de 150-300M parámetros sigue siendo la herramienta correcta para tareas discriminativas a escala: clasificar millones de documentos, extraer entidades o filtrar un corpus de pretraining. Cuesta órdenes de magnitud menos que un LLM generativo por documento y, con datos etiquetados, suele igualarlo o superarlo en clasificación. En LatamGPT los encoders cumplen dos roles: <strong>aplicaciones</strong> (sentimiento, NER, ruteo de tickets) y <strong>filtros de datos</strong> (calidad educativa, toxicidad, idioma) que corren sobre billones de tokens.</p>
 
     <table class="model-table">
       <thead><tr><th>Tarea</th><th>Recomendación</th><th>Razón</th></tr></thead>
       <tbody>
-        <tr><td>Clasificación de texto</td><td>BERT / RoBERTa</td><td>Más rápido, más barato, preciso</td></tr>
-        <tr><td>NER (entidades)</td><td>BERT / RoBERTa</td><td>Token-level, bidireccional</td></tr>
-        <tr><td>QA extractiva</td><td>BERT / RoBERTa</td><td>Span extraction eficiente</td></tr>
-        <tr><td>Generación de texto</td><td>LLM causal (GPT/LLaMA)</td><td>Requiere modelo autoregresivo</td></tr>
-        <tr><td>Chat / instrucciones</td><td>LLM causal (instruct)</td><td>Capacidad generativa necesaria</td></tr>
-        <tr><td>Filtrado de calidad</td><td>fastText o BERT pequeño</td><td>Velocidad para TB de datos</td></tr>
+        <tr><td>Clasificación de texto</td><td>Encoder fine-tuned</td><td>Rápido, barato, calibrable</td></tr>
+        <tr><td>NER / extracción de spans</td><td>Encoder (token classification)</td><td>Atención bidireccional a nivel de token</td></tr>
+        <tr><td>Filtros de calidad o toxicidad para pretraining</td><td>Encoder pequeño (mmBERT-small, MrBERT-es)</td><td>Throughput sobre TB de texto</td></tr>
+        <tr><td>Documentos largos (contratos, sentencias)</td><td>Encoder ModernBERT con 8k tokens</td><td>Evita trocear en ventanas de 512</td></tr>
+        <tr><td>Clasificación con pocas o ninguna etiqueta</td><td>LLM con prompt (y luego destilar a un encoder)</td><td>Zero-shot; el encoder abarata la inferencia masiva</td></tr>
+        <tr><td>Generación, chat, razonamiento</td><td>LLM causal</td><td>Requiere decodificación autoregresiva</td></tr>
       </tbody>
     </table>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Elegir encoder</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Fine-tune con Trainer v5</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Calibrar umbral</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Inferencia batch</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Filtro de datos o servicio</div>
+    </div>
+    <p>El patrón de filtro es el de FineWeb-Edu y JQL: un modelo caro (LLM o anotadores humanos) etiqueta una muestra, un encoder aprende esas etiquetas y luego puntúa el corpus entero. Las secciones 4, 5 y 8 son exactamente esas piezas; para el pipeline completo ve las guías de <a href="fineweb-edu.html">FineWeb-Edu</a> y <a href="filtrado.html">filtrado de calidad</a>.</p>
   </div>
 
-  <!-- 2. Modelos disponibles -->
+  <!-- 2. Panorama -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-list"></i>2. Modelos disponibles para es/pt</h2>
+    <div class="section-title"><i class="ti ti-list-details" aria-hidden="true"></i>2. Panorama 2026: qué encoder usar para es/pt</div>
+    <p>Desde fines de 2024 la arquitectura ModernBERT (RoPE, atención local/global alternada, unpadding y FlashAttention, contexto de 8.192 tokens) se volvió la base de la mayoría de los encoders nuevos. Sobre ella aparecieron mmBERT (multilingüe, más de 1.800 idiomas) y variantes monolingües modernas para español (MrBERT-es, del BSC) y portugués (BERTomelo, de la UnB). BETO, BERTimbau y XLM-R quedan como <strong>línea base</strong>: siguen siendo fuertes y conviene compararlos siempre.</p>
 
     <table class="model-table">
-      <thead><tr><th>Modelo</th><th>Idioma</th><th>HuggingFace ID</th></tr></thead>
+      <thead><tr><th>Modelo</th><th>HF id</th><th>Idiomas</th><th>Params</th><th>Contexto</th><th>Licencia</th></tr></thead>
       <tbody>
-        <tr><td>BETO</td><td>Español</td><td>dccuchile/bert-base-spanish-wwm-cased</td></tr>
-        <tr><td>RoBERTa-BNE</td><td>Español</td><td>PlanTL-GOB-ES/roberta-base-bne</td></tr>
-        <tr><td>BERTimbau base</td><td>Portugués</td><td>neuralmind/bert-base-portuguese-cased</td></tr>
-        <tr><td>BERTimbau large</td><td>Portugués</td><td>neuralmind/bert-large-portuguese-cased</td></tr>
-        <tr><td>XLM-R large</td><td>Multilingüe (100 idiomas)</td><td>FacebookAI/xlm-roberta-large</td></tr>
-        <tr><td>mBERT</td><td>Multilingüe (104 idiomas)</td><td>google-bert/bert-base-multilingual-cased</td></tr>
+        <tr><td>BETO</td><td>dccuchile/bert-base-spanish-wwm-cased</td><td>es</td><td>~110M</td><td>512</td><td>CC BY 4.0 (con salvedades)</td></tr>
+        <tr><td>BERTimbau base / large</td><td>neuralmind/bert-base-portuguese-cased, neuralmind/bert-large-portuguese-cased</td><td>pt-BR</td><td>~110M / ~335M</td><td>512</td><td>MIT</td></tr>
+        <tr><td>XLM-R base</td><td>FacebookAI/xlm-roberta-base</td><td>100 idiomas</td><td>279M</td><td>512</td><td>MIT</td></tr>
+        <tr><td>ModernBERT base</td><td>answerdotai/ModernBERT-base</td><td>inglés y código</td><td>150M</td><td>8.192</td><td>Apache 2.0</td></tr>
+        <tr><td>mmBERT small / base</td><td>jhu-clsp/mmBERT-small, jhu-clsp/mmBERT-base</td><td>1.800+ idiomas</td><td>140M / 307M</td><td>8.192</td><td>MIT</td></tr>
+        <tr><td>EuroBERT 210m</td><td>EuroBERT/EuroBERT-210m</td><td>15 idiomas (incluye es y pt)</td><td>210M</td><td>8.192</td><td>Apache 2.0</td></tr>
+        <tr><td>MrBERT-es</td><td>BSC-LT/MrBERT-es</td><td>es + en</td><td>150M</td><td>8.192</td><td>Apache 2.0</td></tr>
+        <tr><td>BERTomelo base / large</td><td>unb-labia/BERTomelo-ModernBERT-Base-v1, unb-labia/BERTomelo-ModernBERT-Large-v1</td><td>pt</td><td>136M / 377M</td><td>1.024</td><td>Apache 2.0</td></tr>
       </tbody>
     </table>
 
-    <div class="tip"><strong>¿Cuál elegir?</strong> Para español: RoBERTa-BNE suele superar a BETO en la mayoría de benchmarks modernos. Para portugués: BERTimbau-large. Para proyectos que requieren ambos idiomas: XLM-R large.</div>
+    <div class="tip"><strong>¿Cuál elegir?</strong> Para un solo modelo que cubra español y portugués (y variantes regionales con poco dato), empieza con <code>jhu-clsp/mmBERT-base</code>; si el throughput manda, <code>mmBERT-small</code>. Para español puro prueba <code>BSC-LT/MrBERT-es</code>; para portugués, <code>BERTomelo</code> y BERTimbau. EuroBERT es la alternativa multilingüe con tokenizer tipo Llama. NeoBERT y Ettin (encoders de 2025) son solo inglés: útiles como referencia de arquitectura, no para es/pt.</div>
+
+    <div class="warn"><strong>Ojo con RoBERTa-BNE:</strong> la model card de <code>PlanTL-GOB-ES/roberta-base-bne</code> lo marca como deprecado (los modelos del PlanTL migraron al BSC). Sigue descargándose y sirve como baseline histórico en un benchmark, pero no lo uses como default de un proyecto nuevo. Y BERTomelo tiene contexto de <strong>1.024 tokens</strong>, no 8k: aunque usa la arquitectura ModernBERT, fue preentrenado con secuencias cortas.</div>
   </div>
 
-  <!-- 3. Clasificación de texto -->
+  <!-- 3. Setup -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-tags"></i>3. Fine-tuning para clasificación</h2>
+    <div class="section-title"><i class="ti ti-server" aria-hidden="true"></i>3. Entorno y hardware</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">python -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -U "transformers&gt;=5.0" "datasets&gt;=5.0" accelerate scikit-learn seqeval
+# Opcional, solo GPUs Ampere o superiores (A100, L4, H100, RTX 30xx/40xx):
+pip install flash-attn --no-build-isolation</code></pre>
+    </div>
+
+    <table class="model-table">
+      <thead><tr><th>Experimento</th><th>GPU sugerida</th><th>Tiempo orientativo</th></tr></thead>
+      <tbody>
+        <tr><td>Sentimiento (1,8k tweets, sección 4)</td><td>Cualquier GPU de 16 GB</td><td>2-5 min por modelo</td></tr>
+        <tr><td>Toxicidad (5k ejemplos, sección 5)</td><td>Cualquier GPU de 16 GB</td><td>5-10 min</td></tr>
+        <tr><td>NER WikiANN es o pt (20k oraciones, sección 6)</td><td>L4 / A10 de 24 GB</td><td>10-25 min</td></tr>
+        <tr><td>Contexto de 8k (sección 7)</td><td>A100 40-80 GB, o L4 24 GB con batch 1-2 y gradient checkpointing</td><td>Depende del corpus</td></tr>
+        <tr><td>Benchmark de 7 encoders (sección 9)</td><td>L4 / A10 de 24 GB</td><td>~1 h</td></tr>
+      </tbody>
+    </table>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> en una T4 gratuita de Colab (16 GB, sin soporte bf16 ni FlashAttention 2) usa <code>mmBERT-small</code> o BETO, reemplaza <code>bf16=True</code> por <code>fp16=True</code> y baja <code>max_length</code> a 256. Las tareas de las secciones 4 a 6 corren completas en esa configuración.</div>
+  </div>
+
+  <!-- 4. Clasificación -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-tags" aria-hidden="true"></i>4. Clasificación de sentimiento en español y portugués</div>
+    <p>Usamos <code>cardiffnlp/tweet_sentiment_multilingual</code> (negativo/neutro/positivo, splits en español y portugués). Su loading script ya no corre con datasets 4.x/5.x (se eliminaron los loading scripts), así que se cargan directamente los <code>.jsonl</code> vía <code>hf://</code>. La etiqueta viene como string (<code>"0"</code>, <code>"1"</code>, <code>"2"</code>) y hay que convertirla a entero.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — clasificacion.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from datasets import load_dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    TrainingArguments,
-    Trainer,
-    DataCollatorWithPadding,
-)
-import evaluate
-import numpy as np
+      <pre><code class="language-python">import numpy as np
+from datasets import load_dataset
+from sklearn.metrics import accuracy_score, f1_score
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          DataCollatorWithPadding, Trainer, TrainingArguments)
 
-MODEL_NAME = "PlanTL-GOB-ES/roberta-base-bne"
+MODEL_ID = "jhu-clsp/mmBERT-base"   # o BSC-LT/MrBERT-es, dccuchile/bert-base-spanish-wwm-cased...
+LANG = "spanish"                    # "portuguese" para pt-BR
+BASE = f"hf://datasets/cardiffnlp/tweet_sentiment_multilingual/data/{LANG}"
 LABELS = ["negativo", "neutro", "positivo"]
 
-# Cargar datos y tokenizador
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-dataset = load_dataset("json", data_files={"train": "data/train.jsonl", "validation": "data/val.jsonl"})
+ds = load_dataset("json", data_files={s: f"{BASE}/{s}.jsonl" for s in ["train", "validation", "test"]})
+ds = ds.map(lambda ex: {"label": int(ex["label"])})   # "0"/"1"/"2" -&gt; 0/1/2
 
-def tokenize(examples):
-    return tokenizer(examples["text"], truncation=True, max_length=512)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 
-tokenized = dataset.map(tokenize, batched=True)
+def tokenize(batch):
+    return tokenizer(batch["text"], truncation=True, max_length=256)
 
-# Modelo
+ds = ds.map(tokenize, batched=True, remove_columns=["text"])
+
 model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME,
+    MODEL_ID,
     num_labels=len(LABELS),
-    id2label={i: l for i, l in enumerate(LABELS)},
+    id2label=dict(enumerate(LABELS)),
     label2id={l: i for i, l in enumerate(LABELS)},
 )
-
-# Métricas
-accuracy = evaluate.load("accuracy")
-f1 = evaluate.load("f1")
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
     return {
-        "accuracy": accuracy.compute(predictions=preds, references=labels)["accuracy"],
-        "f1_macro": f1.compute(predictions=preds, references=labels, average="macro")["f1"],
+        "accuracy": accuracy_score(labels, preds),
+        "f1_macro": f1_score(labels, preds, average="macro"),
     }
 
-# Training
 args = TrainingArguments(
-    output_dir="models/clasificador-sentimiento",
-    learning_rate=2e-5,
-    per_device_train_batch_size=32,
-    per_device_eval_batch_size=64,
-    num_train_epochs=3,
-    weight_decay=0.01,
-    evaluation_strategy="epoch",
-    save_strategy="epoch",
-    load_best_model_at_end=True,
-    metric_for_best_model="f1_macro",
-    report_to="wandb",
+    output_dir=f"models/sentimiento-{LANG}",
+    learning_rate=5e-5,              # ModernBERT/mmBERT toleran 3e-5 a 8e-5; BETO/BERTimbau, 2e-5 a 5e-5
+    per_device_train_batch_size=32, per_device_eval_batch_size=64,
+    num_train_epochs=5, weight_decay=0.01,
+    warmup_steps=0.1,                # v5: un float &lt; 1 se interpreta como fracción (reemplaza warmup_ratio)
+    eval_strategy="epoch", save_strategy="epoch", save_total_limit=1,
+    load_best_model_at_end=True, metric_for_best_model="f1_macro",
+    bf16=True,                       # fp16=True en T4/V100
+    logging_steps=20, report_to="none", seed=42,
 )
 
 trainer = Trainer(
     model=model,
     args=args,
-    train_dataset=tokenized["train"],
-    eval_dataset=tokenized["validation"],
-    tokenizer=tokenizer,
+    train_dataset=ds["train"],
+    eval_dataset=ds["validation"],
+    processing_class=tokenizer,      # en v5 ya no existe tokenizer=
     data_collator=DataCollatorWithPadding(tokenizer),
     compute_metrics=compute_metrics,
 )
-
 trainer.train()
-trainer.save_model("models/clasificador-sentimiento/best")</code></pre>
+print(trainer.evaluate(ds["test"], metric_key_prefix="test"))
+trainer.save_model(f"models/sentimiento-{LANG}/best")   # guarda también el tokenizer</code></pre>
     </div>
+
+    <div class="warn"><strong>Ángulo Latam:</strong> el split en español de este dataset es pequeño (~1,8k tweets de entrenamiento) y no está balanceado por país. Úsalo para comparar encoders, pero antes de producción agrega ejemplos propios de Chile, Argentina, México o Brasil: el voseo, los modismos y la ironía local son justamente donde los modelos fallan. Con un dataset tan chico, reporta la media de 3 semillas, no una sola corrida.</div>
   </div>
 
-  <!-- 4. NER -->
+  <!-- 5. Toxicidad -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-highlight"></i>4. Fine-tuning para NER</h2>
-    <p>NER es token-level classification. El desafío principal es alinear las etiquetas (por palabra) con los subwords del tokenizador.</p>
+    <div class="section-title"><i class="ti ti-shield-check" aria-hidden="true"></i>5. Clasificador de toxicidad con umbral calibrado</div>
+    <p>Un clasificador binario de toxicidad es la pieza típica de un filtro de datos. <code>textdetox/multilingual_toxicity_dataset</code> trae 5.000 ejemplos en español (columnas <code>text</code> y <code>toxic</code>) en un único split <code>es</code>, así que hacemos un 70/15/15 estratificado. La clave no es el argmax: elegimos el umbral en validación según el costo de cada error y lo guardamos junto al modelo.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — toxicidad.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import numpy as np
+from datasets import ClassLabel, DatasetDict, load_dataset
+from sklearn.metrics import classification_report, f1_score
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          DataCollatorWithPadding, Trainer, TrainingArguments)
+
+MODEL_ID = "BSC-LT/MrBERT-es"
+OUT = "models/toxicidad-es"
+
+raw = load_dataset("textdetox/multilingual_toxicity_dataset", split="es")
+raw = raw.rename_column("toxic", "label")
+raw = raw.cast_column("label", ClassLabel(names=["no_toxico", "toxico"]))
+split = raw.train_test_split(test_size=0.3, seed=42, stratify_by_column="label")
+held = split["test"].train_test_split(test_size=0.5, seed=42, stratify_by_column="label")
+ds = DatasetDict(train=split["train"], validation=held["train"], test=held["test"])
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+ds = ds.map(lambda b: tokenizer(b["text"], truncation=True, max_length=256),
+            batched=True, remove_columns=["text"])
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_ID, num_labels=2,
+    id2label={0: "no_toxico", 1: "toxico"}, label2id={"no_toxico": 0, "toxico": 1},
+)
+args = TrainingArguments(
+    output_dir=OUT, learning_rate=5e-5, num_train_epochs=4, warmup_steps=0.1,
+    per_device_train_batch_size=32, per_device_eval_batch_size=64,
+    eval_strategy="epoch", save_strategy="no", bf16=True, report_to="none", seed=42,
+)
+trainer = Trainer(model=model, args=args, train_dataset=ds["train"],
+                  eval_dataset=ds["validation"], processing_class=tokenizer,
+                  data_collator=DataCollatorWithPadding(tokenizer))
+trainer.train()
+
+def toxic_probs(split_ds):
+    logits = trainer.predict(split_ds).predictions
+    z = np.exp(logits - logits.max(axis=1, keepdims=True))
+    return (z / z.sum(axis=1, keepdims=True))[:, 1]
+
+# Elegir umbral en validación (aquí maximizando F1; para filtrar pretraining
+# suele preferirse alta precisión sobre la clase "no tóxico")
+p_val, y_val = toxic_probs(ds["validation"]), np.array(ds["validation"]["label"])
+grid = np.linspace(0.05, 0.95, 91)
+best_thr = max(grid, key=lambda t: f1_score(y_val, (p_val &gt;= t).astype(int)))
+
+p_test, y_test = toxic_probs(ds["test"]), np.array(ds["test"]["label"])
+print(f"Umbral elegido: {best_thr:.2f}")
+print(classification_report(y_test, (p_test &gt;= best_thr).astype(int),
+                            target_names=["no_toxico", "toxico"], digits=3))
+
+trainer.save_model(OUT)
+with open(f"{OUT}/threshold.json", "w", encoding="utf-8") as f:
+    json.dump({"threshold": float(best_thr)}, f)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Portugués y vocabulario local:</strong> este dataset no tiene split en portugués; para pt-BR necesitas otro corpus (por ejemplo ToLD-Br) o anotación propia, y el insulto rioplatense, chileno o brasileño rara vez aparece en datasets genéricos. Para una cobertura completa de daño (no solo toxicidad léxica) y guardrails en serving, sigue con la guía de <a href="guardrails-produccion-vllm.html">guardrails en producción</a>.</div>
+  </div>
+
+  <!-- 6. NER -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-highlight" aria-hidden="true"></i>6. NER con WikiANN en español y portugués</div>
+    <p>NER es clasificación a nivel de token. <code>unimelb-nlp/wikiann</code> trae configuraciones <code>es</code> y <code>pt</code> en parquet (20k/10k/10k oraciones) con etiquetas BIO de PER, ORG y LOC. El desafío es alinear la etiqueta de cada palabra con los subwords: solo el primer subword recibe la etiqueta real y el resto, <code>-100</code>, para que el loss lo ignore.</p>
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — ner.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, Trainer, DataCollatorForTokenClassification
+      <pre><code class="language-python">import numpy as np
 from datasets import load_dataset
-import evaluate
-import numpy as np
+from seqeval.metrics import f1_score, precision_score, recall_score
+from transformers import (AutoModelForTokenClassification, AutoTokenizer,
+                          DataCollatorForTokenClassification, Trainer, TrainingArguments)
 
-MODEL_NAME = "dccuchile/bert-base-spanish-wwm-cased"
-LABEL_LIST = ["O", "B-PER", "I-PER", "B-ORG", "I-ORG", "B-LOC", "I-LOC"]
-label2id = {l: i for i, l in enumerate(LABEL_LIST)}
-id2label = {i: l for i, l in enumerate(LABEL_LIST)}
+LANG = "es"   # "pt"
+MODEL_ID = {"es": "dccuchile/bert-base-spanish-wwm-cased",      # baseline BETO
+            "pt": "neuralmind/bert-base-portuguese-cased"}[LANG]  # baseline BERTimbau
+# Para comparar: MODEL_ID = "jhu-clsp/mmBERT-base"
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-seqeval = evaluate.load("seqeval")
+ds = load_dataset("unimelb-nlp/wikiann", LANG)
+label_list = ds["train"].features["ner_tags"].feature.names   # O, B-PER, I-PER, B-ORG, ...
+id2label = dict(enumerate(label_list))
+label2id = {l: i for i, l in id2label.items()}
 
+# Los tokenizers BPE byte-level (p. ej. RoBERTa-BNE) necesitan add_prefix_space=True;
+# BERT WordPiece y XLM-R (SentencePiece) no. Con otros BPE byte-level (EuroBERT, ModernBERT
+# original) revisa a mano cómo quedan las palabras sueltas antes de comparar F1
+tok_kwargs = {"add_prefix_space": True} if "roberta-base-bne" in MODEL_ID else {}
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, **tok_kwargs)
 
-def tokenize_and_align_labels(examples):
-    """Alinea etiquetas NER con subwords del tokenizador."""
-    tokenized_inputs = tokenizer(
-        examples["tokens"],
-        truncation=True,
-        is_split_into_words=True,  # importante para NER
-    )
-    labels = []
-    for i, label in enumerate(examples["ner_tags"]):
-        word_ids = tokenized_inputs.word_ids(batch_index=i)
-        previous_word_idx = None
-        label_ids = []
-        for word_idx in word_ids:
-            if word_idx is None:
-                label_ids.append(-100)  # tokens especiales [CLS], [SEP], padding
-            elif word_idx != previous_word_idx:
-                label_ids.append(label[word_idx])  # primer subword → etiqueta real
+def tokenize_and_align(batch):
+    enc = tokenizer(batch["tokens"], truncation=True, max_length=256, is_split_into_words=True)
+    all_labels = []
+    for i, tags in enumerate(batch["ner_tags"]):
+        prev, ids = None, []
+        for w in enc.word_ids(batch_index=i):
+            if w is None:
+                ids.append(-100)          # tokens especiales
+            elif w != prev:
+                ids.append(tags[w])       # primer subword de la palabra
             else:
-                label_ids.append(-100)  # subwords subsecuentes → ignorar en loss
-            previous_word_idx = word_idx
-        labels.append(label_ids)
-    tokenized_inputs["labels"] = labels
-    return tokenized_inputs
+                ids.append(-100)          # subwords siguientes
+            prev = w
+        all_labels.append(ids)
+    enc["labels"] = all_labels
+    return enc
 
+tokenized = ds.map(tokenize_and_align, batched=True, remove_columns=ds["train"].column_names)
 
 def compute_metrics(p):
-    predictions, labels = p
-    predictions = np.argmax(predictions, axis=2)
-    true_preds = [[id2label[p] for (p, l) in zip(pred, label) if l != -100]
-                  for pred, label in zip(predictions, labels)]
-    true_labels = [[id2label[l] for (p, l) in zip(pred, label) if l != -100]
-                   for pred, label in zip(predictions, labels)]
-    results = seqeval.compute(predictions=true_preds, references=true_labels)
-    return {"f1": results["overall_f1"], "precision": results["overall_precision"],
-            "recall": results["overall_recall"]}
-
-
-# Cargar dataset NER (formato CoNLL)
-dataset = load_dataset("json", data_files={"train": "data/ner_train.jsonl", "validation": "data/ner_val.jsonl"})
-tokenized_dataset = dataset.map(tokenize_and_align_labels, batched=True)
+    preds = np.argmax(p.predictions, axis=-1)
+    y_true, y_pred = [], []
+    for pr, lab in zip(preds, p.label_ids):
+        keep = lab != -100
+        y_true.append([id2label[int(x)] for x in lab[keep]])
+        y_pred.append([id2label[int(x)] for x in pr[keep]])
+    return {"precision": precision_score(y_true, y_pred),
+            "recall": recall_score(y_true, y_pred),
+            "f1": f1_score(y_true, y_pred)}
 
 model = AutoModelForTokenClassification.from_pretrained(
-    MODEL_NAME, num_labels=len(LABEL_LIST), id2label=id2label, label2id=label2id
-)
+    MODEL_ID, num_labels=len(label_list), id2label=id2label, label2id=label2id)
 
 trainer = Trainer(
     model=model,
-    args=TrainingArguments(output_dir="models/ner-es", learning_rate=2e-5, num_train_epochs=5,
-                           per_device_train_batch_size=16, evaluation_strategy="epoch"),
-    train_dataset=tokenized_dataset["train"],
-    eval_dataset=tokenized_dataset["validation"],
-    tokenizer=tokenizer,
+    args=TrainingArguments(
+        output_dir=f"models/ner-{LANG}", learning_rate=3e-5, num_train_epochs=3,
+        per_device_train_batch_size=32, per_device_eval_batch_size=64, warmup_steps=0.1,
+        eval_strategy="epoch", save_strategy="epoch", save_total_limit=1,
+        load_best_model_at_end=True, metric_for_best_model="f1",
+        bf16=True, report_to="none"),
+    train_dataset=tokenized["train"],
+    eval_dataset=tokenized["validation"],
+    processing_class=tokenizer,
     data_collator=DataCollatorForTokenClassification(tokenizer),
     compute_metrics=compute_metrics,
 )
-trainer.train()</code></pre>
+trainer.train()
+print(trainer.evaluate(tokenized["test"], metric_key_prefix="test"))
+trainer.save_model(f"models/ner-{LANG}/best")</code></pre>
     </div>
 
-    <div class="tip"><strong>Sobre la alineación de etiquetas:</strong> En NER con BIO tagging, solo el <em>primer subword</em> de cada palabra recibe la etiqueta real. Los subwords subsecuentes reciben <code>-100</code> para que el loss los ignore. Esto es crítico: sin esta alineación correcta, el modelo no converge bien.</div>
+    <div class="tip"><strong>Más allá de WikiANN:</strong> las etiquetas de WikiANN se generaron automáticamente desde enlaces de Wikipedia, así que sirven para comparar modelos, no como techo de calidad. Para dominios reales (legal, salud, prensa local) evalúa en un set anotado a mano; la model card de BERTomelo, por ejemplo, reporta resultados en LeNER-Br (NER legal en portugués).</div>
   </div>
 
-  <!-- 5. Inferencia -->
+  <!-- 7. Contexto largo -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-player-play"></i>5. Inferencia: pipeline simplificado y batch</h2>
+    <div class="section-title"><i class="ti ti-file-text" aria-hidden="true"></i>7. Documentos largos: 8k tokens con FlashAttention 2</div>
+    <p>BETO y BERTimbau truncan a 512 tokens, lo que obliga a trocear contratos o sentencias en ventanas y agregar logits. mmBERT, MrBERT-es, EuroBERT y ModernBERT aceptan 8.192 tokens. En la arquitectura ModernBERT dos de cada tres capas usan atención local (ventana de 128 tokens), lo que mantiene el costo bajo control; <code>attn_implementation="flash_attention_2"</code> aprovecha esa ventana deslizante con kernels eficientes. Si pides <code>flash_attention_2</code> sin tener <code>flash-attn</code> instalado, la carga falla: omite el argumento para usar SDPA (el default), que funciona pero es más lento y gasta más memoria a 8k. El unpadding del paper original de ModernBERT no es lo que ganas aquí: el beneficio práctico es la atención local más FA2, y ordenar o agrupar por largo para reducir padding.</p>
 
-    <h3 class="sub-title">Versión simple — pipeline API</h3>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — long_context.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          DataCollatorWithPadding, Trainer, TrainingArguments)
+
+MODEL_ID = "jhu-clsp/mmBERT-base"   # o BSC-LT/MrBERT-es para español
+MAX_LEN = 8192
+# JSONL propio: {"text": "&lt;sentencia completa&gt;", "label": 0..N-1}
+ds = load_dataset("json", data_files={"train": "data/legal_train.jsonl",
+                                      "validation": "data/legal_val.jsonl"})
+num_labels = len(set(ds["train"]["label"]))
+
+tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+ds = ds.map(lambda b: tokenizer(b["text"], truncation=True, max_length=MAX_LEN),
+            batched=True, remove_columns=["text"])
+
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_ID,
+    num_labels=num_labels,
+    attn_implementation="flash_attention_2",   # requiere flash-attn y GPU Ampere+
+)
+
+args = TrainingArguments(
+    output_dir="models/legal-8k",
+    per_device_train_batch_size=2,
+    gradient_accumulation_steps=8,     # batch efectivo de 16 documentos
+    gradient_checkpointing=True,       # cambia cómputo por memoria
+    learning_rate=3e-5, num_train_epochs=3, warmup_steps=0.1,
+    bf16=True,                         # FA2 corre en bf16 bajo autocast
+    eval_strategy="epoch", save_strategy="epoch", save_total_limit=1, report_to="none",
+)
+Trainer(model=model, args=args, train_dataset=ds["train"], eval_dataset=ds["validation"],
+        processing_class=tokenizer, data_collator=DataCollatorWithPadding(tokenizer)).train()</code></pre>
+    </div>
+
+    <div class="warn"><strong>Memoria:</strong> con 8k tokens, batch 2 y gradient checkpointing, un modelo base cabe en una L4 de 24 GB; sin checkpointing apunta a 40-80 GB. Antes de pagar contexto largo, mide cuántos de tus documentos superan realmente 512 o 1.024 tokens: si son pocos, truncar o trocear con un encoder más chico puede ser más barato con igual F1.</div>
+  </div>
+
+  <!-- 8. Inferencia batch -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-player-play" aria-hidden="true"></i>8. Inferencia batch y throughput</div>
+    <p>Para unos cientos de textos basta el <code>pipeline</code>. Para millones (filtros de corpus) conviene un loop propio: ordenar por largo para minimizar padding, <code>torch.inference_mode()</code>, pesos en bf16 y batches grandes.</p>
+
+    <div class="sub-title">Versión simple: pipeline</div>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — inferencia_simple.py</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from transformers import pipeline
 
-# Clasificación
-clf = pipeline(
-    "text-classification",
-    model="models/clasificador-sentimiento/best",
-    device=0,         # GPU 0; -1 para CPU
-    top_k=None,       # devuelve scores para todas las clases
-)
+clf = pipeline("text-classification", model="models/sentimiento-spanish/best", device=0, top_k=None)
+for r in clf(["La atención fue impecable, vuelvo seguro.", "Pésimo, nunca más."], batch_size=32):
+    print(r)
 
-textos = [
-    "El servicio fue excelente, volvería sin duda.",
-    "Pésima atención, nunca más vuelvo.",
-    "El producto llegó a tiempo.",
-]
-for resultado in clf(textos, batch_size=32):
-    print(resultado)
-# [{'label': 'positivo', 'score': 0.97}, ...]
-
-# NER
-ner = pipeline(
-    "token-classification",
-    model="models/ner-es",
-    aggregation_strategy="simple",  # agrupa tokens del mismo span
-    device=0,
-)
-entities = ner("María González trabaja en Google Chile desde 2021.")
-for ent in entities:
-    print(f"{ent['word']:20s} {ent['entity_group']:6s} {ent['score']:.2f}")</code></pre>
+ner = pipeline("token-classification", model="models/ner-es/best",
+               aggregation_strategy="simple", device=0)
+for ent in ner("Gabriela Mistral nació en Vicuña y trabajó en la Universidad de Chile."):
+    print(f"{ent['word']:25s} {ent['entity_group']:4s} {ent['score']:.2f}")</code></pre>
     </div>
 
-    <h3 class="sub-title">Versión batch manual (mayor control)</h3>
+    <div class="sub-title">Versión batch con medición de throughput</div>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — inferencia_batch.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import torch
-from torch.utils.data import DataLoader, Dataset
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+      <pre><code class="language-python">import json
+import time
+import torch
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-MODEL_PATH = "models/clasificador-sentimiento/best"
-BATCH_SIZE = 64
+MODEL_DIR = "models/sentimiento-spanish/best"
+BATCH_SIZE, MAX_LEN = 128, 512
+device = "cuda" if torch.cuda.is_available() else "cpu"
+dtype = torch.bfloat16 if device == "cuda" else torch.float32
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
-model.eval().cuda()
-
+tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
+model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR, dtype=dtype).to(device).eval()
 id2label = model.config.id2label
 
+@torch.inference_mode()
+def classify(texts: list[str]) -&gt; list[dict]:
+    order = sorted(range(len(texts)), key=lambda i: len(texts[i]))   # menos padding
+    out: list[dict] = [{} for _ in texts]
+    for start in range(0, len(order), BATCH_SIZE):
+        idx = order[start:start + BATCH_SIZE]
+        enc = tokenizer([texts[i] for i in idx], truncation=True, max_length=MAX_LEN,
+                        padding=True, return_tensors="pt").to(device)
+        probs = model(**enc).logits.float().softmax(dim=-1)
+        conf, pred = probs.max(dim=-1)
+        for i, p, c in zip(idx, pred.tolist(), conf.tolist()):
+            out[i] = {"label": id2label[p], "score": round(c, 4)}
+    return out
 
-class TextDataset(Dataset):
-    def __init__(self, texts):
-        self.texts = texts
+with open("data/textos.txt", encoding="utf-8") as f:
+    texts = [line.strip() for line in f if line.strip()]
 
-    def __len__(self):
-        return len(self.texts)
+t0 = time.perf_counter()
+preds = classify(texts)
+if device == "cuda":
+    torch.cuda.synchronize()
+elapsed = time.perf_counter() - t0
+print(f"{len(texts) / elapsed:,.0f} textos/s en {device}")
 
-    def __getitem__(self, idx):
-        return self.texts[idx]
+with open("data/predicciones.jsonl", "w", encoding="utf-8") as f:
+    for t, p in zip(texts, preds):
+        f.write(json.dumps({"text": t, **p}, ensure_ascii=False) + "\n")</code></pre>
+    </div>
 
-
-def collate(batch):
-    return tokenizer(batch, truncation=True, max_length=512,
-                     padding=True, return_tensors="pt")
-
-
-texts = open("data/textos_a_clasificar.txt").read().splitlines()
-loader = DataLoader(TextDataset(texts), batch_size=BATCH_SIZE, collate_fn=collate)
-
-all_preds, all_probs = [], []
-with torch.no_grad():
-    for batch in loader:
-        batch = {k: v.cuda() for k, v in batch.items()}
-        logits = model(**batch).logits
-        probs  = torch.softmax(logits, dim=-1)
-        preds  = probs.argmax(dim=-1)
-        all_preds.extend([id2label[p.item()] for p in preds])
-        all_probs.extend(probs.max(dim=-1).values.tolist())
-
-for text, pred, prob in zip(texts[:5], all_preds[:5], all_probs[:5]):
-    print(f"{pred} ({prob:.2f}) — {text[:60]}")</code></pre>
+    <div class="sub-title">Multi-GPU</div>
+    <p>Los scripts con <code>Trainer</code> de las secciones 4 a 7 escalan a varias GPUs sin cambios (DDP); basta lanzarlos con <code>accelerate</code> o <code>torchrun</code>. Para inferencia sobre un corpus completo, lo más simple es partir los archivos en shards y correr un proceso independiente por GPU, como en la guía de <a href="fineweb-edu.html">FineWeb-Edu</a>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">accelerate launch --num_processes 4 --mixed_precision bf16 clasificacion.py
+# equivalente:
+torchrun --nproc_per_node 4 clasificacion.py</code></pre>
     </div>
   </div>
 
-  <!-- 6. Accelerate multi-GPU -->
+  <!-- 9. Benchmark -->
   <div class="guide-section">
-    <h2 class="section-title"><i class="ti ti-cpu"></i>6. Entrenamiento distribuido con Accelerate</h2>
-    <p>Para datasets grandes o modelos más grandes (BERT-large, XLM-R-large), el Trainer de HuggingFace puede ser demasiado opaco. Con Accelerate tienes control total sobre el training loop y escala a múltiples GPUs sin cambiar el código.</p>
+    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>9. Benchmark comparativo: baseline vs encoders modernos</div>
+    <p>La decisión final siempre es empírica: misma tarea, mismos hiperparámetros, varias semillas, y dos métricas, F1 macro y textos por segundo. Este script entrena cada encoder sobre el sentimiento de la sección 4 y reporta ambas. Es autocontenido (repite la carga de datos de la sección 4).</p>
 
     <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">bash — configurar accelerate</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-bash">accelerate config   # responde las preguntas: cuántas GPUs, mixed precision, etc.
-# O pasar config directamente:
-accelerate launch --num_processes 4 --mixed_precision bf16 bert_accelerate.py</code></pre>
-    </div>
-
-    <div class="code-block">
-      <div class="code-toolbar"><span class="code-lang">python — bert_accelerate.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import torch
-from torch.optim import AdamW
-from torch.utils.data import DataLoader
-from transformers import (
-    AutoTokenizer, AutoModelForSequenceClassification,
-    get_cosine_schedule_with_warmup,
-)
-from accelerate import Accelerator
+      <div class="code-toolbar"><span class="code-lang">python — benchmark_encoders.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import time
+import numpy as np
+import torch
 from datasets import load_dataset
-import evaluate
+from sklearn.metrics import f1_score
+from transformers import (AutoModelForSequenceClassification, AutoTokenizer,
+                          DataCollatorWithPadding, Trainer, TrainingArguments)
 
-MODEL_NAME  = "FacebookAI/xlm-roberta-large"
-OUTPUT_DIR  = "models/xlmr-clasificador-es"
-NUM_EPOCHS  = 3
-LR          = 2e-5
-BATCH_SIZE  = 16   # por GPU
+LANG = "spanish"   # "portuguese"
+MODELS = {
+    "spanish": ["dccuchile/bert-base-spanish-wwm-cased", "PlanTL-GOB-ES/roberta-base-bne",
+                "FacebookAI/xlm-roberta-base", "jhu-clsp/mmBERT-small", "jhu-clsp/mmBERT-base",
+                "BSC-LT/MrBERT-es", "EuroBERT/EuroBERT-210m"],
+    "portuguese": ["neuralmind/bert-base-portuguese-cased", "FacebookAI/xlm-roberta-base",
+                   "jhu-clsp/mmBERT-small", "jhu-clsp/mmBERT-base",
+                   "unb-labia/BERTomelo-ModernBERT-Base-v1", "EuroBERT/EuroBERT-210m"],
+}[LANG]
+SEEDS = [13, 42, 2026]
+BASE = f"hf://datasets/cardiffnlp/tweet_sentiment_multilingual/data/{LANG}"
+raw = load_dataset("json", data_files={s: f"{BASE}/{s}.jsonl" for s in ["train", "validation", "test"]})
+raw = raw.map(lambda ex: {"label": int(ex["label"])})
 
-accelerator = Accelerator(mixed_precision="bf16", log_with="wandb")
-accelerator.init_trackers("bert-es-classification")
+def run(model_id: str, seed: int) -&gt; tuple[float, float]:
+    tok = AutoTokenizer.from_pretrained(model_id)
+    ds = raw.map(lambda b: tok(b["text"], truncation=True, max_length=128), batched=True)
+    model = AutoModelForSequenceClassification.from_pretrained(model_id, num_labels=3)
+    args = TrainingArguments(
+        output_dir="tmp_bench", learning_rate=3e-5, num_train_epochs=4, warmup_steps=0.1,
+        per_device_train_batch_size=32, per_device_eval_batch_size=128,
+        eval_strategy="no", save_strategy="no", bf16=True, report_to="none", seed=seed)
+    trainer = Trainer(model=model, args=args, train_dataset=ds["train"].remove_columns(["text"]),
+                      processing_class=tok, data_collator=DataCollatorWithPadding(tok))
+    trainer.train()
+    test = ds["test"].remove_columns(["text"])
+    preds = trainer.predict(test).predictions.argmax(-1)
+    f1 = f1_score(np.array(test["label"]), preds, average="macro")
+    # Throughput de inferencia pura sobre los textos de test
+    model = trainer.model.to(torch.bfloat16).eval()
+    texts = list(ds["test"]["text"])   # datasets 4+/5 devuelve un objeto Column; lo pasamos a list
+    torch.cuda.synchronize()
+    t0 = time.perf_counter()
+    with torch.inference_mode():
+        for i in range(0, len(texts), 128):
+            enc = tok(texts[i:i + 128], truncation=True, max_length=128,
+                      padding=True, return_tensors="pt").to(model.device)
+            model(**enc)
+    torch.cuda.synchronize()
+    return f1, len(texts) / (time.perf_counter() - t0)
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-
-# Dataset
-raw = load_dataset("json", data_files={"train": "data/train.jsonl", "val": "data/val.jsonl"})
-LABELS = sorted(set(raw["train"]["label"]))
-label2id = {l: i for i, l in enumerate(LABELS)}
-
-def tokenize(ex):
-    enc = tokenizer(ex["text"], truncation=True, max_length=512, padding="max_length")
-    enc["labels"] = label2id[ex["label"]]
-    return enc
-
-tokenized = raw.map(tokenize, remove_columns=raw["train"].column_names)
-tokenized.set_format("torch")
-
-train_loader = DataLoader(tokenized["train"], batch_size=BATCH_SIZE, shuffle=True)
-val_loader   = DataLoader(tokenized["val"],   batch_size=BATCH_SIZE*2)
-
-# Modelo
-model = AutoModelForSequenceClassification.from_pretrained(
-    MODEL_NAME,
-    num_labels=len(LABELS),
-    id2label={i: l for i, l in enumerate(LABELS)},
-    label2id=label2id,
-)
-
-optimizer = AdamW(model.parameters(), lr=LR, weight_decay=0.01)
-num_steps = len(train_loader) * NUM_EPOCHS
-scheduler = get_cosine_schedule_with_warmup(
-    optimizer, num_warmup_steps=int(0.06 * num_steps), num_training_steps=num_steps
-)
-
-# Accelerate se encarga de distribuir en múltiples GPUs
-model, optimizer, train_loader, val_loader, scheduler = accelerator.prepare(
-    model, optimizer, train_loader, val_loader, scheduler
-)
-
-accuracy = evaluate.load("accuracy")
-f1_metric = evaluate.load("f1")
-
-for epoch in range(NUM_EPOCHS):
-    # ── Entrenamiento ──────────────────────────────────────────────────────────
-    model.train()
-    for step, batch in enumerate(train_loader):
-        outputs = model(**batch)
-        loss = outputs.loss
-        accelerator.backward(loss)     # reemplaza loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
-        scheduler.step()
-        optimizer.zero_grad()
-
-        if step % 50 == 0:
-            accelerator.log({"train/loss": loss.item(), "train/lr": scheduler.get_last_lr()[0]})
-
-    # ── Validación ─────────────────────────────────────────────────────────────
-    model.eval()
-    all_preds, all_labels = [], []
-    for batch in val_loader:
-        with torch.no_grad():
-            outputs = model(**batch)
-        preds = outputs.logits.argmax(dim=-1)
-        # gather de todos los procesos antes de evaluar
-        preds, labels = accelerator.gather_for_metrics((preds, batch["labels"]))
-        all_preds.extend(preds.cpu().tolist())
-        all_labels.extend(labels.cpu().tolist())
-
-    acc = accuracy.compute(predictions=all_preds, references=all_labels)["accuracy"]
-    f1  = f1_metric.compute(predictions=all_preds, references=all_labels, average="macro")["f1"]
-    accelerator.log({"val/accuracy": acc, "val/f1_macro": f1}, step=epoch)
-    accelerator.print(f"Epoch {epoch+1}: acc={acc:.3f}, f1={f1:.3f}")
-
-# Guardar solo desde el proceso principal
-accelerator.wait_for_everyone()
-unwrapped = accelerator.unwrap_model(model)
-unwrapped.save_pretrained(OUTPUT_DIR, save_function=accelerator.save)
-tokenizer.save_pretrained(OUTPUT_DIR)</code></pre>
+print("| modelo | F1 macro (media ± std) | textos/s |")
+for mid in MODELS:
+    scores = [run(mid, s) for s in SEEDS]
+    f1s = np.array([s[0] for s in scores])
+    tps = np.mean([s[1] for s in scores])
+    print(f"| {mid} | {f1s.mean():.3f} ± {f1s.std():.3f} | {tps:,.0f} |")</code></pre>
     </div>
 
-    <div class="tip">
-      <strong>Diferencias clave vs Trainer:</strong>
-      <ul style="margin-top:6px;padding-left:18px">
-        <li><code>accelerator.backward(loss)</code> reemplaza <code>loss.backward()</code> — maneja mixed precision automáticamente</li>
-        <li><code>accelerator.gather_for_metrics()</code> recoge predicciones de todas las GPUs antes de calcular métricas</li>
-        <li><code>accelerator.unwrap_model()</code> extrae el modelo real de los wrappers de distribución antes de guardar</li>
-      </ul>
-    </div>
+    <div class="tip"><strong>Cómo leer los resultados:</strong> en tweets (textos cortos) la diferencia de velocidad depende sobre todo del tamaño del modelo y del vocabulario; las ventajas de unpadding y FlashAttention aparecen con textos largos y batches heterogéneos. Si las diferencias de F1 entre dos modelos quedan dentro de la desviación entre semillas, elige el más rápido. Las salvedades estadísticas (intervalos de confianza, test pareados) están en la guía de <a href="evaluacion-latam.html">evaluación para Latam</a>.</div>
+
+    <div class="warn"><strong>EuroBERT y código remoto:</strong> las versiones recientes de transformers v5 incluyen EuroBERT de forma nativa (<code>model_type="eurobert"</code>), así que carga sin <code>trust_remote_code</code>. Si tu versión no lo trae, necesitarás <code>trust_remote_code=True</code> como indica su model card; revisa el código antes de habilitarlo.</div>
   </div>
 
   <div class="sources">
-    <div class="sources-title">Fuentes</div>
+    <div class="sources-title">Referencias</div>
     <div class="source-list">
-      <a class="source-link paper" href="https://arxiv.org/abs/2308.02976" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BETO (Cañete et al., 2020)</a>
-      <a class="source-link paper" href="https://link.springer.com/chapter/10.1007/978-3-030-61377-8_28" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>BERTimbau (Souza et al., 2020)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/1911.02116" target="_blank" rel="noopener"><i class="ti ti-file-text" style="font-size:11px"></i>XLM-R (Conneau et al., 2020)</a>
-      <a class="source-link" href="https://huggingface.co/docs/accelerate" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>Accelerate docs</a>
-      <a class="source-link" href="https://huggingface.co/docs/transformers/tasks/token_classification" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>HF Token Classification Guide</a>
-      <a class="source-link" href="https://github.com/chakki-works/seqeval" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>seqeval</a>
-      <a class="source-link" href="https://huggingface.co/PlanTL-GOB-ES/roberta-base-bne" target="_blank" rel="noopener"><i class="ti ti-external-link" style="font-size:11px"></i>RoBERTa-BNE</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2509.06888" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>mmBERT (Marone et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2412.13663" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>ModernBERT (Warner et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2503.05500" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>EuroBERT (Boizard et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2602.21379" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MrBERT (Tamayo et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2606.28999" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>BERTomelo (Oliveira et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.19587" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>NeoBERT (Le Breton et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2507.11412" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Ettin: Seq vs Seq (Weller et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2308.02976" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>BETO (Cañete et al., 2020)</a>
+      <a class="source-link paper" href="https://link.springer.com/chapter/10.1007/978-3-030-61377-8_28" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>BERTimbau (Souza et al., 2020)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1911.02116" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>XLM-R (Conneau et al., 2020)</a>
+      <a class="source-link" href="https://huggingface.co/blog/mmbert" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>mmBERT (HF blog)</a>
+      <a class="source-link" href="https://github.com/huggingface/transformers/blob/main/MIGRATION_GUIDE_V5.md" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Guía de migración a transformers v5</a>
+      <a class="source-link" href="https://huggingface.co/docs/transformers/tasks/token_classification" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>HF: token classification</a>
+      <a class="source-link" href="https://huggingface.co/jhu-clsp/mmBERT-base" target="_blank" rel="noopener"><i class="ti ti-robot"></i>jhu-clsp/mmBERT-base</a>
+      <a class="source-link" href="https://huggingface.co/BSC-LT/MrBERT-es" target="_blank" rel="noopener"><i class="ti ti-robot"></i>BSC-LT/MrBERT-es</a>
+      <a class="source-link" href="https://huggingface.co/unb-labia/BERTomelo-ModernBERT-Base-v1" target="_blank" rel="noopener"><i class="ti ti-robot"></i>BERTomelo base</a>
+      <a class="source-link" href="https://huggingface.co/datasets/unimelb-nlp/wikiann" target="_blank" rel="noopener"><i class="ti ti-database"></i>WikiANN</a>
+      <a class="source-link" href="https://huggingface.co/datasets/cardiffnlp/tweet_sentiment_multilingual" target="_blank" rel="noopener"><i class="ti ti-database"></i>tweet_sentiment_multilingual</a>
+      <a class="source-link" href="https://huggingface.co/datasets/textdetox/multilingual_toxicity_dataset" target="_blank" rel="noopener"><i class="ti ti-database"></i>TextDetox toxicity</a>
+      <a class="source-link" href="https://github.com/chakki-works/seqeval" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>seqeval</a>
+      <a class="source-link" href="fineweb-edu.html"><i class="ti ti-school"></i>Guía: FineWeb-Edu</a>
+      <a class="source-link" href="filtrado.html"><i class="ti ti-filter"></i>Guía: Filtrado de calidad</a>
+      <a class="source-link" href="guardrails-produccion-vllm.html"><i class="ti ti-shield"></i>Guía: Guardrails con vLLM</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-dots"></i>Guía: Evaluación Latam</a>
     </div>
   </div>
 </main>
 
-<footer>Construido para CENIA · LatamGPT · <a href="../index.html">Hub</a></footer>
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>

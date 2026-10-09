@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Construcción de datasets SFT para Latam — LatamGPT</title>
+<meta name="description" content="Cómo crear datasets de instrucciones SFT en español y portugués latinoamericano con Self-Instruct, Magpie, filtrado de calidad y publicación en Hugging Face Hub.">
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
@@ -70,7 +72,7 @@
 
 <main class="page">
   <div class="guide-header">
-    <div class="breadcrumb">Guías prácticas → Post-training</div>
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
     <h1 class="guide-title">Construcción de datasets SFT para Latam</h1>
     <p class="guide-desc">Cómo crear datasets de instrucciones de alta calidad en español y portugués latinoamericano. Cubre formatos de datos, generación sintética con Self-Instruct y Magpie, traducción verificada, filtrado y publicación en HuggingFace Hub.</p>
   </div>
@@ -116,10 +118,15 @@
 import random
 from openai import OpenAI  # compatible con cualquier API OpenAI-compatible
 
+# Teacher open-weight servido localmente con vLLM:
+#   vllm serve Qwen/Qwen3-30B-A3B-Instruct-2507
+# (Si usas un modelo de OpenAI u otro proveedor, revisa sus términos de uso:
+#  suelen restringir usar sus salidas para entrenar modelos propios.)
 client = OpenAI(
-    api_key="tu-api-key",
-    # base_url="http://localhost:8000/v1",  # usar modelo local con vLLM
+    base_url="http://localhost:8000/v1",
+    api_key="EMPTY",
 )
+TEACHER = "Qwen/Qwen3-30B-A3B-Instruct-2507"
 
 SEED_TASKS = [
     "Explica qué es el FONASA y cómo acceder a él.",
@@ -129,17 +136,18 @@ SEED_TASKS = [
     "Traduce este párrafo al portugués brasileño conservando el registro formal.",
 ]
 
-SYSTEM_PROMPT = """Eres un experto generando instrucciones de entrenamiento en español e
-inglés latinoamericano. Genera 5 instrucciones nuevas, diversas y útiles para un asistente
+SYSTEM_PROMPT = """Eres un experto generando instrucciones de entrenamiento en español y
+portugués latinoamericano. Genera 5 instrucciones nuevas, diversas y útiles para un asistente
 de IA. Las instrucciones deben ser en español rioplatense, mexicano, colombiano, chileno o
-portugués brasileño. Responde solo con JSON, sin texto adicional."""
+portugués brasileño. Responde solo con JSON, sin texto adicional, con exactamente este formato:
+{"instructions": ["instrucción 1", "instrucción 2", "instrucción 3", "instrucción 4", "instrucción 5"]}"""
 
 def generate_instructions(seed_sample: list[str]) -> list[dict]:
     seed_str = "\n".join(f"- {s}" for s in seed_sample)
     prompt = f"Instrucciones de ejemplo:\n{seed_str}\n\nGenera 5 instrucciones nuevas en JSON:"
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=TEACHER,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": prompt},
@@ -153,7 +161,7 @@ def generate_instructions(seed_sample: list[str]) -> list[dict]:
 
 def generate_response(instruction: str) -> str:
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=TEACHER,
         messages=[
             {"role": "system",    "content": "Eres un asistente útil, preciso y culturalmente apropiado para Latinoamérica."},
             {"role": "user",      "content": instruction},
@@ -204,32 +212,31 @@ print(f"Generados {len(all_examples)} ejemplos")</code></pre>
 import torch
 import json
 
-MODEL = "meta-llama/Llama-3.2-8B-Instruct"
+# Modelo gated: acepta la licencia en el Hub y exporta HF_TOKEN
+MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 tokenizer = AutoTokenizer.from_pretrained(MODEL)
-model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.bfloat16, device_map="auto")
+model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.bfloat16, device_map="auto")
+EOT_ID = tokenizer.convert_tokens_to_ids("&lt;|eot_id|&gt;")
 
 
 def extract_user_turn(system_prompt: str = None) -> str:
-    """Genera una instrucción de usuario usando el chat template truncado."""
-    messages = []
+    """Genera una instrucción de usuario usando el pre-query template de Llama 3."""
+    # apply_chat_template(..., add_generation_prompt=True) agregaría el encabezado del
+    # ASISTENTE; Magpie necesita que el prompt termine en el encabezado del USUARIO,
+    # así que construimos el pre-query template a mano.
+    pre = "&lt;|begin_of_text|&gt;"
     if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-    # Aplicar template hasta el punto donde empieza el turno del usuario
-    prompt = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True,
-    )
-    # Para Llama3: el template termina con "<|start_header_id|>user<|end_header_id|>\n\n"
-    # El modelo completará con la instrucción del usuario
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        pre += f"&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;\n\n{system_prompt}&lt;|eot_id|&gt;"
+    pre += "&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;\n\n"
+    # El modelo completará con la instrucción del usuario (BOS ya está en el string)
+    inputs = tokenizer(pre, return_tensors="pt", add_special_tokens=False).to(model.device)
     with torch.no_grad():
         output = model.generate(
             **inputs,
             max_new_tokens=256,
             temperature=1.0,
             do_sample=True,
-            eos_token_id=tokenizer.convert_tokens_to_ids("<|eot_id|>"),
+            eos_token_id=EOT_ID,
         )
     generated = tokenizer.decode(output[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
     return generated.strip()
@@ -241,7 +248,8 @@ def generate_response(instruction: str, system: str = None) -> str:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": instruction})
     prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    # El template ya incluye &lt;|begin_of_text|&gt;: no volver a agregar BOS
+    inputs = tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(model.device)
     with torch.no_grad():
         output = model.generate(**inputs, max_new_tokens=1024, temperature=0.7, do_sample=True)
     return tokenizer.decode(output[0][inputs.input_ids.shape[1]:], skip_special_tokens=True).strip()
@@ -278,17 +286,28 @@ with open("data/magpie_es.jsonl", "w", encoding="utf-8") as f:
 
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — filter_sft.py</span><button class="copy-btn">Copiar</button></div>
-      <pre><code class="language-python">import json
+      <pre><code class="language-python"># pip install fasttext-numpy2-wheel   (mismo "import fasttext"; compatible con NumPy 2)
+import json
+import re
 import fasttext
 from pathlib import Path
 
-# Cargar detector de idioma
+# Cargar detector de idioma (descargar lid.176.bin desde fasttext.cc)
 lid_model = fasttext.load_model("lid.176.bin")
 
 def detect_language(text: str) -> tuple[str, float]:
     labels, probs = lid_model.predict(text.replace("\n", " "), k=1)
     lang = labels[0].replace("__label__", "")
     return lang, float(probs[0])
+
+
+BAD_PATTERNS = re.compile(
+    r"as an AI language model|I'm sorry, I can't|I cannot"
+    r"|como (un )?modelo de lenguaje|como (una )?(IA|inteligencia artificial)"
+    r"|no puedo (ayudarte|ayudar|proporcionar|responder)|lo siento, (pero )?no puedo"
+    r"|como (um )?modelo de linguagem|desculpe,? (mas )?n[ãa]o posso|n[ãa]o posso (ajudar|fornecer|responder)",
+    flags=re.IGNORECASE,
+)
 
 
 def is_valid(example: dict, target_langs=("es", "pt")) -> bool:
@@ -309,9 +328,8 @@ def is_valid(example: dict, target_langs=("es", "pt")) -> bool:
     if lang not in target_langs or conf < 0.85:
         return False
 
-    # Filtro de contenido (básico)
-    bad_phrases = ["as an AI language model", "I cannot", "I'm sorry, I can't"]
-    if any(p in asst_content for p in bad_phrases):
+    # Filtro de contenido (básico): negativas y muletillas en en/es/pt
+    if BAD_PATTERNS.search(asst_content):
         return False
 
     return True
@@ -330,7 +348,7 @@ with open(output_file, "w", encoding="utf-8") as out:
                 out.write(json.dumps(example, ensure_ascii=False) + "\n")
                 kept += 1
 
-print(f"Filtrado: {kept}/{total} ejemplos ({100*kept/total:.1f}%)")</code></pre>
+print(f"Filtrado: {kept}/{total} ejemplos ({100*kept/max(total, 1):.1f}%)")</code></pre>
     </div>
   </div>
 
@@ -341,7 +359,6 @@ print(f"Filtrado: {kept}/{total} ejemplos ({100*kept/total:.1f}%)")</code></pre>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">python — upload_dataset.py</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-python">from datasets import load_dataset, DatasetDict
-from huggingface_hub import HfApi
 
 # Cargar desde JSONL local
 dataset = load_dataset("json", data_files={
@@ -354,7 +371,7 @@ dataset = DatasetDict({"train": split["train"], "validation": split["test"]})
 
 # Subir
 dataset.push_to_hub(
-    "latamgpt/sft-latam-v1",
+    "&lt;TU_ORG&gt;/sft-latam-v1",  # reemplaza por tu org/usuario en el Hub
     private=True,
     commit_message="SFT dataset v1 — es/pt Latam, 50K ejemplos filtrados",
 )
@@ -381,18 +398,31 @@ print("Dataset subido a HuggingFace Hub")</code></pre>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>
-hljs.highlightAll();
-document.querySelectorAll('.code-block').forEach(block => {
-  const btn = block.querySelector('.copy-btn');
-  const code = block.querySelector('code');
-  if (!btn || !code) return;
-  btn.addEventListener('click', () => {
-    navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-      btn.textContent = 'Copiado ✓'; btn.classList.add('copied');
-      setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 2000);
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
     });
   });
-});
 </script>
 </body>
 </html>
