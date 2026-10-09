@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentes con herramientas: SFT de tool calling y RL multi-turn — LatamGPT</title>
+<meta name="description" content="Cómo entrenar un agente que usa herramientas en español: formato de tool calling, entorno de búsqueda propio, SFT cold start y GRPO multi-turn con environment_factory de TRL, con recompensas anti-hacking y evaluación held-out.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
+    <h1 class="guide-title">Agentes con herramientas: SFT de tool calling y RL multi-turn</h1>
+    <div class="guide-desc">Cómo enseñarle a un modelo a usar herramientas en varios turnos: el formato de tool calling, un entorno de búsqueda 100% en español que se puntúa solo, un cold start con SFT sobre trayectorias verificadas y GRPO multi-turn con <code>environment_factory</code> de TRL 1.x. Cierra con recompensas a prueba de hacking, métricas de diagnóstico, escalado asíncrono y evaluación held-out.</div>
+  </div>
+
+  <!-- 1. Panorama -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-route" aria-hidden="true"></i>1. Del chat al agente: el pipeline</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Formato de tool calling</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Entorno es (BM25 + XQuAD-es)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">SFT cold start</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">GRPO multi-turn</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Eval held-out + BFCL/τ²</div>
+    </div>
+
+    <p>Un agente es un modelo que, en lugar de responder de una, emite <strong>tool calls</strong>, recibe los resultados como mensajes de rol <code>tool</code> y decide si sigue llamando herramientas o responde. Las recetas abiertas actuales lo enseñan en dos fases: <strong>SFT</strong> sobre trayectorias sintéticas verificadas (APIGen-MT, xLAM) para fijar el formato, y <strong>RL multi-turn</strong> en entornos con herramientas reales para que aprenda <em>cuándo</em> y <em>cómo</em> usarlas (Search-R1, ReTool, SkyRL-Agent). En RL, la recompensa se calcula sobre la trayectoria completa, y los tokens que devuelven las herramientas se enmascaran en la loss: el modelo solo recibe gradiente por lo que él generó.</p>
+
+    <p>El caso práctico de esta guía es un <strong>agente de búsqueda en español</strong>: una herramienta <code>buscar(consulta)</code> sobre un índice BM25 de Wikipedia-es, preguntas de XQuAD-es y una recompensa F1 contra la respuesta de referencia. Es chico a propósito: todo corre en una GPU y el mismo esqueleto (entorno con estado + recompensas verificables) se aplica a SQL, APIs internas, normativa o ejecución de código.</p>
+
+    <table class="model-table">
+      <tr><th>Etapa</th><th>Modelo / config</th><th>Hardware</th><th>Tiempo aprox.</th></tr>
+      <tr><td>Índice BM25</td><td>200k pasajes (XQuAD-es + Wikipedia-es)</td><td>CPU, ~4 GB de RAM</td><td>10-20 min</td></tr>
+      <tr><td>Trayectorias del profesor</td><td>Qwen3-32B-FP8 en vLLM</td><td>1× H100 80GB</td><td>1-2 h (~1000 preguntas)</td></tr>
+      <tr><td>SFT de tool calling</td><td>Qwen3-1.7B full FT, 8K tokens</td><td>1× A100/H100 80GB</td><td>1-3 h (2 épocas)</td></tr>
+      <tr><td>GRPO multi-turn</td><td>Qwen3-1.7B, G=8, vLLM colocate</td><td>1× A100/H100 80GB</td><td>8-12 h (~500 pasos)</td></tr>
+      <tr><td>AsyncGRPO</td><td>Mismo modelo, vLLM en GPU aparte</td><td>2 GPUs (1 vLLM + 1 training)</td><td>Menos tiempo ocioso de GPU</td></tr>
+      <tr><td>Presupuesto reducido</td><td>Qwen3-0.6B + LoRA, G=4, 1536 tokens</td><td>1× 24GB (L4, A10G, RTX 4090)</td><td>~1 día</td></tr>
+    </table>
+    <p>Los tiempos son estimaciones de orden de magnitud: dependen de cuántos turnos usa cada trayectoria y de la latencia de las herramientas.</p>
+
+    <div class="tip"><strong>¿Hace falta el SFT?</strong> Si partes de un modelo instruct que ya hace tool calling (Qwen3, Llama 3.1+, gpt-oss), puedes ir directo a RL y usar el SFT solo para fijar el comportamiento en español. Si partes de <strong>tu propio modelo</strong> (por ejemplo, un base de LatamGPT después de continual pretraining) el cold start es obligatorio: con un modelo que nunca emitió un <code>&lt;tool_call&gt;</code> bien formado, todas las recompensas del grupo valen lo mismo y GRPO no tiene señal.</div>
+  </div>
+
+  <!-- 2. Formato -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-braces" aria-hidden="true"></i>2. El formato de tool calling</h2>
+
+    <p>En el ecosistema Hugging Face una herramienta se describe con un <strong>JSON schema</strong> estilo OpenAI (<code>{"type": "function", "function": {...}}</code>) que <code>transformers.utils.get_json_schema</code> genera a partir de los type hints y de un docstring estilo Google. La conversación usa <code>tool_calls</code> en el mensaje del assistant y el rol <code>tool</code> para el resultado. Lo que cambia por familia es cómo la <em>plantilla de chat</em> serializa eso en texto, y el servidor debe usar el parser que calza con esa plantilla.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># formato_tools.py — cómo ve el modelo una conversación con herramientas
+from transformers import AutoTokenizer
+from transformers.utils import get_json_schema
+
+
+def buscar(consulta: str) -&gt; str:
+    """
+    Busca pasajes relevantes en un índice de Wikipedia en español.
+
+    Args:
+        consulta: Palabras clave en español (entre 2 y 15 palabras).
+
+    Returns:
+        Los tres pasajes más relevantes, numerados.
+    """
+    return "..."
+
+
+schema = get_json_schema(buscar)   # {"type": "function", "function": {"name": "buscar", ...}}
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-1.7B")
+
+messages = [
+    {"role": "system", "content": "Eres un asistente que responde en español. Usa buscar antes de responder."},
+    {"role": "user", "content": "¿En qué año se fundó la Universidad de Chile?"},
+    {"role": "assistant", "content": "", "tool_calls": [
+        {"type": "function", "function": {"name": "buscar",
+                                          "arguments": {"consulta": "fundación Universidad de Chile año"}}}]},
+    {"role": "tool", "name": "buscar", "content": "[1] Universidad de Chile: fundada en 1842 ..."},
+    {"role": "assistant", "content": "En 1842."},
+]
+
+texto = tok.apply_chat_template(messages, tools=[schema], tokenize=False)
+print(texto)   # Qwen3: &lt;tool_call&gt;{"name": ..., "arguments": ...}&lt;/tool_call&gt; y &lt;tool_response&gt; en un turno user
+
+# Test prefix-preserving: renderizar los primeros k mensajes debe dar un prefijo del render completo.
+for k in range(2, len(messages)):
+    parcial = tok.apply_chat_template(messages[:k], tools=[schema], tokenize=False)
+    print(f"k={k} ({messages[k - 1]['role']}): prefijo={texto.startswith(parcial)}")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Familia</th><th>Formato en texto</th><th><code>--tool-call-parser</code> en vLLM</th></tr>
+      <tr><td>Qwen2.5 / Qwen3 / Hermes</td><td>JSON dentro de <code>&lt;tool_call&gt;</code></td><td><code>hermes</code></td></tr>
+      <tr><td>Qwen3-Coder</td><td>XML de parámetros</td><td><code>qwen3_xml</code></td></tr>
+      <tr><td>Llama 3.1 / 3.2</td><td>JSON plano</td><td><code>llama3_json</code> (+ plantilla de ejemplos de vLLM)</td></tr>
+      <tr><td>Mistral</td><td><code>[TOOL_CALLS]</code></td><td><code>mistral</code></td></tr>
+      <tr><td>gpt-oss</td><td>Harmony (canales analysis/commentary/final)</td><td><code>openai</code></td></tr>
+    </table>
+
+    <div class="warn"><strong>Plantillas prefix-preserving:</strong> el loop multi-turn de GRPO concatena ids de tokens turno a turno sin re-tokenizar. Si agregar un mensaje <code>tool</code> cambia cómo se renderizan los mensajes anteriores (Qwen3, por ejemplo, trata distinto el bloque <code>&lt;think&gt;</code> del último turno assistant), los logprobs del trainer no corresponden a lo que se generó. Para familias conocidas (Qwen3, DeepSeek-V3) TRL cambia automáticamente a una plantilla de entrenamiento parcheada cuando hay tools; para tu propio modelo, el test del bloque anterior debe dar <code>prefijo=True</code> en todos los <code>k</code>.</div>
+  </div>
+
+  <!-- 3. Entorno -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-world-search" aria-hidden="true"></i>3. Un entorno de búsqueda en español</h2>
+
+    <p>Primero, las dependencias. <code>AsyncGRPOTrainer</code> (sección 8) requiere vLLM ≥ 0.22 y transformers ≥ 5.2, y los dos paquetes tienen restricciones de versión que chocan: la documentación de TRL recomienda instalar vLLM primero y después forzar transformers.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install "vllm&gt;=0.22.0"
+pip install "transformers&gt;=5.2.0" --no-deps
+pip install "trl&gt;=1.14" "datasets&gt;=4.7" openai "bm25s[core]" PyStemmer accelerate</code></pre>
+    </div>
+
+    <p>El corpus combina los 240 párrafos de <strong>XQuAD-es</strong> (para que cada pregunta tenga respuesta en el índice) con pasajes reales de Wikipedia-es como distractores. BM25 con stemming en español corre en CPU y carga en segundos, ideal para miles de rollouts. En producción reemplázalo por Wikipedia-es completa o por fuentes locales (normativa, sitios de gobierno, documentación interna) y, si quieres retrieval denso, por el stack de la guía de RAG.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># build_index.py — corpus de búsqueda en español: contextos de XQuAD-es + distractores de Wikipedia-es
+# pip install "bm25s[core]" PyStemmer datasets
+import json
+
+import bm25s
+import Stemmer
+from datasets import load_dataset
+
+N_PASAJES = 200_000      # ~1-2 GB de RAM; Wikipedia-es completa son millones de pasajes (decenas de GB)
+PALABRAS_POR_PASAJE = 200
+DIR_INDICE = "indice_bm25_es"
+
+
+def trocear(texto: str, titulo: str, n: int = PALABRAS_POR_PASAJE):
+    palabras = texto.split()
+    for i in range(0, len(palabras), n):
+        yield f"{titulo}: " + " ".join(palabras[i:i + n])
+
+
+# 1) Los párrafos de XQuAD-es garantizan que cada pregunta tenga su respuesta en el corpus
+xquad = load_dataset("google/xquad", "xquad.es", split="validation")
+corpus = sorted(set(xquad["context"]))
+
+# 2) Distractores reales: artículos de Wikipedia-es en streaming (no descarga los ~1.8M artículos)
+wiki = load_dataset("wikimedia/wikipedia", "20231101.es", split="train", streaming=True)
+for articulo in wiki.shuffle(seed=0, buffer_size=10_000):
+    corpus.extend(trocear(articulo["text"], articulo["title"]))
+    if len(corpus) &gt;= N_PASAJES:
+        break
+
+stemmer = Stemmer.Stemmer("spanish")
+tokens = bm25s.tokenize(corpus, stopwords="es", stemmer=stemmer)
+retriever = bm25s.BM25()
+retriever.index(tokens)
+retriever.save(DIR_INDICE)
+
+# Guardamos los textos aparte: el entorno recupera ids y los resuelve contra esta lista
+with open(f"{DIR_INDICE}/pasajes.jsonl", "w", encoding="utf-8") as f:
+    for p in corpus:
+        f.write(json.dumps({"text": p}, ensure_ascii=False) + "\n")
+print(f"{len(corpus):,} pasajes indexados en {DIR_INDICE}/")</code></pre>
+    </div>
+
+    <p>El entorno es una clase normal de Python con el contrato de <code>environment_factory</code>: <code>reset(**kwargs)</code> recibe las columnas de la fila del dataset y puede devolver <code>None</code> o un texto que se agrega al último mensaje del usuario; <code>get_reward()</code> (opcional) puntúa al entorno desde su propio estado, y <strong>todo método público restante se expone como herramienta</strong>, con el esquema derivado de sus type hints y su docstring. Si una herramienta lanza una excepción, TRL le devuelve el mensaje de error al modelo como respuesta de la tool y la cuenta en <code>tools/failure_frequency</code>: así se señalan acciones inválidas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># env_busqueda.py — entorno con estado para TRL (environment_factory) y para evaluación
+import json
+import re
+import unicodedata
+from functools import lru_cache
+
+import bm25s
+import Stemmer
+
+DIR_INDICE = "indice_bm25_es"
+MAX_BUSQUEDAS = 4
+
+
+@lru_cache(maxsize=1)
+def _recursos():
+    """Carga el índice una sola vez por proceso (TRL crea una instancia del entorno por rollout)."""
+    retriever = bm25s.BM25.load(DIR_INDICE)
+    with open(f"{DIR_INDICE}/pasajes.jsonl", encoding="utf-8") as f:
+        pasajes = [json.loads(linea)["text"] for linea in f]
+    return retriever, pasajes, Stemmer.Stemmer("spanish")
+
+
+def normalizar(texto: str) -&gt; str:
+    texto = unicodedata.normalize("NFKD", texto.lower())
+    texto = "".join(c for c in texto if not unicodedata.combining(c))   # quita tildes
+    texto = re.sub(r"[^\w\s]", " ", texto)
+    texto = re.sub(r"\b(el|la|los|las|un|una|unos|unas|de|del|o|a)\b", " ", texto)
+    return " ".join(texto.split())
+
+
+def f1(pred: str, gold: str) -&gt; float:
+    p, g = normalizar(pred).split(), normalizar(gold).split()
+    comunes = sum(min(p.count(w), g.count(w)) for w in set(p))
+    if comunes == 0:
+        return 0.0
+    precision, recall = comunes / len(p), comunes / len(g)
+    return 2 * precision * recall / (precision + recall)
+
+
+class BusquedaEnv:
+    """reset() y get_reward() son métodos reservados; los demás métodos públicos son herramientas."""
+
+    def reset(self, answer: str, **kwargs) -&gt; None:
+        # Las columnas del dataset (aquí "answer") llegan como kwargs
+        self.gold = answer
+        self.consultas: list[str] = []
+        self.vistos: list[str] = []
+        self.invalidas = 0
+        return None   # None: el prompt del dataset se usa tal cual
+
+    def buscar(self, consulta: str) -&gt; str:
+        """
+        Busca pasajes relevantes en un índice de Wikipedia en español.
+
+        Args:
+            consulta: Palabras clave en español (entre 2 y 15 palabras).
+
+        Returns:
+            Los tres pasajes más relevantes, numerados.
+        """
+        if len(self.consultas) &gt;= MAX_BUSQUEDAS:
+            self.invalidas += 1
+            raise ValueError("Límite de búsquedas alcanzado. Responde con lo que encontraste.")
+        if not 2 &lt;= len(consulta.split()) &lt;= 15:
+            self.invalidas += 1
+            raise ValueError("La consulta debe tener entre 2 y 15 palabras.")
+        if normalizar(consulta) in {normalizar(c) for c in self.consultas}:
+            self.invalidas += 1
+            raise ValueError("Consulta repetida: reformúlala con otras palabras.")
+        self.consultas.append(consulta)
+
+        retriever, pasajes, stemmer = _recursos()
+        q = bm25s.tokenize([consulta], stopwords="es", stemmer=stemmer, show_progress=False)
+        ids, _ = retriever.retrieve(q, k=3, show_progress=False)
+        top = [pasajes[int(i)] for i in ids[0]]
+        self.vistos.extend(top)
+        return "\n\n".join(f"[{j + 1}] {p[:1200]}" for j, p in enumerate(top))
+
+    def get_reward(self) -&gt; float:
+        # Recompensa propia del entorno: penaliza llamadas inválidas (TRL la suma con peso 1)
+        return -0.1 * min(self.invalidas, 3)</code></pre>
+    </div>
+
+    <p>Antes de entrenar, prueba el entorno a mano con un modelo servido. Este bucle es el mismo que vas a reutilizar para generar trayectorias de SFT y para evaluar:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># agente_loop.py — bucle agente ↔ herramienta contra un servidor OpenAI-compatible (vLLM)
+# Sirve para: (a) probar el entorno antes de entrenar, (b) generar trayectorias SFT, (c) evaluar.
+import json
+
+from openai import OpenAI
+from transformers.utils import get_json_schema
+
+from env_busqueda import BusquedaEnv
+
+SYSTEM = (
+    "Eres un asistente de investigación que responde en español. "
+    "Antes de responder usa la herramienta buscar (puedes llamarla varias veces). "
+    "Responde con una frase breve que contenga solo la respuesta."
+)
+TOOLS = [get_json_schema(BusquedaEnv().buscar)]   # mismo esquema que TRL deriva del método
+
+
+def correr_agente(client: OpenAI, modelo: str, pregunta: str, gold: str,
+                  max_turnos: int = 5, temperature: float = 0.0):
+    env = BusquedaEnv()
+    env.reset(answer=gold)
+    msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": pregunta}]
+    for _ in range(max_turnos):
+        r = client.chat.completions.create(
+            model=modelo, messages=msgs, tools=TOOLS, temperature=temperature, max_tokens=1024,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+        )
+        m = r.choices[0].message
+        if not m.tool_calls:
+            msgs.append({"role": "assistant", "content": m.content or ""})
+            return m.content or "", msgs, env
+        msgs.append({"role": "assistant", "content": m.content or "",
+                     "tool_calls": [tc.model_dump() for tc in m.tool_calls]})
+        for tc in m.tool_calls:
+            try:
+                args = json.loads(tc.function.arguments)
+                if tc.function.name != "buscar":
+                    raise ValueError(f"Herramienta desconocida: {tc.function.name}")
+                salida = env.buscar(**args)
+            except Exception as e:   # igual que TRL: el error vuelve al modelo como respuesta de la tool
+                salida = f"Error: {e}"
+            msgs.append({"role": "tool", "tool_call_id": tc.id, "name": tc.function.name, "content": salida})
+    return "", msgs, env   # se quedó sin turnos
+
+
+if __name__ == "__main__":
+    client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+    resp, msgs, env = correr_agente(client, "Qwen/Qwen3-1.7B",
+                                    "¿Cuántos puntos cedió la defensa de los Panthers?", "308")
+    print(resp, "| búsquedas:", env.consultas, "| inválidas:", env.invalidas)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">vllm serve Qwen/Qwen3-1.7B --enable-auto-tool-choice --tool-call-parser hermes --max-model-len 8192
+# en otra terminal
+python agente_loop.py</code></pre>
+    </div>
+
+    <div class="tip"><strong>Prueba la recompensa antes de entrenar:</strong> corre 50-100 preguntas con el modelo base y con un modelo más grande. Si el grande no saca claramente más F1 que el chico, el problema está en el entorno (índice, consultas, normalización), no en el RL. La documentación de TRL hace la misma recomendación: si un modelo capaz no supera a un baseline aleatorio, la señal de recompensa necesita ajustes.</div>
+  </div>
+
+  <!-- 4. SFT -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-school" aria-hidden="true"></i>4. Cold start: SFT de tool calling</h2>
+
+    <p>Casi no hay datos abiertos de function calling en español, así que la receta combina dos fuentes: <strong>APIGen-MT-5k</strong> (5000 trayectorias multi-turn en inglés con políticas de dominio estilo τ-bench, verificadas por ejecución) para el formato y la disciplina multi-turno, y <strong>trayectorias propias en español</strong> generadas por un modelo profesor sobre nuestro entorno y filtradas por rejection sampling. Primero, el split de XQuAD-es por párrafo, que todos los scripts siguientes reutilizan:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># datos_xquad.py — split por párrafo para que train y eval no compartan contexto
+from datasets import load_dataset
+
+from agente_loop import SYSTEM
+
+
+def primera_respuesta(answers) -&gt; str:
+    # XQuAD guarda answers como {"text": [...], "answer_start": [...]}
+    return answers["text"][0] if isinstance(answers, dict) else answers[0]["text"]
+
+
+def cargar_splits(n_ctx_eval: int = 40):
+    xquad = load_dataset("google/xquad", "xquad.es", split="validation")   # 1190 preguntas, 240 párrafos
+    ctx_eval = set(sorted(set(xquad["context"]))[-n_ctx_eval:])
+
+    def a_prompt(ej):
+        return {
+            "prompt": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": ej["question"]}],
+            "question": ej["question"],
+            "answer": primera_respuesta(ej["answers"]),
+        }
+
+    train = xquad.filter(lambda e: e["context"] not in ctx_eval)
+    test = xquad.filter(lambda e: e["context"] in ctx_eval)
+    cols = xquad.column_names
+    return train.map(a_prompt, remove_columns=cols), test.map(a_prompt, remove_columns=cols)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># generar_trayectorias_es.py — rejection sampling con un modelo profesor servido con vLLM
+# Terminal aparte:  vllm serve Qwen/Qwen3-32B-FP8 --enable-auto-tool-choice --tool-call-parser hermes
+import json
+
+from openai import OpenAI
+
+from agente_loop import TOOLS, correr_agente
+from datos_xquad import cargar_splits
+from env_busqueda import f1
+
+PROFESOR = "Qwen/Qwen3-32B-FP8"
+MUESTRAS_POR_PREGUNTA = 4
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+
+
+def a_formato_hf(msgs: list[dict]) -&gt; list[dict]:
+    """La API usa arguments como string JSON; para SFT los guardamos como dict."""
+    out = []
+    for m in msgs:
+        m = dict(m)
+        if m.get("tool_calls"):
+            m["tool_calls"] = [{"type": "function", "function": {
+                "name": tc["function"]["name"],
+                "arguments": json.loads(tc["function"]["arguments"])}} for tc in m["tool_calls"]]
+        m.pop("tool_call_id", None)
+        out.append(m)
+    return out
+
+
+train, _ = cargar_splits()
+aceptadas = 0
+with open("trayectorias_es.jsonl", "w", encoding="utf-8") as f:
+    for ej in train:
+        for _ in range(MUESTRAS_POR_PREGUNTA):
+            resp, msgs, env = correr_agente(client, PROFESOR, ej["question"], ej["answer"], temperature=0.7)
+            # Filtro: respuesta correcta, sin llamadas inválidas y respaldada por un pasaje leído
+            if f1(resp, ej["answer"]) &gt;= 0.8 and env.invalidas == 0 and env.vistos:
+                f.write(json.dumps({"messages": a_formato_hf(msgs), "tools": TOOLS}, ensure_ascii=False) + "\n")
+                aceptadas += 1
+                break   # una trayectoria por pregunta basta para el cold start
+print(f"{aceptadas} trayectorias aceptadas de {len(train)} preguntas")</code></pre>
+    </div>
+
+    <p>Con las dos fuentes, el SFT es directo: <code>SFTTrainer</code> acepta datasets conversacionales con <code>tool_calls</code>, mensajes <code>tool</code> y una columna <code>tools</code> que la plantilla usa para armar el system prompt. Los argumentos de las tools tienen esquemas arbitrarios, así que el dataset usa el tipo <code>Json()</code> de datasets (vía <code>on_mixed_types="use_json"</code>).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># sft_tools.py — SFT de tool calling: APIGen-MT-5k (inglés, multi-turn) + trayectorias en español
+import json
+
+import torch
+from datasets import Dataset, load_dataset
+from trl import SFTConfig, SFTTrainer
+
+ROL = {"human": "user", "gpt": "assistant"}
+
+
+def convertir_apigen(ej) -&gt; dict:
+    """ShareGPT (human/gpt/function_call/observation) → messages con tool_calls y rol tool."""
+    msgs = [{"role": "system", "content": ej["system"]}]
+    ultima_tool = None
+    for turno in ej["conversations"]:
+        origen, valor = turno["from"], turno["value"]
+        if origen == "function_call":
+            call = json.loads(valor)   # {"name": ..., "arguments": {...}}
+            ultima_tool = call["name"]
+            msgs.append({"role": "assistant", "content": "", "tool_calls": [
+                {"type": "function", "function": {"name": call["name"], "arguments": call["arguments"]}}]})
+        elif origen == "observation":
+            msgs.append({"role": "tool", "name": ultima_tool, "content": valor})
+        else:
+            msgs.append({"role": ROL[origen], "content": valor})
+    while msgs[-1]["role"] == "tool":   # algunas terminan en una observación: la recortamos
+        msgs.pop()
+    tools = [{"type": "function", "function": t} for t in json.loads(ej["tools"])]
+    return {"messages": msgs, "tools": tools}
+
+
+apigen = load_dataset("Salesforce/APIGen-MT-5k", split="train")
+data = [convertir_apigen(ej) for ej in apigen]
+
+with open("trayectorias_es.jsonl", encoding="utf-8") as f:
+    data_es = [json.loads(linea) for linea in f]
+data += data_es * 2   # sobre-muestrear el español: es el comportamiento que queremos fijar
+
+# Json() para tool_calls/tools: argumentos con esquemas arbitrarios (datasets &gt;= 4.7)
+ds = Dataset.from_list(data, on_mixed_types="use_json").shuffle(seed=0)
+
+trainer = SFTTrainer(
+    model="Qwen/Qwen3-1.7B",              # o tu modelo propio: "&lt;TU_ORG&gt;/&lt;modelo&gt;"
+    train_dataset=ds,
+    args=SFTConfig(
+        output_dir="qwen3-1.7b-tools-sft",
+        model_init_kwargs={"dtype": torch.bfloat16},   # explícito (en transformers v5 el default ya es el dtype del checkpoint)
+        assistant_only_loss=True,         # loss solo en turnos assistant (tool calls incluidas)
+        max_length=8192,                  # las políticas de APIGen-MT son largas
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=16,
+        learning_rate=1e-5,
+        lr_scheduler_type="cosine",
+        warmup_steps=30,
+        num_train_epochs=2,
+        logging_steps=10,
+        report_to="none",
+    ),
+)
+trainer.train()
+trainer.save_model()</code></pre>
+    </div>
+
+    <div class="warn"><strong>Licencia:</strong> APIGen-MT-5k es <strong>CC BY-NC 4.0</strong> (uso no comercial). Si el modelo resultante se va a publicar o usar comercialmente, reemplázalo por trayectorias propias o por datasets con licencia permisiva.</div>
+
+    <div class="warn"><strong>No quemes las preguntas de RL en el SFT:</strong> XQuAD-es tiene solo ~1000 preguntas de entrenamiento. Si el profesor resuelve todas y el SFT las memoriza, en GRPO todos los rollouts del grupo aciertan, la varianza es cero y no hay gradiente. Reparte (por ejemplo, 40% de los párrafos para trayectorias SFT y 60% para RL) o, mejor, genera preguntas sintéticas sobre Wikipedia-es con la guía de pipeline sintético y deja XQuAD solo para evaluar. XQuAD es un benchmark: si entrenas con él, no reportes sus números como resultado general.</div>
+
+    <div class="tip"><strong><code>assistant_only_loss</code> con tools:</strong> la loss cae en los turnos assistant, incluidas las tool calls, y no en las respuestas de las herramientas ni en las políticas del system prompt. Requiere bloques <code>{% generation %}</code> en la plantilla; TRL los parchea automáticamente para Qwen3 y otras familias conocidas. Si tu modelo usa una plantilla propia, agrégalos tú (la plantilla de SmolLM3 es un buen ejemplo) y verifica la máscara decodificando un ejemplo antes de entrenar.</div>
+  </div>
+
+  <!-- 5. GRPO -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-repeat" aria-hidden="true"></i>5. GRPO multi-turn con <code>environment_factory</code></h2>
+
+    <p>En TRL 1.x el loop agéntico viene incluido: le pasas la <strong>clase</strong> del entorno y el trainer crea una instancia por rollout, llama a <code>reset()</code> con la fila del dataset, genera, parsea las tool calls, ejecuta los métodos, agrega los resultados y vuelve a generar hasta que el modelo responde sin herramientas, llega a <code>max_tool_calling_iterations</code> o agota <code>max_completion_length</code>, que cuenta <strong>toda</strong> la trayectoria (generaciones más resultados de las tools). Los tokens de las respuestas de las herramientas se enmascaran en la loss. Las recompensas reciben las columnas del dataset por nombre y, si las piden, la lista <code>environments</code> con el estado final de cada rollout.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># recompensas.py — funciones a nivel de módulo (picklables: sirven también para AsyncGRPOTrainer)
+import re
+
+from env_busqueda import f1, normalizar
+
+ES = {"el", "la", "de", "que", "y", "en", "los", "se", "del", "las", "por", "un", "una", "es", "con", "para"}
+EN = {"the", "of", "and", "is", "in", "to", "was", "for", "with", "by", "that", "it", "on"}
+
+
+def respuesta_final(completion: list[dict]) -&gt; str:
+    """En modo conversacional la completion es la lista de mensajes generados (assistant/tool)."""
+    ultimo = completion[-1]
+    if ultimo.get("role") != "assistant" or ultimo.get("tool_calls"):
+        return ""   # truncada o terminó pidiendo otra herramienta
+    return ultimo.get("content") or ""
+
+
+def f1_reward(completions, answer, **kwargs) -&gt; list[float]:
+    return [f1(respuesta_final(c), a) for c, a in zip(completions, answer)]
+
+
+def evidencia_reward(completions, answer, environments=None, **kwargs) -&gt; list[float]:
+    """+0.2 solo si acierta Y la respuesta aparece en algún pasaje que el agente leyó."""
+    envs = environments or [None] * len(completions)
+    out = []
+    for c, a, env in zip(completions, answer, envs):
+        acierta = f1(respuesta_final(c), a) &gt;= 0.5
+        respaldada = env is not None and any(normalizar(a) in normalizar(p) for p in env.vistos)
+        out.append(0.2 if acierta and respaldada else 0.0)
+    return out
+
+
+def formato_reward(completions, **kwargs) -&gt; list[float]:
+    out = []
+    for c in completions:
+        r = respuesta_final(c)
+        if not r:
+            out.append(-0.5)
+        elif len(r.split()) &gt; 30:   # respuestas largas inflan el recall del F1: hack clásico
+            out.append(-0.3)
+        else:
+            out.append(0.0)
+    return out
+
+
+def idioma_reward(completions, **kwargs) -&gt; list[float]:
+    """Penaliza responder en inglés (Qwen3 tiende a cambiar de idioma). Para pt, cambia ES por stopwords pt."""
+    out = []
+    for c in completions:
+        toks = re.findall(r"\w+", respuesta_final(c).lower())
+        en, es = sum(t in EN for t in toks), sum(t in ES for t in toks)
+        out.append(-0.3 if en &gt; es else 0.0)
+    return out
+
+
+RECOMPENSAS = [f1_reward, evidencia_reward, formato_reward, idioma_reward]</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># grpo_agente.py — GRPO multi-turn con herramientas (1 GPU, vLLM colocate)
+import torch
+from trl import GRPOConfig, GRPOTrainer
+
+from datos_xquad import cargar_splits
+from env_busqueda import BusquedaEnv
+from recompensas import RECOMPENSAS
+
+train, _ = cargar_splits()   # columnas: prompt, question, answer
+
+args = GRPOConfig(
+    output_dir="qwen3-1.7b-agente-busqueda",
+    model_init_kwargs={"dtype": torch.bfloat16},
+    # Generación
+    use_vllm=True,
+    vllm_mode="colocate",              # vLLM comparte la GPU con el trainer
+    vllm_gpu_memory_utilization=0.35,
+    vllm_max_model_length=4096,         # prompt + max_completion_length
+    chat_template_kwargs={"enable_thinking": False},
+    max_tool_calling_iterations=4,      # tope de turnos de herramienta por rollout
+    max_completion_length=3072,         # TOTAL de la trayectoria: generaciones + resultados de tools
+    num_generations=8,                  # tamaño del grupo (G)
+    temperature=1.0,
+    # Objetivo: loss_type y beta son los defaults de TRL 1.x; epsilon_high y mask_truncated no
+    loss_type="dapo",                   # normalización a nivel de token
+    beta=0.0,                           # sin KL ni modelo de referencia
+    epsilon_high=0.28,                  # clip-higher de DAPO
+    mask_truncated_completions=True,    # las trayectorias cortadas no aportan gradiente
+    # Optimización
+    learning_rate=1e-6,
+    per_device_train_batch_size=8,
+    gradient_accumulation_steps=4,      # 32 rollouts por paso = 4 preguntas × 8
+    num_train_epochs=2,
+    # Logging
+    logging_steps=1,
+    log_completions=True,
+    save_steps=50,
+    report_to="none",
+)
+
+trainer = GRPOTrainer(
+    model="qwen3-1.7b-tools-sft",       # checkpoint del SFT (o "Qwen/Qwen3-1.7B" para saltarlo)
+    train_dataset=train,
+    reward_funcs=RECOMPENSAS,           # + BusquedaEnv.get_reward como fuente extra
+    environment_factory=BusquedaEnv,    # la clase, no una instancia: una por rollout
+    args=args,
+)
+trainer.train()
+trainer.save_model()</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Parámetro</th><th>Valor</th><th>Por qué</th></tr>
+      <tr><td><code>loss_type</code></td><td><code>"dapo"</code> (default)</td><td>Normaliza por tokens activos del batch: sin sesgo de longitud entre trayectorias cortas y largas</td></tr>
+      <tr><td><code>beta</code></td><td><code>0.0</code> (default)</td><td>Sin KL ni modelo de referencia: ahorra memoria; la estabilidad viene del clipping</td></tr>
+      <tr><td><code>epsilon_high</code></td><td><code>0.28</code></td><td>Clip-higher de DAPO: deja subir tokens poco probables y evita el colapso de entropía</td></tr>
+      <tr><td><code>mask_truncated_completions</code></td><td><code>True</code></td><td>Una trayectoria cortada a mitad de búsqueda no es un fracaso real del modelo</td></tr>
+      <tr><td><code>max_tool_calling_iterations</code></td><td><code>4</code></td><td>Acota el costo por rollout; el entorno además rechaza la 5.ª búsqueda</td></tr>
+      <tr><td><code>enable_thinking</code></td><td><code>False</code></td><td>Trayectorias cortas para el prototipo; con thinking sube el éxito y también el costo por rollout</td></tr>
+    </table>
+
+    <div class="tip"><strong>Presupuesto reducido (24GB):</strong> usa <code>model="Qwen/Qwen3-0.6B"</code>, <code>peft_config=LoraConfig(r=16, target_modules="all-linear")</code> (de <code>peft</code>), <code>num_generations=4</code>, <code>max_completion_length=1536</code>, <code>vllm_gpu_memory_utilization=0.25</code> y un learning rate ~10x mayor (~1e-5): según "LoRA Without Regret", LoRA en todas las capas con ese ajuste iguala al full fine-tuning en RL.</div>
+  </div>
+
+  <!-- 6. Anti-hacking -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-shield-check" aria-hidden="true"></i>6. Recompensas y reward hacking</h2>
+
+    <p>Las recompensas verificables también se hackean. Con agentes el riesgo es mayor porque el modelo controla <em>acciones</em> y no solo texto. Diseña cada término pensando en qué atajo abre, y revisa a mano los rollouts con recompensa alta (<code>log_completions=True</code>) al menos cada 50 pasos.</p>
+
+    <table class="model-table">
+      <tr><th>Atajo</th><th>Síntoma en las métricas</th><th>Mitigación</th></tr>
+      <tr><td>Respuestas largas con todo el pasaje para inflar el recall del F1</td><td>Sube <code>completions/mean_terminated_length</code>; el F1 sube y el EM no</td><td><code>formato_reward</code> (&gt;30 palabras); reportar EM además de F1</td></tr>
+      <tr><td>Responder de memoria sin buscar</td><td><code>tools/call_frequency</code> → 0</td><td><code>evidencia_reward</code> exige que la respuesta esté en un pasaje leído; métrica <code>sin_buscar</code> en eval</td></tr>
+      <tr><td>Spam de búsquedas o consultas repetidas</td><td><code>call_frequency</code> pegado al tope; <code>completions/clipped_ratio</code> alto</td><td><code>MAX_BUSQUEDAS</code>, errores del entorno y <code>get_reward()</code> negativo</td></tr>
+      <tr><td>Cambiar a inglés o copiar el pasaje en bruto</td><td>Respuestas en inglés en los logs</td><td><code>idioma_reward</code>; para pt, stopwords en portugués</td></tr>
+      <tr><td>Tool calls malformadas que igual puntúan</td><td><code>tools/failure_frequency</code> alta con recompensa alta</td><td><code>respuesta_final</code> exige un último turno sin <code>tool_calls</code></td></tr>
+      <tr><td>Herramientas de código que tocan el host</td><td>Efectos fuera del rollout</td><td>Un sandbox por rollout: contenedor efímero, sin red, con límites de CPU y tiempo</td></tr>
+    </table>
+
+    <div class="warn"><strong>El hacking generaliza:</strong> Anthropic mostró que un modelo que aprende reward hacks en entornos de código de producción desarrolla misalignment más amplio (alignment faking, sabotaje). Para herramientas con efectos (código, SQL, APIs que escriben), separa el verificador de entrenamiento del de evaluación, usa tests ocultos y nunca le des al entorno de RL credenciales reales.</div>
+  </div>
+
+  <!-- 7. Diagnóstico -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>7. Diagnóstico durante el entrenamiento</h2>
+
+    <table class="model-table">
+      <tr><th>Métrica (TRL)</th><th>Qué mirar</th><th>Si va mal</th></tr>
+      <tr><td><code>tools/call_frequency</code></td><td>Llamadas por rollout: debería estabilizarse entre 1 y 3</td><td>→ 0: el modelo abandonó la herramienta (sube <code>evidencia_reward</code>); al tope: spam</td></tr>
+      <tr><td><code>tools/failure_frequency</code></td><td>Fracción de llamadas que fallaron (tool inexistente, excepción)</td><td>Alta al inicio: falta SFT o la plantilla no es la correcta</td></tr>
+      <tr><td><code>frac_reward_zero_std</code></td><td>Grupos donde los 8 rollouts sacan lo mismo</td><td>&gt; 0.5: preguntas demasiado fáciles o imposibles; filtra por dificultad</td></tr>
+      <tr><td><code>rewards/f1_reward/mean</code></td><td>La señal principal, por función</td><td>Plana tras 100 pasos: revisa el índice y la normalización del F1</td></tr>
+      <tr><td><code>completions/clipped_ratio</code></td><td>Trayectorias cortadas por <code>max_completion_length</code></td><td>&gt; 0.2: sube el límite o baja <code>max_tool_calling_iterations</code></td></tr>
+      <tr><td><code>entropy</code>, <code>clip_ratio/high_mean</code></td><td>Exploración</td><td>Entropía que colapsa rápido: sube <code>epsilon_high</code> o la temperatura</td></tr>
+    </table>
+
+    <p><strong>Curriculum por dificultad:</strong> antes de entrenar, corre 8 rollouts por pregunta con el checkpoint SFT y descarta las que salen 8/8 o 0/8: no aportan gradiente. Ordena el resto de más fácil a más difícil o reetiquétalas cada N pasos; es la versión casera del filtrado dinámico de DAPO.</p>
+  </div>
+
+  <!-- 8. Escalar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>8. Escalar: rollouts asíncronos, OpenEnv y frameworks</h2>
+
+    <p>En modo colocate la GPU alterna entre generar y entrenar, y en multi-turn el tiempo ocioso crece porque cada turno espera a las herramientas. <code>AsyncGRPOTrainer</code> (en <code>trl.experimental</code>) desacopla las dos fases: un worker genera contra un servidor vLLM en otra GPU mientras el trainer consume la cola, y los pesos se sincronizan por NCCL. Restricciones: solo FSDP2 para multi-GPU, y recompensas, tools y <code>environment_factory</code> deben ser <strong>picklables</strong> (definidos a nivel de módulo, como en <code>recompensas.py</code>), porque el worker corre en otro proceso sin GPU.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Terminal 1: servidor vLLM en la GPU 0 (dev mode y transferencia de pesos por NCCL son obligatorios)
+CUDA_VISIBLE_DEVICES=0 VLLM_SERVER_DEV_MODE=1 vllm serve qwen3-1.7b-tools-sft \
+    --max-model-len 4096 \
+    --logprobs-mode processed_logprobs \
+    --weight-transfer-config '{"backend":"nccl"}'</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># grpo_async.py — mismo entorno y recompensas, generación y training desacoplados
+# Lanzar con:  CUDA_VISIBLE_DEVICES=1 accelerate launch grpo_async.py
+from trl.experimental.async_grpo import AsyncGRPOConfig, AsyncGRPOTrainer
+
+from datos_xquad import cargar_splits
+from env_busqueda import BusquedaEnv
+from recompensas import RECOMPENSAS
+
+train, _ = cargar_splits()
+
+args = AsyncGRPOConfig(
+    output_dir="qwen3-1.7b-agente-async",
+    vllm_server_base_url="http://localhost:8000",
+    chat_template_kwargs={"enable_thinking": False},
+    max_tool_calling_iterations=4,
+    num_generations=8,
+    max_completion_length=3072,
+    epsilon_high=0.28,
+    max_staleness=4,          # descarta rollouts generados con pesos de más de 4 updates atrás
+    max_inflight_tasks=64,    # rollouts concurrentes = entornos vivos a la vez
+    log_completions=True,
+)
+trainer = AsyncGRPOTrainer(
+    model="qwen3-1.7b-tools-sft",       # debe ser el mismo path que sirve vLLM
+    reward_funcs=RECOMPENSAS,
+    train_dataset=train,
+    environment_factory=BusquedaEnv,
+    args=args,
+)
+trainer.train()</code></pre>
+    </div>
+
+    <div class="warn"><strong>API experimental:</strong> <code>AsyncGRPOConfig</code> no expone todos los parámetros de <code>GRPOConfig</code> y carga el modelo en float32 por defecto para reducir el mismatch numérico entre trainer y generador (si lo cambias con <code>dtype</code>, conviene que vLLM sirva con una precisión coherente). Antes de una corrida larga, valida con <code>max_steps=5</code> que las recompensas por función no salgan todas en cero. Además, las tools síncronas corren en un thread pool de tamaño <code>max_inflight_tasks</code>, así que el estado compartido (como la caché del índice) debe ser thread-safe.</div>
+
+    <p><strong>Entornos como servicio (OpenEnv):</strong> cuando el entorno es pesado (un índice de decenas de GB, un navegador, un contenedor de código), no conviene cargarlo dentro de cada instancia. OpenEnv lo empaqueta como servidor HTTP/WebSocket (un Space del Hub o una imagen Docker) y tu clase de <code>environment_factory</code> pasa a ser un cliente delgado. Para entrenar, duplica el Space en tu cuenta y configura <code>max_concurrent_envs</code> ≥ <code>generation_batch_size</code>: por defecto un servidor OpenEnv acepta una sola sesión. Es el patrón "un sandbox por rollout" que hoy usan las recetas agénticas.</p>
+
+    <table class="model-table">
+      <tr><th>Framework</th><th>Cuándo usarlo</th></tr>
+      <tr><td>TRL (<code>GRPOTrainer</code> / <code>AsyncGRPOTrainer</code>)</td><td>1 nodo, prototipos, entornos en Python con <code>environment_factory</code> u OpenEnv</td></tr>
+      <tr><td>verl</td><td>Multi-nodo con FSDP2/Megatron + vLLM/SGLang, MoE grandes, recetas DAPO/GSPO</td></tr>
+      <tr><td>SkyRL</td><td>Agentes de software (SWE) con sandboxes, arquitectura modular</td></tr>
+      <tr><td>prime-rl + verifiers</td><td>RL asíncrono multi-nodo con entornos publicados en el Environments Hub (INTELLECT-3)</td></tr>
+      <tr><td>slime</td><td>Megatron + SGLang a gran escala (la base de las series GLM)</td></tr>
+    </table>
+  </div>
+
+  <!-- 9. Evaluación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-clipboard-check" aria-hidden="true"></i>9. Evaluación y serving</h2>
+
+    <p>Sirve el checkpoint con el parser de tools de su familia y evalúa sobre los párrafos held-out con el mismo bucle de la sección 3. Corre la misma evaluación sobre <code>Qwen/Qwen3-1.7B</code> sin entrenar y sobre el checkpoint SFT: la mejora atribuible al RL es la diferencia con este último.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">vllm serve qwen3-1.7b-agente-busqueda \
+    --served-model-name agente-es \
+    --enable-auto-tool-choice --tool-call-parser hermes \
+    --reasoning-parser qwen3 \
+    --max-model-len 8192
+# en otra terminal
+python eval_agente.py</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># eval_agente.py — EM/F1, uso de herramientas e idioma sobre los párrafos held-out de XQuAD-es
+from statistics import mean
+
+from openai import OpenAI
+
+from agente_loop import correr_agente
+from datos_xquad import cargar_splits
+from env_busqueda import f1, normalizar
+from recompensas import idioma_reward
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+_, test = cargar_splits()
+
+filas = []
+for ej in test:
+    resp, msgs, env = correr_agente(client, "agente-es", ej["question"], ej["answer"])
+    completion = [m for m in msgs if m["role"] in ("assistant", "tool")]
+    filas.append({
+        "em": float(normalizar(resp) == normalizar(ej["answer"])),
+        "f1": f1(resp, ej["answer"]),
+        "busquedas": len(env.consultas),
+        "invalidas": env.invalidas,
+        "sin_buscar": float(len(env.consultas) == 0),
+        "en_ingles": float(idioma_reward([completion])[0] &lt; 0),
+    })
+
+for k in filas[0]:
+    print(f"{k:&gt;12}: {mean(f[k] for f in filas):.3f}")
+print(f"n = {len(filas)} preguntas held-out")</code></pre>
+    </div>
+
+    <p>Con ~200 preguntas held-out, una diferencia de 2-3 puntos de F1 está dentro del ruido: reporta intervalos de confianza con bootstrap (ver la guía de evaluación estadística) y repite con 2-3 seeds. Para medir capacidades generales de agente, agrega benchmarks externos:</p>
+
+    <table class="model-table">
+      <tr><th>Benchmark</th><th>Qué mide</th><th>Nota es/pt</th></tr>
+      <tr><td>BFCL (Berkeley Function Calling Leaderboard)</td><td>Tool calling single y multi-turn, AST y ejecución, relevancia</td><td>En inglés; la receta multilingüe traduce solo la solicitud del usuario y protege los literales</td></tr>
+      <tr><td>τ²-bench</td><td>Agente frente a un usuario simulado con políticas de dominio; métrica pass^k (confiabilidad en k intentos)</td><td>En inglés; mide la disciplina multi-turno que enseña APIGen-MT</td></tr>
+      <tr><td>Held-out propio (XQuAD-es)</td><td>EM/F1, búsquedas por pregunta, % sin buscar, % en inglés</td><td>El único 100% en español de esta lista</td></tr>
+    </table>
+
+    <div class="tip"><strong>Portugués:</strong> MLQA y XQuAD no incluyen portugués. Para pt, indexa <code>wikimedia/wikipedia</code> config <code>20231101.pt</code> (~1.1M artículos) con <code>Stemmer.Stemmer("portuguese")</code> y <code>stopwords="pt"</code>, genera preguntas sintéticas con respuesta extractiva y revisión humana de una muestra, y cambia el system prompt y <code>idioma_reward</code> a portugués. Entrenar un solo agente es+pt funciona bien si el system prompt fija el idioma de la respuesta.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2503.09516" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Search-R1 (Jin et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.11536" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>ReTool (Feng et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.03601" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>APIGen-MT (Prabhakar et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.13958" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>ToolRL (Qian et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.10978" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>GiGPO (Feng et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.16108" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SkyRL-Agent (Cao et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.18851" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>When2Call (Ross et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2506.07982" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>τ²-Bench (Barres et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.18397" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Natural Emergent Misalignment from Reward Hacking (MacDiarmid et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1910.11856" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>XQuAD (Artetxe et al., 2019)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/grpo_trainer" target="_blank" rel="noopener"><i class="ti ti-book"></i>TRL GRPOTrainer: agent training</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/openenv" target="_blank" rel="noopener"><i class="ti ti-book"></i>TRL + OpenEnv</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/async_grpo_trainer" target="_blank" rel="noopener"><i class="ti ti-book"></i>TRL AsyncGRPOTrainer</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/dataset_formats" target="_blank" rel="noopener"><i class="ti ti-book"></i>TRL: formato de datasets con tool calling</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/tool_calling/" target="_blank" rel="noopener"><i class="ti ti-server"></i>vLLM Tool Calling</a>
+      <a class="source-link" href="https://huggingface.co/blog/openenv-agentic-rl" target="_blank" rel="noopener"><i class="ti ti-article"></i>OpenEnv para RL agéntico (HF blog)</a>
+      <a class="source-link" href="https://huggingface.co/blog/sergiopaniego/rl-environments-2026" target="_blank" rel="noopener"><i class="ti ti-article"></i>One sandbox per rollout (HF blog)</a>
+      <a class="source-link" href="https://github.com/huggingface/OpenEnv" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>huggingface/OpenEnv</a>
+      <a class="source-link" href="https://github.com/xhluca/bm25s" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>bm25s</a>
+      <a class="source-link" href="https://gorilla.cs.berkeley.edu/leaderboard.html" target="_blank" rel="noopener"><i class="ti ti-trophy"></i>BFCL Leaderboard</a>
+      <a class="source-link" href="https://huggingface.co/datasets/Salesforce/APIGen-MT-5k" target="_blank" rel="noopener"><i class="ti ti-database"></i>Salesforce/APIGen-MT-5k (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/google/xquad" target="_blank" rel="noopener"><i class="ti ti-database"></i>google/xquad (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/wikimedia/wikipedia" target="_blank" rel="noopener"><i class="ti ti-database"></i>wikimedia/wikipedia (HF)</a>
+      <a class="source-link" href="grpo-rl.html"><i class="ti ti-repeat"></i>Guía: GRPO y RL para razonamiento</a>
+      <a class="source-link" href="sft-dataset.html"><i class="ti ti-database"></i>Guía: Dataset de SFT</a>
+      <a class="source-link" href="synthetic-pipeline.html"><i class="ti ti-wand"></i>Guía: Pipeline de datos sintéticos</a>
+      <a class="source-link" href="agentes-mcp.html"><i class="ti ti-plug"></i>Guía: Agentes con tool calling y MCP</a>
+      <a class="source-link" href="rag-espanol.html"><i class="ti ti-search"></i>Guía: RAG en español y portugués</a>
+      <a class="source-link" href="evaluacion-estadistica.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación estadísticamente rigurosa</a>
+      <a class="source-link" href="serving-produccion.html"><i class="ti ti-server"></i>Guía: Serving en producción</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

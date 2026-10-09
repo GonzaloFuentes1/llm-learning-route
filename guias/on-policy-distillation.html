@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="On-policy distillation con el DistillationTrainer de TRL: el estudiante genera y el teacher corrige cada token con reverse KL, para transferir razonamiento en español, recuperar el chat tras el continual pretraining y fusionar expertos con MOPD.">
+<title>On-policy distillation con TRL — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Post-training &amp; Alineamiento</div>
+    <h1 class="guide-title">On-policy distillation con TRL</h1>
+    <div class="guide-desc">En la destilación on-policy el estudiante genera sus propias respuestas y el teacher corrige cada token con reverse KL. La señal es densa como en el SFT y on-policy como en el RL. Esta guía usa el <code>DistillationTrainer</code> de TRL 1.x en tres recetas: transferir razonamiento en español de Qwen3-8B a Qwen3-1.7B, recuperar el chat de un modelo después del continual pretraining en es/pt y fusionar expertos por dominio con MOPD.</div>
+  </div>
+
+  <!-- 1. Qué es -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-exchange" aria-hidden="true"></i>1. Off-policy vs on-policy: el problema que resuelve</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Prompt es/pt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Estudiante genera (vLLM)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Teacher puntúa cada token</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Reverse KL por token</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Update del estudiante</div>
+    </div>
+
+    <p>El SFT sobre salidas del teacher (destilación <em>off-policy</em>) entrena al estudiante solo con prefijos perfectos. En inferencia, en cambio, el estudiante continúa sus propios prefijos, que tienen errores, y nunca aprendió a recuperarse de ellos. Eso es el <strong>exposure bias</strong>, y crece con el largo de la secuencia. Por eso duele tanto en razonamiento largo. El RL (GRPO) sí es on-policy, pero da una sola recompensa escalar por respuesta: unos pocos bits por episodio. La <strong>destilación on-policy (OPD)</strong> combina lo mejor de los dos. El estudiante muestrea la respuesta, el teacher calcula su distribución sobre <em>cada</em> token de esa respuesta y la pérdida es la divergencia token a token. El resultado es una señal densa sobre los errores que el estudiante realmente comete.</p>
+
+    <table class="model-table">
+      <tr><th>Método</th><th>¿Quién genera?</th><th>Señal</th><th>Requiere</th></tr>
+      <tr><td>SFT / destilación off-policy</td><td>Teacher (offline)</td><td>Densa (cada token), pero sobre prefijos del teacher</td><td>Dataset de trazas del teacher</td></tr>
+      <tr><td>RL (GRPO, RLVR)</td><td>Estudiante</td><td>Escalar por respuesta</td><td>Verificador o reward model; muchos rollouts</td></tr>
+      <tr><td>OPD (esta guía)</td><td>Estudiante</td><td>Densa: una divergencia por token</td><td>Teacher con logprobs y <strong>el mismo tokenizer</strong></td></tr>
+    </table>
+
+    <p>Hay evidencia pública de su eficiencia. En el experimento de Thinking Machines (2025), Qwen3-8B-Base con SFT sobre 400K trazas de OpenThoughts-3 llega a 60% en AIME'24. Continuando con OPD pasa a ~70% en unos 150 pasos (en la práctica usaron Qwen3-8B como teacher, que rindió algo mejor que Qwen3-32B). Los autores estiman una reducción de costo de 9× a 30× frente a seguir escalando el SFT hasta 2M ejemplos. En otro experimento, en el que el teacher es una copia del mismo modelo entrenada con RL, OPD alcanza al teacher con 7-10× menos pasos de gradiente que el RL, lo que estiman en 50-100× menos cómputo. El Qwen3 Technical Report usa OPD para sus modelos chicos: Qwen3-8B destilado on-policy llega a 74.4 en AIME'24 con ~1/10 de las GPU-horas del RL. En 2026 OPD también se usa para <em>consolidar</em> modelos. MOPD (Multi-teacher OPD) entrena un experto por dominio con RL y los funde en un solo estudiante, superando a Mix-RL, RL en cascada y merging de parámetros en Qwen3-30B-A3B. Se usó en el post-training de MiMo-V2-Flash.</p>
+
+    <div class="tip"><strong>Por qué importa para LatamGPT:</strong> después del continual pretraining en corpus es/pt, el modelo sabe más sobre la región pero pierde instruction-following. OPD desde el instruct original devuelve el comportamiento de chat sin borrar el conocimiento nuevo (receta B, §7). Es el caso de uso con mejor relación costo/beneficio de esta guía.</div>
+  </div>
+
+  <!-- 2. Pérdida -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-math-function" aria-hidden="true"></i>2. La pérdida: reverse KL, forward KL y el <code>beta</code> de TRL</h2>
+
+    <p>TRL minimiza la <strong>divergencia de Jensen-Shannon generalizada</strong> entre la distribución del estudiante <code>p_S</code> y la del teacher <code>p_T</code> en cada posición de la respuesta generada. Con <code>p_M = (1-β)·p_S + β·p_T</code>, la pérdida es <code>β·KL(p_T‖p_M) + (1-β)·KL(p_S‖p_M)</code>. Los extremos se implementan como casos especiales: <code>beta=0.0</code> es la forward KL <code>KL(p_T‖p_S)</code> y <code>beta=1.0</code> es la reverse KL <code>KL(p_S‖p_T)</code>.</p>
+    <p>La reverse KL es <strong>mode seeking</strong>. Penaliza fuerte que el estudiante ponga masa donde el teacher no la pone, pero no lo obliga a cubrir todos los modos del teacher. Para un estudiante chico eso es lo deseable: elige un camino que el teacher aprueba en vez de repartirse entre todos. Además, la reverse KL estimada en tokens muestreados por el estudiante es un objetivo on-policy en sentido estricto. Thinking Machines lo plantea como RL con recompensa por token igual a <code>-(log p_S(x_t) - log p_T(x_t))</code> y factor de descuento cero: cada token solo optimiza el siguiente.</p>
+
+    <p>El bloque siguiente es autocontenido y reproduce el cálculo con tensores de juguete. Sirve para fijar la intuición y para depurar si alguna vez escribes tu propia pérdida.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · jsd_toy.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+import torch.nn.functional as F
+
+
+def generalized_jsd(student_logits, teacher_logits, mask, beta=1.0, temperature=1.0):
+    """JSD generalizada por token, como la usa TRL. Shapes: (B, T, V), mask (B, T)."""
+    s = F.log_softmax(student_logits / temperature, dim=-1)
+    t = F.log_softmax(teacher_logits / temperature, dim=-1)
+    if beta == 0.0:      # forward KL: KL(p_T || p_S)
+        per_tok = F.kl_div(s, t, reduction="none", log_target=True).sum(-1)
+    elif beta == 1.0:    # reverse KL: KL(p_S || p_T)
+        per_tok = F.kl_div(t, s, reduction="none", log_target=True).sum(-1)
+    else:
+        b = torch.tensor(beta)
+        m = torch.logsumexp(torch.stack([s + torch.log(1 - b), t + torch.log(b)]), dim=0)
+        kl_t = F.kl_div(m, t, reduction="none", log_target=True).sum(-1)
+        kl_s = F.kl_div(m, s, reduction="none", log_target=True).sum(-1)
+        per_tok = b * kl_t + (1 - b) * kl_s
+    return (per_tok * mask).sum() / mask.sum()
+
+
+torch.manual_seed(0)
+B, T, V = 2, 5, 32
+student = torch.randn(B, T, V)
+teacher = torch.randn(B, T, V) * 2.0           # teacher más "seguro" (menor entropía)
+mask = torch.ones(B, T)
+mask[1, 3:] = 0                                  # padding después del EOS
+
+for beta in (0.0, 0.5, 1.0):
+    print(f"beta={beta}: {generalized_jsd(student, teacher, mask, beta):.4f}")
+
+# Estimador de un solo token (Thinking Machines): reverse KL en el token muestreado
+sampled = torch.distributions.Categorical(logits=student).sample()          # (B, T)
+lp_s = F.log_softmax(student, -1).gather(-1, sampled[..., None]).squeeze(-1)
+lp_t = F.log_softmax(teacher, -1).gather(-1, sampled[..., None]).squeeze(-1)
+per_token_reward = -(lp_s - lp_t) * mask       # "ventaja" por token, descuento 0
+print("reward medio por token:", (per_token_reward.sum() / mask.sum()).item())</code></pre>
+    </div>
+
+    <div class="warn"><strong>Los defaults de <code>beta</code> no coinciden entre trainers.</strong> En TRL 1.x (verificado en 1.15), <code>DistillationTrainer</code> usa <code>beta=1.0</code> (reverse KL), <code>AsyncDistillationTrainer</code> usa <code>beta=0.0</code> (forward KL) y <code>GOLDTrainer</code> usa <code>beta=0.5</code>. Fíjalo siempre de forma explícita. Además, este <code>beta</code> elige la divergencia: no es el coeficiente de penalización KL contra un modelo de referencia, como el de GRPO. En OPD no hay modelo de referencia.</div>
+  </div>
+
+  <!-- 3. Requisitos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>3. Requisitos, hardware y costos</h2>
+
+    <p>OPD tiene tres requisitos duros:</p>
+    <p><strong>(1) Vocabulario compartido.</strong> La pérdida compara distribuciones sobre los mismos ids de token. Qwen3-0.6B, 1.7B, 4B y 8B comparten tokenizer, así que cualquier par de la familia sirve. Si extendiste el vocabulario para es/pt, usa GOLD (§7).</p>
+    <p><strong>(2) Acceso a los logits del teacher</strong>, ya sea cargado localmente o servido con vLLM con <code>--max-logprobs -1</code>. Las APIs cerradas no sirven.</p>
+    <p><strong>(3) Generación en cada paso.</strong> El rollout del estudiante domina el tiempo de reloj, así que usa vLLM.</p>
+
+    <table class="model-table">
+      <tr><th>Receta</th><th>Modelos</th><th>Hardware</th><th>Tiempo orientativo</th></tr>
+      <tr><td>A. Razonamiento en español</td><td>Qwen3-8B → Qwen3-1.7B, full FT</td><td>1×H100/A100 80GB, vLLM colocate; 2 GPUs para server mode</td><td>~300 pasos × 64 rollouts de hasta 4K tokens: 15-25 h en 1×H100</td></tr>
+      <tr><td>A, presupuesto reducido</td><td>Qwen3-4B → Qwen3-0.6B, LoRA</td><td>1×24GB (L4, RTX 4090)</td><td>Respuestas de hasta 2K tokens; 1-2 días</td></tr>
+      <tr><td>B. Recuperar chat tras CPT</td><td>Qwen3-8B (instruct) → checkpoint CPT 8B</td><td>LoRA: 1×80GB; full FT: 4×80GB con FSDP2</td><td>~200 pasos con respuestas de hasta 1K tokens: 6-12 h</td></tr>
+      <tr><td>C. MOPD multi-teacher</td><td>2+ expertos 8B → estudiante SFT</td><td>1 GPU por teacher + 1 para vLLM del estudiante + 1-2 de training</td><td>Depende del número de dominios</td></tr>
+    </table>
+    <p>Los tiempos son estimaciones propias, no mediciones: dependen del largo medio de las respuestas (mira <code>completions/mean_length</code>) y de cuánta memoria le des a vLLM. En la receta A, la cuenta de memoria es aproximada: el estudiante de 1.7B en bf16 con AdamW ocupa ~14 GB, el teacher de 8B en bf16 ~16 GB y vLLM con <code>vllm_gpu_memory_utilization=0.30</code> ~24 GB. Lo que queda es para activaciones.</p>
+    <div class="warn"><strong>bf16 puro y learning rates de 1e-6:</strong> cargar el estudiante en bf16 ahorra memoria, pero bf16 tiene solo 8 bits de mantisa: una actualización de ~1e-6 sobre pesos de magnitud ~1e-2 queda por debajo de la resolución y muchas se pierden por redondeo. Si la loss no baja en full FT, carga el estudiante en float32 (<code>model_init_kwargs={"dtype": "float32"}</code>, el default de TRL) con <code>bf16=True</code> para entrenar en precisión mixta: el 1.7B pasa a ~27 GB entre pesos, gradientes y AdamW, así que baja <code>vllm_gpu_memory_utilization</code> o usa el modo server. Con LoRA no hay problema, porque el LR es mayor y los adaptadores se pueden mantener en float32.</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">uv venv .venv-opd --python 3.12
+source .venv-opd/bin/activate
+uv pip install "trl[vllm]&gt;=1.14" "peft&gt;=0.21" "transformers&gt;=5.17,&lt;6" "datasets&gt;=5" \
+  trackio "lm-eval[ifeval,vllm]&gt;=0.4.13" lingua-language-detector
+# AsyncDistillationTrainer (receta C) exige vllm&gt;=0.22 y transformers&gt;=5.2.
+# Si pip reporta conflicto: instala vllm primero y luego transformers con --no-deps.</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Datos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database" aria-hidden="true"></i>4. Datos: solo prompts, y en español y portugués</h2>
+
+    <p>OPD no necesita respuestas, porque el estudiante las genera. El trainer espera un dataset <em>conversacional prompt-only</em>: una columna <code>prompt</code> con una lista de mensajes. Las demás columnas se ignoran, así que guardamos <code>teacher_id</code> (para MOPD) y <code>lang</code> (idioma esperado de la respuesta, para evaluar). La mezcla combina tres fuentes: problemas de <code>trl-lib/DeepMath-103K</code>, prompts de chat de <code>allenai/tulu-3-sft-mixture</code> y prompts escritos por personas en español y portugués de <code>CohereLabs/aya_dataset</code> (<code>language_code</code> <code>spa</code> y <code>por</code>). Si ya tienes problemas traducidos o sintéticos en es/pt (ver la guía de <a href="synthetic-pipeline.html">pipeline sintético</a>), agrégalos como JSONL.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · prepare_prompts.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from pathlib import Path
+
+from datasets import concatenate_datasets, load_dataset
+
+SYSTEM = {
+    "spa": "Responde siempre en español. Si razonas paso a paso, razona también en español.",
+    "por": "Responda sempre em português. Se raciocinar passo a passo, raciocine também em português.",
+}
+
+
+def make_row(system_lang, user_turns, teacher_id):
+    msgs = [{"role": "system", "content": SYSTEM[system_lang]}]
+    msgs += [{"role": m["role"], "content": m["content"]} for m in user_turns]
+    return {"prompt": msgs, "teacher_id": teacher_id, "lang": system_lang}
+
+
+# 1) Razonamiento matemático: enunciados en inglés, pero se pide razonar en español
+math = load_dataset("trl-lib/DeepMath-103K", split="train").shuffle(seed=0).select(range(20_000))
+math = math.map(lambda x: make_row("spa", x["prompt"], "math"), remove_columns=math.column_names)
+
+# 2) Chat general: el prefijo de la conversación hasta el primer turno del asistente
+tulu = load_dataset("allenai/tulu-3-sft-mixture", split="train").shuffle(seed=0).select(range(30_000))
+
+
+def tulu_prompt(x):
+    prefix = []
+    for m in x["messages"]:
+        if m["role"] == "assistant":
+            break
+        if m["role"] == "user":
+            prefix.append(m)
+    return make_row("spa", prefix[:1], "chat")
+
+
+tulu = tulu.map(tulu_prompt, remove_columns=tulu.column_names)
+tulu = tulu.filter(lambda x: len(x["prompt"]) == 2).select(range(10_000))
+
+# 3) Prompts nativos en español y portugués (Aya, escritos por personas)
+aya = load_dataset("CohereLabs/aya_dataset", split="train")
+native = []
+for code in ("spa", "por"):
+    sub = aya.filter(lambda x, c=code: x["language_code"] == c)
+    sub = sub.map(lambda x, c=code: make_row(c, [{"role": "user", "content": x["inputs"]}], "chat"),
+                  remove_columns=aya.column_names)
+    native.append(sub)
+
+parts = [math, tulu, *native]
+
+# 4) Opcional: tus problemas en es/pt, JSONL con campos "problem" y "lang" (spa|por)
+extra = Path("data/mate_es_pt.jsonl")
+if extra.exists():
+    own = load_dataset("json", data_files=str(extra), split="train")
+    own = own.map(lambda x: make_row(x["lang"], [{"role": "user", "content": x["problem"]}], "math"),
+                  remove_columns=own.column_names)
+    parts.append(own)
+
+ds = concatenate_datasets(parts).shuffle(seed=0)
+ds = ds.train_test_split(test_size=500, seed=0)
+ds.save_to_disk("data/opd_prompts")
+print(ds)
+print(ds["train"].to_pandas()["lang"].value_counts())</code></pre>
+    </div>
+
+    <div class="warn"><strong>El estudiante hereda los sesgos de idioma del teacher.</strong> Si el teacher razona en inglés aunque le pidas español (Qwen3 lo hace a menudo en modo <em>thinking</em>), asigna probabilidad alta a los tokens en inglés y empuja al estudiante en esa dirección. Antes de entrenar, genera 100 respuestas del teacher con el mismo system prompt y mide el idioma con el script de §9. Si menos del ~90% de las trazas salen en español, cambia el teacher o el prompt antes de gastar GPU-horas.</div>
+  </div>
+
+  <!-- 5. Receta A -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-school" aria-hidden="true"></i>5. Receta A: razonamiento en español, Qwen3-8B → Qwen3-1.7B</h2>
+
+    <p>Esta es la configuración de referencia. Los dos modelos son de la misma familia y vLLM corre dentro del proceso de entrenamiento (modo <code>colocate</code>, el default). Qwen3 tiene modo <em>thinking</em>. Con <code>chat_template_kwargs</code> lo activas para que el estudiante genere trazas que el teacher puntúa. Qwen3-1.7B ya fue destilado por Qwen, así que el objetivo aquí es mover el <em>idioma</em> de la traza y el rendimiento en problemas en español. Para un experimento limpio de transferencia de capacidad, parte de tu propio checkpoint SFT (<code>&lt;TU_ORG&gt;/&lt;modelo-sft&gt;</code>).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · opd_train.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk
+from trl import DistillationConfig, DistillationTrainer
+
+ds = load_from_disk("data/opd_prompts")
+
+args = DistillationConfig(
+    output_dir="checkpoints/qwen3-1.7b-opd-es",
+    # Ojo: si no pasas dtype, el trainer carga el modelo en float32
+    model_init_kwargs={"dtype": "bfloat16"},
+    teacher_model_init_kwargs={"dtype": "bfloat16"},
+    beta=1.0,                       # reverse KL (default, pero explícito)
+    temperature=1.0,                # muestreo del estudiante Y temperatura de la pérdida
+    max_completion_length=4096,
+    chat_template_kwargs={"enable_thinking": True},
+    use_vllm=True,                  # vllm_mode="colocate" por defecto
+    vllm_gpu_memory_utilization=0.30,
+    vllm_max_model_length=6144,
+    learning_rate=1e-6,             # default de DistillationConfig para full FT
+    lr_scheduler_type="constant_with_warmup",
+    warmup_steps=0.05,              # float &lt; 1 = fracción de los pasos totales
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=16, # 64 rollouts por paso de optimizador
+    max_steps=300,
+    logging_steps=5,
+    save_steps=50,
+    eval_strategy="steps",
+    eval_steps=50,
+    log_completions=True,
+    num_completions_to_print=2,
+    report_to="trackio",
+)
+
+trainer = DistillationTrainer(
+    model="Qwen/Qwen3-1.7B",
+    teacher_model="Qwen/Qwen3-8B",
+    args=args,
+    train_dataset=ds["train"],
+    eval_dataset=ds["test"].select(range(64)),
+)
+trainer.train()
+trainer.save_model()</code></pre>
+    </div>
+    <p>Lanza con <code>accelerate launch opd_train.py</code>. Si el teacher es mucho más grande o te quedas sin memoria, saca vLLM a una GPU aparte (modo server). El servidor del estudiante necesita el modo dev y la transferencia de pesos por NCCL, porque el trainer le empuja los pesos nuevos en cada paso:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># GPU 0: servidor vLLM del ESTUDIANTE (genera los rollouts)
+CUDA_VISIBLE_DEVICES=0 VLLM_SERVER_DEV_MODE=1 vllm serve Qwen/Qwen3-1.7B \
+  --weight-transfer-config '{"backend": "nccl"}' \
+  --logprobs-mode processed_logprobs \
+  --max-logprobs -1 &amp;
+
+# GPU 1: trainer (estudiante + teacher local). En opd_train.py agrega vllm_mode="server"
+CUDA_VISIBLE_DEVICES=1 accelerate launch opd_train.py</code></pre>
+    </div>
+
+    <div class="tip"><strong>Presupuesto reducido (1×24GB):</strong> usa <code>model="Qwen/Qwen3-0.6B"</code>, <code>teacher_model="Qwen/Qwen3-4B"</code>, <code>max_completion_length=2048</code> y <code>vllm_gpu_memory_utilization=0.25</code>. Pasa también <code>peft_config=LoraConfig(r=32, lora_alpha=64, target_modules="all-linear")</code>, con un learning rate ~10× mayor (1e-5). <code>"all-linear"</code> excluye <code>lm_head</code>, y eso importa: TRL rechaza adaptadores en <code>lm_head</code> porque la pérdida lee esa matriz directamente. Si necesitas entrenar la cabeza, usa <code>modules_to_save=["lm_head"]</code>.</div>
+  </div>
+
+  <!-- 6. Monitoreo -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>6. Qué mirar mientras entrena</h2>
+
+    <table class="model-table">
+      <tr><th>Métrica (TRL)</th><th>Comportamiento sano</th><th>Señal de alarma</th></tr>
+      <tr><td><code>loss</code> (JSD/KL por token)</td><td>Baja rápido en los primeros 50-100 pasos y luego se aplana</td><td>Sube o queda plana desde el inicio: LR demasiado bajo, o teacher y estudiante con chat templates distintos</td></tr>
+      <tr><td><code>entropy</code></td><td>Baja de a poco hacia la entropía típica del teacher</td><td>Colapso a ~0 (respuestas repetitivas) o explosión (texto incoherente)</td></tr>
+      <tr><td><code>completions/mean_length</code></td><td>Converge al largo típico del teacher</td><td>Crece sin parar: el estudiante entra en loops que el teacher no penaliza lo suficiente</td></tr>
+      <tr><td><code>completions/clipped_ratio</code></td><td>&lt; 10%</td><td>&gt; 25%: sube <code>max_completion_length</code> o baja el razonamiento. Las respuestas truncadas no tienen EOS y enseñan a no cerrar</td></tr>
+      <tr><td><code>completions/mean_terminated_length</code></td><td>Similar a <code>mean_length</code></td><td>Mucho menor: casi todas las respuestas largas se están cortando</td></tr>
+    </table>
+    <p>Activa <code>log_completions=True</code> y <strong>lee</strong> las respuestas cada 50 pasos. Revisa tres cosas: si la traza sigue en español, si aparecen etiquetas <code>&lt;think&gt;</code> mal cerradas y si el estudiante copia muletillas del teacher sin resolver el problema.</p>
+  </div>
+
+  <!-- 7. Receta B -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-recycle" aria-hidden="true"></i>7. Receta B (LatamGPT): recuperar el chat tras el continual pretraining</h2>
+
+    <p>El escenario es este: tomaste un modelo instruct, le hiciste <a href="continual-pretraining.html">continual pretraining</a> o <a href="mid-training.html">mid-training</a> con corpus regional en es/pt y el modelo ahora sabe más, pero sigue peor las instrucciones. Thinking Machines midió exactamente este caso con Qwen3-8B y documentos internos. Destilaron on-policy desde el Qwen3-8B original sobre prompts de Tulu 3:</p>
+
+    <table class="model-table">
+      <tr><th>Modelo (Thinking Machines, 2025)</th><th>QA de dominio</th><th>IF-eval</th></tr>
+      <tr><td>Qwen3-8B original</td><td>18%</td><td>85%</td></tr>
+      <tr><td>+ mid-training 100% documentos</td><td>43%</td><td>45%</td></tr>
+      <tr><td>+ mid-training 70% documentos / 30% chat</td><td>36%</td><td>79%</td></tr>
+      <tr><td>+ mid-training 70/30 + OPD desde el original</td><td>41%</td><td>83%</td></tr>
+    </table>
+    <p>OPD recupera casi todo el IF-eval y conserva el conocimiento nuevo. Para LatamGPT, el estudiante es tu checkpoint CPT y el teacher es el instruct del que partiste. Usa modo <em>no-thinking</em> y respuestas más cortas, porque aquí importa el estilo de chat y no el razonamiento largo. Con dos modelos de 8B, LoRA es lo que entra en una GPU.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · recover_chat.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk
+from peft import LoraConfig
+from trl import DistillationConfig, DistillationTrainer
+
+ds = load_from_disk("data/opd_prompts")
+chat = ds["train"].filter(lambda x: x["teacher_id"] == "chat")   # Tulu + Aya es/pt
+
+args = DistillationConfig(
+    output_dir="checkpoints/cpt-es-opd-chat",
+    model_init_kwargs={"dtype": "bfloat16"},
+    teacher_model_init_kwargs={"dtype": "bfloat16"},
+    beta=1.0,
+    max_completion_length=1024,
+    chat_template_kwargs={"enable_thinking": False},
+    use_vllm=True,
+    vllm_gpu_memory_utilization=0.25,
+    learning_rate=1e-5,             # LoRA: ~10x el LR de full FT; barre 5e-6 a 5e-5
+    lr_scheduler_type="constant_with_warmup",
+    warmup_steps=0.05,
+    per_device_train_batch_size=4,
+    gradient_accumulation_steps=16,
+    max_steps=200,
+    logging_steps=5,
+    save_steps=50,
+    log_completions=True,
+    report_to="trackio",
+)
+
+trainer = DistillationTrainer(
+    model="&lt;TU_ORG&gt;/&lt;qwen3-8b-cpt-es&gt;",   # tu checkpoint después del CPT
+    teacher_model="Qwen/Qwen3-8B",            # el instruct del que partiste
+    args=args,
+    train_dataset=chat,
+    peft_config=LoraConfig(r=64, lora_alpha=128, target_modules="all-linear", task_type="CAUSAL_LM"),
+)
+trainer.train()
+trainer.save_model()</code></pre>
+    </div>
+
+    <div class="warn"><strong>Dos trampas frecuentes.</strong> (1) Si hiciste el CPT sobre el modelo <em>base</em>, el estudiante todavía no sabe chatear: sus rollouts iniciales son texto libre y el teacher da poca señal útil. Haz antes un SFT corto de arranque (ver <a href="sft-dataset.html">datasets para SFT</a>) y aplica OPD después. (2) El checkpoint CPT tiene que conservar el mismo chat template y los mismos tokens especiales que el teacher. Si el EOS o <code>&lt;|im_end|&gt;</code> difieren, la pérdida compara tokens que no significan lo mismo. Fu et al. (2026) listan este mismatch entre sus tres failure modes principales.</div>
+
+    <div class="sub-title">Si extendiste el vocabulario para es/pt: GOLD</div>
+    <p>Si LatamGPT agregó tokens al tokenizer, estudiante y teacher ya no comparten vocabulario y <code>DistillationTrainer</code> entrena contra ids equivocados. <code>GOLDTrainer</code> (en <code>trl.experimental</code>) alinea los tramos de texto entre los dos tokenizers y fusiona las probabilidades, basado en la pérdida ULD de Boizard et al. Con <code>uld_use_hybrid_loss=True</code> compara directo los tokens que coinciden (la mayoría, si solo extendiste el vocabulario) y usa ULD para el resto. GOLD hereda la mezcla on/off-policy de GKD: <code>lmbda=1.0</code> la vuelve 100% on-policy. A diferencia de <code>DistillationTrainer</code>, espera un dataset conversacional <em>con</em> respuestas (<code>messages</code>).</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · recover_chat_gold.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_dataset
+from trl.experimental.gold import GOLDConfig, GOLDTrainer
+
+# GOLD usa el formato "messages" (prompt + respuesta); con lmbda=1.0 las respuestas
+# las genera el estudiante y las del dataset solo delimitan prompt y completion
+train = load_dataset("allenai/tulu-3-sft-mixture", split="train[:20000]")
+
+args = GOLDConfig(
+    output_dir="checkpoints/cpt-es-gold",
+    model_init_kwargs={"dtype": "bfloat16"},
+    teacher_model_init_kwargs={"dtype": "bfloat16"},
+    use_uld_loss=True,
+    uld_use_hybrid_loss=True,
+    teacher_tokenizer_name_or_path="Qwen/Qwen3-8B",
+    lmbda=1.0,                      # fracción on-policy
+    max_completion_length=1024,     # default 128: súbelo
+    max_length=2048,
+    learning_rate=1e-6,             # default de GOLD: 1e-7
+    per_device_train_batch_size=2,
+    gradient_accumulation_steps=16,
+    dataloader_drop_last=True,
+    use_vllm=True,
+    vllm_gpu_memory_utilization=0.25,   # default 0.9: bájalo si el teacher comparte GPU
+)
+
+trainer = GOLDTrainer(
+    model="&lt;TU_ORG&gt;/&lt;modelo-cpt-vocab-extendido&gt;",
+    teacher_model="Qwen/Qwen3-8B",
+    args=args,
+    train_dataset=train,
+)
+trainer.train()</code></pre>
+    </div>
+  </div>
+
+  <!-- 8. Receta C -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-git-merge" aria-hidden="true"></i>8. Receta C: MOPD, fusionar expertos por dominio</h2>
+
+    <p>MOPD tiene tres etapas: SFT general, un experto por dominio entrenado de forma independiente con RL (por ejemplo, matemática en español con <a href="grpo-rl.html">GRPO</a> y chat/instrucciones con DPO o RL) y una fusión por OPD en la que cada prompt lo corrige <em>solo</em> el experto de su dominio. <code>AsyncDistillationTrainer</code> implementa la tercera etapa. El estudiante genera desde su propio servidor vLLM, cada teacher se sirve con <code>vllm serve</code> y la columna <code>teacher_id</code> enruta cada fila a su experto. El entrenamiento corre en paralelo con la generación, así que algunas muestras vienen de una política un poco vieja; <code>max_staleness</code> descarta las que van demasiado atrasadas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">TEACHER_MATH="&lt;TU_ORG&gt;/&lt;experto-mate-es&gt;"
+TEACHER_CHAT="&lt;TU_ORG&gt;/&lt;experto-chat-es&gt;"
+STUDENT="&lt;TU_ORG&gt;/&lt;estudiante-sft&gt;"
+
+# Teachers: estáticos, solo puntúan (logprobs procesados con temperatura y sin tope de top-k)
+CUDA_VISIBLE_DEVICES=0 vllm serve "$TEACHER_MATH" --port 8001 \
+  --logprobs-mode processed_logprobs --max-logprobs -1 &amp;
+CUDA_VISIBLE_DEVICES=1 vllm serve "$TEACHER_CHAT" --port 8002 \
+  --logprobs-mode processed_logprobs --max-logprobs -1 &amp;
+
+# Estudiante: solo genera; recibe pesos nuevos por NCCL
+CUDA_VISIBLE_DEVICES=2 VLLM_SERVER_DEV_MODE=1 vllm serve "$STUDENT" --port 8000 \
+  --weight-transfer-config '{"backend":"nccl"}' &amp;
+
+# Trainer en otra GPU (para varias GPUs solo se soporta FSDP2, no DeepSpeed ZeRO)
+CUDA_VISIBLE_DEVICES=3 accelerate launch mopd_async.py</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · mopd_async.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from datasets import load_from_disk
+from trl.experimental.async_distillation import AsyncDistillationConfig, AsyncDistillationTrainer
+
+ds = load_from_disk("data/opd_prompts")["train"].select_columns(["prompt", "teacher_id"])
+
+args = AsyncDistillationConfig(
+    output_dir="checkpoints/mopd-es",
+    dtype="bfloat16",                       # default: float32
+    vllm_server_base_url="http://localhost:8000",
+    teacher_server_urls={"math": "http://localhost:8001", "chat": "http://localhost:8002"},
+    beta=1.0,                               # el paper usa reverse KL; el default aquí es 0.0
+    teacher_top_k=16,
+    max_completion_length=4096,
+    learning_rate=1e-6,
+    per_device_train_batch_size=8,
+    gradient_accumulation_steps=8,
+    max_staleness=4,
+    max_steps=500,
+    report_to="trackio",
+)
+
+trainer = AsyncDistillationTrainer(
+    model="&lt;TU_ORG&gt;/&lt;estudiante-sft&gt;",   # el mismo modelo que sirve el puerto 8000
+    args=args,
+    train_dataset=ds,
+)
+trainer.train()</code></pre>
+    </div>
+    <div class="warn"><strong>Lo que el teacher manda por HTTP es una aproximación.</strong> Solo viajan los <code>teacher_top_k</code> candidatos de cada posición, más el token realizado y un "tail bucket" con la masa restante. Con <code>beta=0.0</code> se usa todo ese soporte. Con <code>beta≠0</code>, TRL lo reduce a dos candidatos: el top-1 del teacher y el token que generó el estudiante. Si quieres la reverse KL del paper, acepta esa aproximación. Si quieres usar el top-k completo, prueba <code>beta=0.0</code> y compara. Todos los teachers deben compartir el tokenizer del estudiante; si no, el entrenamiento va contra tokens equivocados <em>sin dar error</em>.</div>
+
+    <table class="model-table">
+      <tr><th>¿MOPD o model merging?</th><th>MOPD</th><th><a href="model-merging.html">Model merging</a></th></tr>
+      <tr><td>Costo</td><td>GPU-horas de entrenamiento + servir N teachers</td><td>Minutos en CPU/GPU</td></tr>
+      <tr><td>Calidad reportada</td><td>Hereda casi toda la capacidad de cada teacher (Qwen3-30B-A3B)</td><td>En el paper de MOPD, el merging de parámetros (Param-Merge) queda por debajo de MOPD</td></tr>
+      <tr><td>Requisitos</td><td>Mismo tokenizer; teachers servibles</td><td>Misma arquitectura y mismo punto de partida</td></tr>
+      <tr><td>Cuándo usarlo</td><td>Versión final del modelo; dominios en conflicto</td><td>Iteración rápida y baseline barato antes de MOPD</td></tr>
+    </table>
+  </div>
+
+  <!-- 9. Evaluación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>9. Evaluación: capacidad, instrucciones e idioma</h2>
+
+    <p>Compara siempre con el <strong>mismo presupuesto de GPU-horas</strong> tres variantes: (a) SFT off-policy con trazas del teacher (ver <a href="destilacion-razonamiento.html">destilación de razonamiento</a>), (b) GRPO desde el mismo checkpoint y (c) OPD. Para razonamiento en español usa MGSM-es. Para instrucciones, IFEval en inglés y la versión en español de BSC (<code>ifeval_es</code>). Más detalles en la guía de <a href="evaluacion-latam.html">evaluación es/pt</a>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Verifica primero los nombres exactos: lm_eval ls tasks | grep -E "ifeval|mgsm_native_cot_es"
+for MODEL in Qwen/Qwen3-1.7B checkpoints/qwen3-1.7b-sft-es checkpoints/qwen3-1.7b-opd-es; do
+  lm_eval --model vllm \
+    --model_args pretrained=$MODEL,dtype=bfloat16,gpu_memory_utilization=0.85,max_model_len=8192 \
+    --tasks mgsm_native_cot_es,ifeval,ifeval_es \
+    --apply_chat_template \
+    --batch_size auto \
+    --output_path resultados/opd/ \
+    --log_samples
+done</code></pre>
+    </div>
+
+    <p>Los benchmarks no miden en qué idioma razona el modelo, y para LatamGPT eso es tan importante como el score. El script siguiente genera sobre el split de test y mide qué fracción de trazas y respuestas sale en el idioma pedido:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · lang_consistency.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import sys
+from collections import Counter
+
+from datasets import load_from_disk
+from lingua import Language, LanguageDetectorBuilder
+from vllm import LLM, SamplingParams
+
+MODEL = sys.argv[1] if len(sys.argv) &gt; 1 else "checkpoints/qwen3-1.7b-opd-es"
+EXPECTED = {"spa": Language.SPANISH, "por": Language.PORTUGUESE}
+
+test = load_from_disk("data/opd_prompts")["test"].select(range(300))
+detector = LanguageDetectorBuilder.from_languages(
+    Language.SPANISH, Language.PORTUGUESE, Language.ENGLISH
+).build()
+
+llm = LLM(model=MODEL, dtype="bfloat16", max_model_len=8192)
+params = SamplingParams(temperature=0.6, top_p=0.95, max_tokens=4096)
+outputs = llm.chat([row["prompt"] for row in test], params,
+                   chat_template_kwargs={"enable_thinking": True})
+
+stats = Counter()
+for row, out in zip(test, outputs):
+    text = out.outputs[0].text
+    trace, _, answer = text.partition("&lt;/think&gt;")
+    if not answer:                        # sin cierre de think: traza truncada
+        stats["sin_cierre"] += 1
+        answer = ""
+    want = EXPECTED[row["lang"]]
+    stats["total"] += 1
+    stats["traza_ok"] += detector.detect_language_of(trace[-2000:]) == want
+    stats["respuesta_ok"] += bool(answer.strip()) and detector.detect_language_of(answer) == want
+
+n = stats["total"]
+print(f"{MODEL}: traza en idioma pedido {stats['traza_ok'] / n:.1%} | "
+      f"respuesta {stats['respuesta_ok'] / n:.1%} | sin cierre {stats['sin_cierre'] / n:.1%}")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Variante (rellénala)</th><th>GPU-h</th><th>MGSM-es</th><th>IFEval / IFEval-es</th><th>Traza en es</th></tr>
+      <tr><td>Qwen3-1.7B original</td><td>0</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>SFT off-policy (trazas del 8B)</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>GRPO (mismo presupuesto)</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+      <tr><td>OPD (receta A)</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+    </table>
+    <p>MGSM no tiene portugués. Para pt, evalúa con un set propio traducido o con PoETa v2, y para la receta B agrega tu QA de dominio regional. El objetivo de esa receta es subir IFEval <em>sin</em> bajar ese QA.</p>
+  </div>
+
+  <!-- 10. Diagnóstico -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-stethoscope" aria-hidden="true"></i>10. Hiperparámetros y failure modes</h2>
+
+    <table class="model-table">
+      <tr><th>Parámetro</th><th>Punto de partida</th><th>Nota</th></tr>
+      <tr><td><code>learning_rate</code></td><td>1e-6 en full FT; 1e-5 con LoRA</td><td>Con LoRA, ~10× el LR de full FT, como en el resto del post-training</td></tr>
+      <tr><td><code>beta</code></td><td>1.0 (reverse KL)</td><td>0.5 (JSD) si el estudiante es muy chico y colapsa a pocos modos</td></tr>
+      <tr><td><code>temperature</code></td><td>1.0</td><td>En <code>DistillationTrainer</code> afecta el muestreo <em>y</em> la pérdida; bajarla distorsiona la KL</td></tr>
+      <tr><td><code>max_completion_length</code></td><td>Percentil 90 del largo del teacher</td><td>Mira <code>clipped_ratio</code>; el default es 512</td></tr>
+      <tr><td>Rollouts por paso</td><td>64-256</td><td>Thinking Machines usó 64 prompts × 4 muestras</td></tr>
+      <tr><td>Pasos</td><td>100-300</td><td>La mayor parte de la ganancia llega pronto; evalúa cada 50 pasos</td></tr>
+    </table>
+
+    <p>Fu et al. (2026) identifican tres failure modes del OPD con log-ratio del token muestreado:</p>
+    <p><strong>Supervisión desbalanceada entre tokens.</strong> Unos pocos tokens dominan el gradiente.</p>
+    <p><strong>Guía poco confiable del teacher sobre prefijos del estudiante.</strong> En rollouts largos el prefijo se aleja del soporte típico del teacher, y ahí sus logprobs dejan de ser informativos.</p>
+    <p><strong>Mismatch de tokenizer o de tokens especiales.</strong></p>
+    <p>Sus remedios: comparar distribuciones sobre el top-K local del teacher, muestrear con top-p y enmascarar los tokens especiales. Puedes aproximar los dos primeros con <code>top_p=0.95</code> en el config y, en la receta C, con <code>teacher_top_k</code>. Para el tercero, revisa a mano que <code>tokenizer.chat_template</code> y <code>eos_token</code> del estudiante y del teacher coincidan.</p>
+    <div class="tip"><strong>Regla práctica:</strong> si el estudiante empieza muy lejos del teacher (un base sin SFT, o un modelo chico frente a uno 20× más grande), primero haz SFT off-policy para acercarlo y después OPD. OPD funciona mejor como corrección fina que como punto de partida. Así lo hacen Qwen3 y Thinking Machines.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link" href="https://thinkingmachines.ai/blog/on-policy-distillation/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>On-Policy Distillation (Thinking Machines, 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2306.13649" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>GKD: On-Policy Distillation of LMs (Agarwal et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2306.08543" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MiniLLM (Gu et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.09388" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Qwen3 Technical Report (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2606.30406" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MOPD: Multi-Teacher On-Policy Distillation (2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2601.02780" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MiMo-V2-Flash (Xiaomi, 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2603.25562" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Revisiting On-Policy Distillation: failure modes (Fu et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2604.00626" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>A Survey of On-Policy Distillation for LLMs (2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2402.12030" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Universal Logit Distillation (Boizard et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2509.04259" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>RL's Razor: Why Online RL Forgets Less (2025)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/distillation_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>TRL DistillationTrainer (docs)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/gold_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>TRL GOLD Trainer (docs)</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/async_distillation_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>TRL AsyncDistillationTrainer (docs)</a>
+      <a class="source-link" href="https://github.com/huggingface/trl/blob/main/examples/async_distillation_math/async_distillation_mopd.py" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Ejemplo MOPD de TRL (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/spaces/HuggingFaceH4/on-policy-distillation" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>HuggingFaceH4/on-policy-distillation (Space)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/trl-lib/DeepMath-103K" target="_blank" rel="noopener"><i class="ti ti-database"></i>trl-lib/DeepMath-103K (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/CohereLabs/aya_dataset" target="_blank" rel="noopener"><i class="ti ti-database"></i>CohereLabs/aya_dataset (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/BSC-LT/IFEval_es" target="_blank" rel="noopener"><i class="ti ti-database"></i>BSC-LT/IFEval_es (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-8B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen/Qwen3-8B (HF)</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>lm-evaluation-harness (GitHub)</a>
+      <a class="source-link" href="https://github.com/pemistahl/lingua-py" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>lingua-py (GitHub)</a>
+      <a class="source-link" href="destilacion-razonamiento.html"><i class="ti ti-school"></i>Guía: Destilación de razonamiento</a>
+      <a class="source-link" href="grpo-rl.html"><i class="ti ti-target-arrow"></i>Guía: GRPO y RL</a>
+      <a class="source-link" href="model-merging.html"><i class="ti ti-git-merge"></i>Guía: Model merging</a>
+      <a class="source-link" href="lora-finetuning.html"><i class="ti ti-adjustments"></i>Guía: LoRA fine-tuning</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+      <a class="source-link" href="mid-training.html"><i class="ti ti-route-2"></i>Guía: Mid-training y annealing</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación en español y portugués</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>
