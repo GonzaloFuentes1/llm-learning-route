@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoE desde cero: router, expertos y balanceo — LatamGPT</title>
+<meta name="description" content="Convierte un LLM denso en Mixture of Experts desde cero: router top-k, expertos fine-grained y compartidos, balanceo con y sin aux-loss, especialización por idioma es/pt, upcycling y expert parallelism.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Arquitectura &amp; Pretraining</div>
+    <h1 class="guide-title">MoE desde cero: router, expertos y balanceo</h1>
+    <div class="guide-desc">Convertimos el decoder de <a href="llm-desde-cero.html">Un LLM moderno desde cero</a> en un Mixture of Experts: router top-k con softmax o sigmoide, expertos fine-grained y compartidos al estilo DeepSeekMoE, las tres familias de balanceo (aux-loss de Switch, LBL por global-batch y aux-loss-free), métricas para detectar colapso, especialización de expertos por idioma en español y portugués, upcycling de un denso y el salto a expert parallelism con Megatron-Core.</div>
+  </div>
+
+  <!-- 1. Por qué MoE -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-split" aria-hidden="true"></i>1. Por qué MoE: parámetros totales vs activos</h2>
+
+    <p>Un bloque MoE reemplaza la MLP densa por <strong>E expertos</strong> (cada uno una MLP SwiGLU) y un <strong>router</strong> que, para cada token, elige k de ellos. El modelo guarda los parámetros de todos los expertos, pero cada token solo paga el cómputo de k. Así se desacopla la capacidad (parámetros totales) del costo por token (parámetros activos). El precio se paga en memoria, porque todos los expertos tienen que estar cargados, y en comunicación, porque los tokens viajan entre GPUs cuando los expertos están repartidos.</p>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">hidden [T, d]</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Router: logits [T, E]</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">top-k por token</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Permutar tokens por experto</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">E MLPs pequeñas</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Suma ponderada + experto compartido</div>
+    </div>
+
+    <p>Entre 2024 y 2026 MoE pasó a ser la arquitectura por defecto de los modelos abiertos frontera, y la tendencia es hacia expertos cada vez más pequeños y numerosos (<em>fine-grained</em>):</p>
+
+    <table class="model-table">
+      <tr><th>Modelo</th><th>Expertos ruteados</th><th>Activos (top-k)</th><th>Compartidos</th><th>Params totales / activos</th><th>Balanceo</th></tr>
+      <tr><td>Mixtral 8x7B</td><td>8</td><td>2</td><td>0</td><td>~47B / ~13B</td><td>—</td></tr>
+      <tr><td>OLMoE-1B-7B</td><td>64</td><td>8</td><td>0</td><td>~6.9B / ~1.3B</td><td>aux-loss (coef. 0.01) + z-loss</td></tr>
+      <tr><td>DeepSeek-V3</td><td>256</td><td>8</td><td>1</td><td>671B / 37B</td><td>aux-loss-free (+ aux secuencial mínima)</td></tr>
+      <tr><td>Qwen3-30B-A3B</td><td>128</td><td>8</td><td>0</td><td>~30.5B / ~3.3B</td><td>LBL por global-batch</td></tr>
+      <tr><td>gpt-oss-120b</td><td>128</td><td>4</td><td>0</td><td>~117B / ~5.1B</td><td>—</td></tr>
+      <tr><td>Kimi K2</td><td>384</td><td>8</td><td>1</td><td>~1T / 32B</td><td>aux-loss-free (estilo V3)</td></tr>
+    </table>
+
+    <p>En 2026 la razón de activación siguió bajando: Qwen3.5 activa 10 de 512 expertos (+1 compartido) y Kimi K3 16 de 896. Las leyes de escala para MoE muestran que la ganancia de eficiencia depende sobre todo de esa razón de activación y de la granularidad (Krajewski et al., 2024; Tian et al., 2025), y DeepSeekMoE 16B igualó a LLaMA2 7B con ~40% del cómputo.</p>
+
+    <div class="tip"><strong>Hardware de esta guía:</strong> la versión didáctica (~100M parámetros activos, ~500M totales, 64 expertos) entrena en 1 GPU de 24-80 GB: ~2B tokens toman del orden de un día en una H100 con el bucle por experto, y bastante más en una RTX 4090/L4. El análisis de routing de OLMoE-1B-7B en bf16 (~14 GB de pesos) cabe en una GPU de 24 GB; Qwen3-30B-A3B-Base (~61 GB en bf16) necesita una A100/H100 de 80 GB. Expert parallelism real requiere ≥8 GPUs con NVLink/InfiniBand. <strong>Presupuesto reducido:</strong> baja a 6 capas, 32 expertos y 300M tokens; las conclusiones cualitativas sobre balanceo y colapso se mantienen. Todo el código didáctico es PyTorch puro y corre también en ROCm.</div>
+  </div>
+
+  <!-- 2. Router -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-route" aria-hidden="true"></i>2. El router desde cero</h2>
+
+    <p>El router es una proyección lineal <code>d_model → E</code> sin bias. Hay dos funciones de score en uso:</p>
+    <table class="model-table">
+      <tr><th>Score</th><th>Pesos de combinación</th><th>Quién lo usa</th></tr>
+      <tr><td>softmax → top-k</td><td>probabilidades top-k (opcionalmente renormalizadas a suma 1)</td><td>Switch, Mixtral, OLMoE, Qwen3</td></tr>
+      <tr><td>sigmoide → top-k</td><td>afinidades top-k renormalizadas a suma 1</td><td>DeepSeek-V3, Kimi K2</td></tr>
+    </table>
+    <p>La sigmoide da a cada experto una afinidad independiente, lo que facilita sumarle un bias de balanceo sin que los demás scores cambien. En los dos casos el router conviene calcularlo en fp32: un error de redondeo en bf16 cambia qué expertos quedan en el top-k.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># moe.py (parte 1): configuración, router y pérdidas de balanceo
+from dataclasses import dataclass
+
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+@dataclass
+class MoEConfig:
+    d_model: int = 768
+    n_experts: int = 64           # expertos ruteados
+    top_k: int = 7                # expertos activos por token (sin contar compartidos)
+    d_expert: int = 256           # hidden de cada experto (fine-grained: 2048 / 8)
+    n_shared: int = 1             # expertos compartidos, siempre activos
+    score: str = "sigmoid"        # "softmax" (Switch, OLMoE, Qwen3) o "sigmoid" (DeepSeek-V3)
+    norm_topk: bool = True        # renormalizar los k pesos para que sumen 1
+    balance: str = "aux_free"     # "aux_loss" | "global_aux_loss" | "aux_free"
+    aux_loss_coef: float = 1e-4   # Switch/OLMoE usan 1e-2; con aux_free, 0 o ~1e-4
+    z_loss_coef: float = 1e-3     # router z-loss de ST-MoE (0 para desactivar)
+    bias_update_rate: float = 1e-3
+
+
+class Router(nn.Module):
+    """Proyección d_model → n_experts + selección top-k."""
+
+    def __init__(self, cfg: MoEConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.weight = nn.Parameter(torch.empty(cfg.n_experts, cfg.d_model))
+        nn.init.normal_(self.weight, std=0.02)
+        # Bias aux-loss-free: buffer (no recibe gradiente) que solo afecta la
+        # SELECCIÓN de expertos, nunca el peso con que se combinan sus salidas.
+        self.register_buffer("expert_bias", torch.zeros(cfg.n_experts))
+        # Asignaciones acumuladas desde la última actualización del bias
+        self.register_buffer("load_accum", torch.zeros(cfg.n_experts), persistent=False)
+
+    def forward(self, x: torch.Tensor):
+        # x: [T, d]. Router en fp32 aunque el resto del modelo use bf16.
+        logits = F.linear(x.float(), self.weight.float())             # [T, E]
+        scores = logits.softmax(dim=-1) if self.cfg.score == "softmax" else logits.sigmoid()
+        select = scores + self.expert_bias if self.cfg.balance == "aux_free" else scores
+        topk_idx = select.topk(self.cfg.top_k, dim=-1).indices         # [T, k]
+        topk_w = scores.gather(-1, topk_idx)                           # [T, k]
+        if self.cfg.norm_topk:
+            topk_w = topk_w / topk_w.sum(dim=-1, keepdim=True).clamp_min(1e-9)
+        counts = torch.bincount(topk_idx.flatten(), minlength=self.cfg.n_experts)
+        if self.training:
+            self.load_accum += counts.float()
+        return logits, scores, topk_idx, topk_w, counts
+
+
+def switch_aux_loss(scores, counts, global_batch=False):
+    """L_aux = N · Σ_i f_i · P_i  (Switch Transformers, generalizada a top-k).
+
+    f_i: fracción de asignaciones que recibió el experto i (no diferenciable).
+    P_i: probabilidad media que el router le da al experto i (diferenciable).
+    Vale 1 con carga perfectamente uniforme y crece con el desbalance.
+    """
+    n_experts = scores.shape[-1]
+    counts = counts.float()
+    if global_batch and dist.is_available() and dist.is_initialized():
+        # LBL por global-batch (Qiu et al., 2025): f_i se mide sobre todos los
+        # ranks de data parallel, no sobre el micro-batch local.
+        counts = counts.clone()
+        dist.all_reduce(counts)
+    f = counts / counts.sum()
+    probs = scores / scores.sum(dim=-1, keepdim=True)   # con sigmoide hay que normalizar
+    P = probs.mean(dim=0)
+    return n_experts * (f * P).sum()
+
+
+def router_z_loss(logits):
+    """ST-MoE: penaliza logits grandes del router (estabilidad en bf16)."""
+    return torch.logsumexp(logits, dim=-1).pow(2).mean()
+
+
+@torch.no_grad()
+def update_expert_bias(router: Router):
+    """Aux-loss-free (Wang et al., 2024; DeepSeek-V3):
+    b_i += u · sign(carga_media - carga_i). Una vez por paso de optimizador."""
+    load = router.load_accum
+    if dist.is_available() and dist.is_initialized():
+        dist.all_reduce(load)
+    router.expert_bias += router.cfg.bias_update_rate * torch.sign(load.mean() - load)
+    router.load_accum.zero_()</code></pre>
+    </div>
+
+    <div class="tip"><strong>Detalle clave del aux-loss-free:</strong> el bias se suma solo para <em>elegir</em> el top-k. Los pesos de combinación salen de los scores originales, así que el bias no distorsiona la salida del modelo ni mete gradientes que compitan con la loss de lenguaje, que es justamente el problema de la aux-loss clásica.</div>
+  </div>
+
+  <!-- 3. Despacho -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-shuffle" aria-hidden="true"></i>3. Despacho, expertos y combinación</h2>
+
+    <p>Con T tokens y top-k hay T·k asignaciones. La forma eficiente de procesarlas es <strong>permutar</strong>: ordenar las asignaciones por experto para que cada uno reciba un bloque contiguo de tokens, aplicar las MLPs y devolver cada resultado a su token con una suma ponderada (<code>index_add_</code>). Esta versión es <em>dropless</em>: ningún token se descarta. La alternativa clásica (Switch, GShard) fija un <em>capacity factor</em> por experto y descarta los tokens que sobran, lo que da shapes estáticas pero degrada la calidad cuando el router se desbalancea.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># moe.py (parte 2): continúa el bloque anterior (mismos imports y definiciones)
+
+
+class SwiGLU(nn.Module):
+    """MLP densa (la misma de la guía llm-desde-cero); se usa como experto compartido."""
+
+    def __init__(self, d_model: int, hidden: int):
+        super().__init__()
+        self.gate_proj = nn.Linear(d_model, hidden, bias=False)
+        self.up_proj = nn.Linear(d_model, hidden, bias=False)
+        self.down_proj = nn.Linear(hidden, d_model, bias=False)
+
+    def forward(self, x):
+        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+
+
+class Experts(nn.Module):
+    """E expertos SwiGLU con pesos apilados [E, d, h] (como transformers v5 y Megatron)."""
+
+    def __init__(self, n_experts: int, d_model: int, hidden: int):
+        super().__init__()
+        self.w_gate = nn.Parameter(torch.randn(n_experts, d_model, hidden) * 0.02)
+        self.w_up = nn.Parameter(torch.randn(n_experts, d_model, hidden) * 0.02)
+        self.w_down = nn.Parameter(torch.randn(n_experts, hidden, d_model) * 0.02)
+
+    def forward(self, x_sorted, tokens_per_expert):
+        # x_sorted: [T*k, d] agrupado por experto. Versión didáctica: bucle por
+        # experto. En producción se usa grouped GEMM (ver sección 9).
+        outs, start = [], 0
+        for e, n in enumerate(tokens_per_expert.tolist()):
+            if n == 0:
+                continue
+            xe = x_sorted[start:start + n]
+            h = F.silu(xe @ self.w_gate[e]) * (xe @ self.w_up[e])
+            outs.append(h @ self.w_down[e])
+            start += n
+        return torch.cat(outs, dim=0)
+
+
+class MoELayer(nn.Module):
+    """Reemplazo directo de la MLP densa: misma firma forward(x) -&gt; x."""
+
+    def __init__(self, cfg: MoEConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.router = Router(cfg)
+        self.experts = Experts(cfg.n_experts, cfg.d_model, cfg.d_expert)
+        self.shared = SwiGLU(cfg.d_model, cfg.n_shared * cfg.d_expert) if cfg.n_shared &gt; 0 else None
+        self.aux_loss = torch.zeros(())
+        self.last_counts = torch.zeros(cfg.n_experts)
+
+    def forward(self, x):
+        B, S, d = x.shape
+        xf = x.reshape(-1, d)                                   # [T, d]
+        logits, scores, idx, w, counts = self.router(xf)
+        k = idx.shape[1]
+        # 1) Despacho: ordenar las T*k asignaciones por experto (stable = determinista)
+        order = idx.flatten().argsort(stable=True)              # [T*k]
+        token_of = order // k                                    # token dueño de cada slot
+        y = self.experts(xf[token_of], counts)
+        # 2) Combinación: suma ponderada de vuelta en la posición de cada token
+        y = y * w.flatten()[order].unsqueeze(-1).to(y.dtype)
+        out = torch.zeros_like(xf).index_add_(0, token_of, y.to(xf.dtype))
+        if self.shared is not None:
+            out = out + self.shared(xf)
+        # 3) Pérdidas auxiliares: el loop de entrenamiento las suma a la CE
+        aux = logits.new_zeros(())
+        if self.cfg.z_loss_coef &gt; 0:
+            aux = aux + self.cfg.z_loss_coef * router_z_loss(logits)
+        if self.cfg.aux_loss_coef &gt; 0:
+            aux = aux + self.cfg.aux_loss_coef * switch_aux_loss(
+                scores, counts, global_batch=self.cfg.balance == "global_aux_loss")
+        self.aux_loss = aux
+        self.last_counts = counts.detach()
+        return out.view(B, S, d)
+
+
+if __name__ == "__main__":
+    layer = MoELayer(MoEConfig(d_model=64, n_experts=16, top_k=4, d_expert=32))
+    x = torch.randn(2, 10, 64)
+    print(layer(x).shape, layer.aux_loss.item(), layer.last_counts.tolist())</code></pre>
+    </div>
+
+    <div class="warn"><strong>Sincronizaciones ocultas:</strong> <code>tokens_per_expert.tolist()</code> obliga a esperar a la GPU y rompe el grafo de <code>torch.compile</code> en cada capa MoE. Para aprender está bien: compila los bloques de atención y deja la MoE en eager. Para velocidad real hay que pasar a grouped GEMM con shapes dinámicas (Megatron-Core <code>--moe-grouped-gemm</code>, kernels de TorchTitan). <code>torch._grouped_mm</code> existe, pero es una API privada y experimental: no la uses en el camino principal.</div>
+  </div>
+
+  <!-- 4. Balanceo -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>4. Balanceo de carga: tres familias</h2>
+
+    <p>Sin balanceo, el router cae en un círculo vicioso: los expertos que reciben más tokens aprenden más rápido, el router los prefiere todavía más y el resto queda muerto (<strong>colapso de expertos</strong>). Además, un experto sobrecargado se vuelve el cuello de botella cuando los expertos están repartidos entre GPUs.</p>
+
+    <table class="model-table">
+      <tr><th>Método</th><th>Cómo funciona</th><th>Pro</th><th>Contra</th></tr>
+      <tr><td>Aux-loss (Switch)</td><td><code>α · N · Σ f_i P_i</code> por micro-batch, con α ≈ 0.01</td><td>Simple y probado (Mixtral, OLMoE)</td><td>Interfiere con la loss de LM; obliga a repartir hasta dentro de una secuencia de código o de un solo idioma</td></tr>
+      <tr><td>LBL por global-batch</td><td>Igual, pero f_i se mide sobre todo el batch global (all-reduce entre ranks y micro-batches)</td><td>Permite especialización por dominio; mejor loss y downstream (Qwen3)</td><td>Requiere sincronizar contadores</td></tr>
+      <tr><td>Aux-loss-free</td><td>Bias por experto en la selección: <code>b_i += u · sign(media − carga_i)</code>, con u ≈ 1e-3</td><td>No hay gradiente en conflicto con la loss de LM (DeepSeek-V3, Kimi K2)</td><td>Un hiperparámetro más (u); DeepSeek-V3 igual mantiene una aux secuencial diminuta</td></tr>
+      <tr><td>Router z-loss (ST-MoE)</td><td><code>mean(logsumexp(logits)²)</code>, coef. ~1e-3</td><td>Estabiliza el router en bf16</td><td>No balancea: se combina con cualquiera de las anteriores</td></tr>
+    </table>
+
+    <p>Para ver el colapso con tus propios ojos sin gastar GPU, este experimento de juguete entrena una capa MoE en CPU sobre datos agrupados en clusters y compara los modos de balanceo:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># toy_balance.py: requiere moe.py (bloques anteriores) en el mismo directorio
+import torch
+from moe import MoEConfig, MoELayer, update_expert_bias
+
+torch.manual_seed(0)
+D, N_CLUSTERS = 64, 8
+centers = torch.randn(N_CLUSTERS, D) * 3
+target_proj = torch.randn(N_CLUSTERS, D, D) / D**0.5
+
+
+def batch(n=512):
+    c = torch.randint(0, N_CLUSTERS, (n,))
+    x = centers[c] + torch.randn(n, D)
+    y = torch.einsum("nd,nde-&gt;ne", x, target_proj[c])   # función distinta por cluster
+    return x.unsqueeze(0), y.unsqueeze(0)
+
+
+def run(balance, aux_coef, score):
+    cfg = MoEConfig(d_model=D, n_experts=16, top_k=2, d_expert=32, n_shared=0,
+                    score=score, balance=balance, aux_loss_coef=aux_coef, z_loss_coef=0.0)
+    layer = MoELayer(cfg)
+    opt = torch.optim.AdamW(layer.parameters(), lr=3e-3)
+    for step in range(400):
+        x, y = batch()
+        mse = torch.nn.functional.mse_loss(layer(x), y)
+        loss = mse + layer.aux_loss
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if balance == "aux_free":
+            update_expert_bias(layer.router)
+    load = layer.last_counts.float()
+    max_vio = (load.max() / load.mean() - 1).item()
+    dead = int((load == 0).sum())
+    print(f"{balance:&gt;10} {score:&gt;8} | mse={mse.item():.3f} MaxVio={max_vio:.2f} muertos={dead}")
+
+
+run("none", 0.0, "softmax")        # sin balanceo
+run("aux_loss", 1e-2, "softmax")   # Switch / OLMoE
+run("aux_free", 0.0, "sigmoid")    # DeepSeek-V3</code></pre>
+    </div>
+
+    <p>Con <code>balance="none"</code> lo normal es ver expertos con carga cero y un MaxVio alto. Los otros dos modos deberían repartir la carga; compara además el MSE para ver cuánto le cuesta a cada método. Los números exactos dependen de la semilla, así que repite con 3 semillas antes de sacar conclusiones.</p>
+
+    <div class="tip"><strong>Global-batch con acumulación de gradiente:</strong> la versión de <code>switch_aux_loss</code> de arriba sincroniza f_i entre ranks de data parallel. Qiu et al. además acumulan los contadores de todos los micro-batches del paso antes de calcular la loss, usando un buffer. El grueso de la mejora viene de dejar de medir el balance por secuencia o por micro-batch. Si usas Megatron-Core, el tipo de balanceo se elige con <code>--moe-router-load-balancing-type</code> (<code>aux_loss</code>, <code>seq_aux_loss</code> y, en versiones recientes, <code>global_aux_loss</code>).</div>
+  </div>
+
+  <!-- 5. Integración y entrenamiento -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-plug-connected" aria-hidden="true"></i>5. Integrar en el LLM y entrenar</h2>
+
+    <p>Partimos del <code>model.py</code>/<code>train.py</code> de la guía <a href="llm-desde-cero.html">Un LLM moderno desde cero</a> (RMSNorm, RoPE, GQA, SwiGLU, ~100M parámetros, datos FineWeb-2 es/pt). Para que el código sirva aunque tu modelo use otros nombres, <code>moeify</code> busca cualquier submódulo de la clase MLP densa y lo reemplaza. DeepSeek-V3 deja densas las primeras capas, y eso se configura con <code>first_dense</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># train_moe.py: continúa model.py/train.py de la guía "Un LLM moderno desde cero".
+# Supone que model.py expone ModelConfig, Transformer (forward(idx) -&gt; logits) y
+# SwiGLU; ajusta los nombres si los tuyos difieren. get_batch, optimizer, scheduler,
+# max_steps y grad_accum vienen de train.py.
+import math
+
+import torch
+import torch.nn.functional as F
+from model import ModelConfig, Transformer, SwiGLU as DenseMLP
+from moe import MoEConfig, MoELayer, update_expert_bias
+
+
+def moeify(model, dense_cls, moe_cfg, first_dense=0):
+    """Reemplaza cada MLP densa por un MoELayer (salvo las primeras `first_dense`)."""
+    # Primero se recolectan los objetivos y después se reemplaza, para no
+    # recorrer los MoELayer recién creados.
+    targets = [(parent, name) for parent in model.modules()
+               for name, child in parent.named_children() if isinstance(child, dense_cls)]
+    layers = []
+    for i, (parent, name) in enumerate(targets):
+        if i &gt;= first_dense:
+            setattr(parent, name, MoELayer(moe_cfg))
+            layers.append(getattr(parent, name))
+    return layers
+
+
+def param_counts(model, moe_layers):
+    total = sum(p.numel() for p in model.parameters())
+    inactive = sum(sum(p.numel() for p in m.experts.parameters())
+                   * (1 - m.cfg.top_k / m.cfg.n_experts) for m in moe_layers)
+    return total, total - inactive
+
+
+@torch.no_grad()
+def routing_stats(moe_layers):
+    out = {}
+    for i, m in enumerate(moe_layers):
+        load = m.last_counts.float()
+        p = load / load.sum()
+        out[f"moe/{i}/max_vio"] = (load.max() / load.mean() - 1).item()
+        out[f"moe/{i}/entropy"] = (-(p * (p + 1e-12).log()).sum() / math.log(p.numel())).item()
+        out[f"moe/{i}/dead"] = int((load == 0).sum())
+        out[f"moe/{i}/bias_span"] = (m.router.expert_bias.max() - m.router.expert_bias.min()).item()
+    return out
+
+
+model_cfg = ModelConfig()                       # d_model=768, 12 capas, GQA 12/4
+model = Transformer(model_cfg)
+moe_cfg = MoEConfig(d_model=model_cfg.d_model)  # 64 expertos x 256, top-7 + 1 compartido
+moe_layers = moeify(model, DenseMLP, moe_cfg, first_dense=1)
+model = model.cuda()
+total, active = param_counts(model, moe_layers)
+print(f"params totales={total/1e6:.0f}M  activos={active/1e6:.0f}M")
+# Recrea el optimizer y el scheduler de train.py DESPUÉS de moeify: los expertos son
+# parámetros nuevos. Excluye router.weight del weight decay, igual que las normas.
+
+for step in range(max_steps):
+    for _ in range(grad_accum):
+        x, y = get_batch("train")
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            logits = model(x)
+            ce = F.cross_entropy(logits.view(-1, logits.size(-1)).float(), y.view(-1))
+            aux = sum(m.aux_loss for m in moe_layers)
+            loss = (ce + aux) / grad_accum
+        loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
+    scheduler.step()
+    if moe_cfg.balance == "aux_free":
+        for m in moe_layers:
+            update_expert_bias(m.router)
+    if step % 50 == 0:
+        stats = routing_stats(moe_layers)
+        worst = max(v for k, v in stats.items() if k.endswith("max_vio"))
+        print(f"step {step} ce={ce.item():.3f} aux={aux.item():.4f} MaxVio(peor capa)={worst:.2f}")
+        # wandb.log({"ce": ce.item(), **stats}, step=step)</code></pre>
+    </div>
+
+    <p>Qué monitorear por capa, además de la loss:</p>
+    <table class="model-table">
+      <tr><th>Métrica</th><th>Definición</th><th>Señal de alarma</th></tr>
+      <tr><td>MaxVio</td><td>(carga máxima − carga media) / carga media (Wang et al., 2024)</td><td>Se queda alto o crece después del warmup</td></tr>
+      <tr><td>Entropía normalizada</td><td>H(carga) / log E, entre 0 y 1</td><td>Cae bajo ~0.8 de forma sostenida</td></tr>
+      <tr><td>Expertos muertos</td><td>Expertos con 0 tokens en el batch</td><td>&gt; 0 durante cientos de pasos: colapso</td></tr>
+      <tr><td>Rango del bias</td><td>max(b) − min(b) en aux-loss-free</td><td>Crece sin parar: el router pelea contra el bias; revisa la LR o baja u</td></tr>
+      <tr><td>aux / ce</td><td>Peso relativo de la aux-loss</td><td>Si supera ~1% de la CE, la aux está dominando</td></tr>
+    </table>
+  </div>
+
+  <!-- 6. Experimentos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-flask" aria-hidden="true"></i>6. Experimentos: denso vs MoE</h2>
+
+    <p>La comparación honesta tiene dos ejes: MoE contra un denso con los <strong>mismos parámetros activos</strong> (mismo costo por token) y contra un denso con los <strong>mismos parámetros totales</strong> (misma memoria). Usa los mismos datos, tokens, semilla y schedule (WSD) en las tres corridas.</p>
+
+    <table class="model-table">
+      <tr><th>Corrida</th><th>Configuración</th><th>Activos</th><th>Totales</th></tr>
+      <tr><td>Denso-S</td><td>d=768, 12 capas, SwiGLU 2048</td><td>~100M</td><td>~100M</td></tr>
+      <tr><td>MoE</td><td>Igual, pero 64 expertos × 256, top-7 + 1 compartido de 256 (capas 2-12)</td><td>~100M</td><td>~470M</td></tr>
+      <tr><td>Denso-L</td><td>d=1536, 16 capas, SwiGLU 4096</td><td>~450M</td><td>~450M</td></tr>
+    </table>
+
+    <p>Lo que la literatura predice (OLMoE, DeepSeekMoE): el MoE debería quedar claramente por debajo de Denso-S en loss a igual número de tokens y acercarse a Denso-L, pero con menos tokens/s que Denso-S en esta implementación ingenua. Mide también la VRAM, porque el MoE carga casi 5x más pesos. Ablaciones baratas con la misma semilla:</p>
+    <ul style="font-size:14px; color:var(--text2); margin:0 0 12px 22px; line-height:1.8;">
+      <li><code>balance</code>: <code>aux_loss</code> vs <code>global_aux_loss</code> vs <code>aux_free</code>, comparando loss y MaxVio.</li>
+      <li><code>score</code>: softmax vs sigmoide.</li>
+      <li>Expertos compartidos: <code>n_shared=0</code> con <code>top_k=8</code> vs <code>n_shared=1</code> con <code>top_k=7</code> (mismo cómputo).</li>
+      <li>Granularidad: 8 expertos × 2048 con top-1 vs 64 × 256 con top-8 (mismo cómputo activo).</li>
+    </ul>
+    <p>Evalúa los checkpoints con las tareas es/pt de la guía base (<code>xstorycloze_es</code>, <code>copa_es</code>, <code>belebele_spa_Latn</code>, <code>portuguese_bench</code>) además de la bits-per-byte de validación por idioma: a esta escala, la bpb es la señal más estable.</p>
+  </div>
+
+  <!-- 7. Especialización por idioma -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-language" aria-hidden="true"></i>7. ¿Se especializan los expertos por idioma?</h2>
+
+    <p>La pregunta que importa para LatamGPT es si los expertos se reparten el trabajo por idioma. Si español y portugués comparten expertos, la transferencia entre ambos se ve favorecida. Si el inglés o el código acaparan expertos, conviene revisar la mezcla de datos. Medimos la distribución de routing por capa en un MoE real (OLMoE-1B-7B, o Qwen3-30B-A3B-Base si tienes 80 GB) con documentos de FineWeb-2 en <code>spa_Latn</code> y <code>por_Latn</code> y de FineWeb en inglés.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install "transformers&gt;=5" datasets accelerate matplotlib</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># analyze_routing.py
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+MODEL_ID = "allenai/OLMoE-1B-7B-0125"   # o "Qwen/Qwen3-30B-A3B-Base" (GPU de 80 GB)
+N_DOCS, MAX_LEN = 500, 512
+SOURCES = {
+    "es": ("HuggingFaceFW/fineweb-2", "spa_Latn"),
+    "pt": ("HuggingFaceFW/fineweb-2", "por_Latn"),
+    "en": ("HuggingFaceFW/fineweb", "sample-10BT"),
+}
+
+tok = AutoTokenizer.from_pretrained(MODEL_ID)
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.bfloat16, device_map="cuda").eval()
+cfg = model.config
+E = getattr(cfg, "num_experts", None) or cfg.num_local_experts
+K = cfg.num_experts_per_tok
+
+# En transformers v5, layer.mlp.gate es un router (TopKRouter) cuyo forward devuelve
+# (router_logits, scores, indices); en versiones viejas era un nn.Linear con logits.
+gates = [layer.mlp.gate for layer in model.model.layers if hasattr(layer.mlp, "gate")]
+counts = {lang: torch.zeros(len(gates), E) for lang in SOURCES}
+current = {"lang": None}
+
+
+def make_hook(layer_idx):
+    def hook(module, inputs, output):
+        logits = output[0] if isinstance(output, tuple) else output
+        top = logits.reshape(-1, E).float().topk(K, dim=-1).indices   # top-k sobre logits = sobre softmax
+        counts[current["lang"]][layer_idx] += torch.bincount(top.flatten(), minlength=E).cpu().float()
+    return hook
+
+
+handles = [g.register_forward_hook(make_hook(i)) for i, g in enumerate(gates)]
+with torch.no_grad():
+    for lang, (repo, name) in SOURCES.items():
+        current["lang"] = lang
+        ds = load_dataset(repo, name=name, split="train", streaming=True)
+        for ex in ds.take(N_DOCS):                         # batch 1: sin padding que filtrar
+            ids = tok(ex["text"], return_tensors="pt", truncation=True, max_length=MAX_LEN)
+            model(**ids.to(model.device))
+for h in handles:
+    h.remove()
+
+
+def js(p, q):
+    m = (p + q) / 2
+    kl = lambda a, b: np.sum(a * np.log((a + 1e-12) / (b + 1e-12)))
+    return 0.5 * kl(p, m) + 0.5 * kl(q, m)
+
+
+dist_ = {lang: (c / c.sum(dim=1, keepdim=True)).numpy() for lang, c in counts.items()}
+L = len(gates)
+js_es_pt = [js(dist_["es"][l], dist_["pt"][l]) for l in range(L)]
+js_es_en = [js(dist_["es"][l], dist_["en"][l]) for l in range(L)]
+for l in range(L):
+    print(f"capa {l:2d}  JS(es,pt)={js_es_pt[l]:.4f}  JS(es,en)={js_es_en[l]:.4f}")
+
+fig, axes = plt.subplots(1, 4, figsize=(20, 3.5))
+axes[0].plot(js_es_pt, label="es vs pt")
+axes[0].plot(js_es_en, label="es vs en")
+axes[0].set_xlabel("capa")
+axes[0].set_ylabel("Jensen-Shannon")
+axes[0].legend()
+for ax, l in zip(axes[1:], [0, L // 2, L - 1]):
+    mat = np.stack([dist_[lang][l] for lang in SOURCES])
+    ax.imshow(mat * E, aspect="auto", cmap="viridis")   # 1.0 = carga uniforme
+    ax.set_yticks(range(len(SOURCES)), list(SOURCES))
+    ax.set_title(f"capa {l}: carga relativa por experto")
+plt.tight_layout()
+plt.savefig("routing_por_idioma.png", dpi=150)</code></pre>
+    </div>
+
+    <p>Hipótesis para contrastar, no resultados garantizados: la divergencia es-pt debería ser menor que la es-en en casi todas las capas, y la especialización suele aparecer más en las capas intermedias que en la primera. Para tu MoE propio, registra el mismo hook sobre <code>m.router</code> de cada <code>MoELayer</code> y toma <code>output[2]</code> (los índices top-k ya incluyen el bias, que es la selección real). Repite la medición con un modelo entrenado con <code>aux_loss</code> y otro con <code>global_aux_loss</code>: si la LBL por micro-batch impide especializar, debería notarse aquí.</p>
+
+    <div class="warn"><strong>Tokenizer y sesgo de medición:</strong> OLMoE se entrenó con un tokenizer y una mezcla centrados en inglés, así que el español y el portugués se parten en más tokens por palabra. Normaliza por tokens (como hace el código) y no compares conteos absolutos. Qwen3 es multilingüe y da una lectura más representativa para es/pt.</div>
+  </div>
+
+  <!-- 8. Upcycling -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrow-big-up-lines" aria-hidden="true"></i>8. Upcycling: de un denso es/pt a un MoE</h2>
+
+    <p>Entrenar un MoE desde cero cuesta. El <strong>upcycling</strong> parte de un denso ya entrenado y copia su MLP en cada experto. He et al. (2024) muestran que, con el mismo presupuesto extra, hacer upcycling de Nemotron-4 15B supera a seguir entrenando el denso (67.6 vs 65.3 en MMLU). Para LatamGPT es una vía barata: el denso es/pt que ya tienes se convierte en el punto de partida del MoE.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># upcycle.py: requiere moe.py (secciones 2 y 3)
+import torch
+from moe import MoEConfig, MoELayer, SwiGLU
+
+
+@torch.no_grad()
+def upcycle_copy(dense: SwiGLU, cfg: MoEConfig, noise_std: float = 0.0) -&gt; MoELayer:
+    """Sparse upcycling: cada experto es una copia exacta de la MLP densa."""
+    assert cfg.d_expert == dense.gate_proj.out_features and cfg.n_shared == 0
+    moe = MoELayer(cfg)
+    for name, lin in [("w_gate", dense.gate_proj), ("w_up", dense.up_proj), ("w_down", dense.down_proj)]:
+        W = lin.weight.T                      # nn.Linear guarda [out, in]; Experts usa [in, out]
+        p = getattr(moe.experts, name)
+        p.copy_(W.unsqueeze(0).expand_as(p))
+        if noise_std &gt; 0:                     # rompe la simetría entre expertos
+            p.add_(torch.randn_like(p) * noise_std * W.std())
+    return moe
+
+
+@torch.no_grad()
+def upcycle_granular(dense: SwiGLU, cfg: MoEConfig, granularity: int) -&gt; MoELayer:
+    """Upcycling fine-grained: parte el hidden en G segmentos; experto e = segmento e % G."""
+    h = dense.gate_proj.out_features
+    seg = h // granularity
+    assert h % granularity == 0 and cfg.d_expert == seg and cfg.n_experts % granularity == 0
+    moe = MoELayer(cfg)
+    Wg, Wu, Wd = dense.gate_proj.weight.T, dense.up_proj.weight.T, dense.down_proj.weight.T
+    for e in range(cfg.n_experts):
+        s = (e % granularity) * seg
+        moe.experts.w_gate[e].copy_(Wg[:, s:s + seg])
+        moe.experts.w_up[e].copy_(Wu[:, s:s + seg])
+        # Si el router elige k = G segmentos distintos con pesos iguales (1/G),
+        # escalar por G recupera la salida densa; en general es una aproximación.
+        moe.experts.w_down[e].copy_(Wd[s:s + seg, :] * granularity)
+    return moe
+
+
+if __name__ == "__main__":
+    dense = SwiGLU(768, 2048)
+    cfg = MoEConfig(d_model=768, n_experts=8, top_k=2, d_expert=2048, n_shared=0,
+                    score="softmax", balance="aux_loss", aux_loss_coef=1e-2)
+    moe = upcycle_copy(dense, cfg).eval()
+    x = torch.randn(2, 16, 768)
+    # Expertos idénticos + pesos top-k que suman 1  =&gt;  salida idéntica al denso
+    torch.testing.assert_close(moe(x), dense(x), rtol=1e-4, atol=1e-5)
+    print("upcycling exacto: OK")</code></pre>
+    </div>
+
+    <p>Recetas que salen de los papers: arranca con LR más baja que la del pretraining del denso, usa top-k ≥ 2 para que el router reciba señal y verifica en el paso 0 que la loss del MoE coincide con la del denso, que es lo que asegura el <code>assert</code>. Compara siempre contra seguir entrenando el denso con los mismos tokens adicionales, ese es el baseline que hay que ganar. En Megatron-Core existe <code>--moe-use-upcycling</code> (con <code>--moe-upcycling-granularity</code> para la variante fine-grained), que convierte el checkpoint denso al vuelo.</p>
+  </div>
+
+  <!-- 9. Escalar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-2" aria-hidden="true"></i>9. Escalar: expert parallelism, Megatron-Core y TorchTitan</h2>
+
+    <p>Cuando los expertos no caben en una GPU se usa <strong>expert parallelism (EP)</strong>: cada GPU guarda E/EP expertos y, en cada capa MoE, los tokens viajan con un <em>all-to-all</em> a la GPU de su experto y vuelven con otro. Los tres ingredientes de rendimiento son grouped GEMM (todos los expertos locales en un solo kernel), un dispatcher eficiente (<code>alltoall</code>, o <code>flex</code> con DeepEP, que solapa la comunicación con el cómputo) y routing limitado por nodo para no saturar InfiniBand (DeepSeek-V3 envía cada token a 4 nodos como máximo).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+# MoE estilo DeepSeek-V3 en miniatura (~1.5B activos / ~9B totales, según el vocabulario) con Megatron-Core en 1 nodo de 8 GPUs.
+# Datos: tokeniza con tools/preprocess_data.py (FineWeb-2 spa_Latn + por_Latn) antes.
+set -euo pipefail
+cd Megatron-LM
+
+torchrun --nproc_per_node 8 pretrain_gpt.py \
+  --num-layers 16 --hidden-size 2048 --num-attention-heads 16 \
+  --group-query-attention --num-query-groups 4 \
+  --seq-length 4096 --max-position-embeddings 4096 \
+  --position-embedding-type rope --normalization RMSNorm --swiglu \
+  --disable-bias-linear --untie-embeddings-and-output-weights \
+  --ffn-hidden-size 5632 \
+  --num-experts 64 --moe-ffn-hidden-size 1408 --moe-router-topk 6 \
+  --moe-shared-expert-intermediate-size 2816 \
+  --moe-layer-freq "([0]*1+[1]*15)" \
+  --moe-router-score-function sigmoid \
+  --moe-router-enable-expert-bias --moe-router-bias-update-rate 1e-3 \
+  --moe-router-load-balancing-type seq_aux_loss --moe-aux-loss-coeff 1e-4 \
+  --moe-router-dtype fp32 \
+  --moe-grouped-gemm --moe-token-dispatcher-type alltoall \
+  --expert-model-parallel-size 8 --tensor-model-parallel-size 1 \
+  --use-distributed-optimizer --bf16 \
+  --micro-batch-size 2 --global-batch-size 512 \
+  --lr 3e-4 --min-lr 3e-5 --lr-decay-style cosine --lr-warmup-iters 2000 \
+  --train-iters 50000 --weight-decay 0.1 --clip-grad 1.0 \
+  --tokenizer-type HuggingFaceTokenizer --tokenizer-model /ruta/a/tokenizer-es-pt \
+  --data-path 1.0 /datos/fineweb2_es_pt_text_document \
+  --save /checkpoints/moe-es-pt --load /checkpoints/moe-es-pt \
+  --log-interval 10 --save-interval 2000
+# Con DeepEP instalado: --moe-token-dispatcher-type flex --moe-flex-dispatcher-backend deepep</code></pre>
+    </div>
+
+    <div class="tip"><strong>Alternativa PyTorch nativa:</strong> TorchTitan trae implementaciones MoE de DeepSeek-V3 y Qwen3, entre otras, con FSDP2 + expert parallelism. Las corridas se definen como configs en Python y se lanzan con <code>run_train.sh</code>. Es más fácil de leer y modificar que Megatron, a cambio de menos optimizaciones maduras. Los detalles de FSDP2 están en la guía <a href="fsdp2-torchtitan.html">Entrenamiento distribuido con FSDP2 y torchtitan</a>.</div>
+
+    <p>En inferencia, MoE cambia el cálculo: se lee poca memoria por token, pero hay que tener todos los expertos cargados. Para verlo, compara el throughput de OLMoE (1.3B activos) contra un denso de tamaño parecido con <code>vllm bench</code>:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install vllm
+# MoE: ~1.3B activos / ~6.9B totales
+vllm bench throughput --model allenai/OLMoE-1B-7B-0125 \
+  --input-len 512 --output-len 256 --num-prompts 1000
+# Denso de referencia (~1.5B)
+vllm bench throughput --model allenai/OLMo-2-0425-1B \
+  --input-len 512 --output-len 256 --num-prompts 1000</code></pre>
+    </div>
+
+    <div class="warn"><strong>Checklist antes de escalar:</strong> (1) MaxVio y expertos muertos estables en la corrida chica; (2) router en fp32; (3) el bias de aux-loss-free se guarda en el checkpoint (es un buffer persistente: verifica que tu conversión a HF lo exporte o lo descarte a propósito); (4) mide la loss por idioma (es, pt, en, código) y no solo la global, porque un desbalance de routing por idioma puede esconderse en el promedio.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2101.03961" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Switch Transformers (Fedus et al., 2021)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>ST-MoE (Zoph et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2401.06066" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>DeepSeekMoE (Dai et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2408.15664" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Auxiliary-Loss-Free Load Balancing (Wang et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>DeepSeek-V3 Technical Report (DeepSeek-AI, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2501.11873" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Demons in the Detail: global-batch LBL (Qiu et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2409.02060" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>OLMoE (Muennighoff et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.09388" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Qwen3 Technical Report (Qwen Team, 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2402.07871" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Scaling Laws for Fine-Grained MoE (Krajewski et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2507.17702" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Towards Greater Leverage: MoE Scaling Laws (Tian et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.07524" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Upcycling Large Language Models into Mixture of Experts (He et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2601.18089" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>LatentMoE (Elango et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2603.07685" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Scalable Training of MoE with Megatron Core (Yan et al., 2026)</a>
+      <a class="source-link" href="https://github.com/NVIDIA/Megatron-LM/blob/main/megatron/core/transformer/moe/README.md" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Megatron-Core MoE (README)</a>
+      <a class="source-link" href="https://github.com/deepseek-ai/DeepEP" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>DeepEP (DeepSeek)</a>
+      <a class="source-link" href="https://github.com/pytorch/torchtitan" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>TorchTitan (PyTorch)</a>
+      <a class="source-link" href="https://huggingface.co/blog/moe" target="_blank" rel="noopener"><i class="ti ti-book"></i>Mixture of Experts Explained (HF blog)</a>
+      <a class="source-link" href="https://huggingface.co/allenai/OLMoE-1B-7B-0125" target="_blank" rel="noopener"><i class="ti ti-robot"></i>allenai/OLMoE-1B-7B-0125 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-30B-A3B-Base" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen/Qwen3-30B-A3B-Base (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="llm-desde-cero.html"><i class="ti ti-brain"></i>Guía: Un LLM moderno desde cero</a>
+      <a class="source-link" href="scaling-laws.html"><i class="ti ti-chart-dots"></i>Guía: Reproducir una scaling law</a>
+      <a class="source-link" href="fsdp2-torchtitan.html"><i class="ti ti-server-2"></i>Guía: FSDP2 y torchtitan</a>
+      <a class="source-link" href="entrenamiento.html"><i class="ti ti-cpu"></i>Guía: Entrenamiento</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-stack-2"></i>Guía: Continual Pretraining</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

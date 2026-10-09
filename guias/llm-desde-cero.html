@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Un LLM moderno desde cero en PyTorch — LatamGPT</title>
+<meta name="description" content="Implementar en PyTorch el decoder que comparten Llama 3, Qwen3 y OLMo 2 (RMSNorm, RoPE, GQA, SwiGLU, QK-norm), entrenar un modelo de ~100M en español y portugués, hacer ablaciones y exportarlo a Qwen3 para evaluarlo.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Arquitectura &amp; Pretraining</div>
+    <h1 class="guide-title">Un LLM moderno desde cero en PyTorch</h1>
+    <div class="guide-desc">Implementar pieza por pieza el decoder que comparten Llama 3, Qwen3, OLMo 2 y SmolLM3 (RMSNorm, RoPE, GQA, SwiGLU, QK-norm), entrenar un modelo de ~100M parámetros sobre FineWeb-2 en español y portugués, hacer ablaciones baratas y exportarlo a <code>Qwen3ForCausalLM</code> para evaluarlo con lm-eval-harness y servirlo con el ecosistema de Hugging Face.</div>
+  </div>
+
+  <!-- 1. Qué vamos a construir -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. Qué vamos a construir y con qué hardware</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">FineWeb-2 es/pt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">BPE es/pt 32K → shards uint16</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">model.py (~100M)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">train.py (bf16 + compile + WSD)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Ablaciones</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Export a Qwen3 + lm-eval</div>
+    </div>
+
+    <p>La idea no es competir con modelos abiertos, sino tener una base propia, corta y legible (unas 250 líneas de modelo y loop) sobre la que el equipo pueda probar decisiones de arquitectura, datos y tokenizer a escala chica antes de gastar GPU en serio. Por eso el modelo usa los mismos nombres de módulos que <code>Qwen3ForCausalLM</code>: al terminar, los pesos se cargan en transformers sin conversiones raras y todo el ecosistema (lm-eval, vLLM, PEFT) funciona tal cual.</p>
+
+    <table class="model-table">
+      <tr><th>Configuración</th><th>Hardware</th><th>Datos</th><th>Tiempo aproximado</th></tr>
+      <tr><td>Base de la guía (d=768, 12 capas, ~100M)</td><td>1× A100/H100 80 GB</td><td>~2.5B tokens (≈25 tokens/parámetro)</td><td>Pocas horas (del orden de 10<sup>5</sup> tokens/s con <code>torch.compile</code>)</td></tr>
+      <tr><td>Misma config en GPU de consumo</td><td>1× RTX 4090 / L4 / A10 (24 GB)</td><td>~2.5B tokens</td><td>Aprox. el doble o más; micro-batch 4-8 con acumulación</td></tr>
+      <tr><td>Presupuesto reducido (d=512, 8 capas, ~45M)</td><td>1× GPU de 16-24 GB</td><td>~1B tokens, contexto 1024</td><td>Una tarde; suficiente para ablaciones relativas</td></tr>
+      <tr><td>Ablaciones (sección 7)</td><td>La misma GPU</td><td>2000 pasos por variante (~1B tokens)</td><td>Cada variante ≈ 40% de la corrida base</td></tr>
+    </table>
+
+    <div class="warn"><strong>Mide antes de planificar:</strong> los tiempos de la tabla son estimaciones. Corre 50 pasos, mira los <code>tokens/s</code> que imprime <code>train.py</code> y recién ahí calcula cuántas horas te cuesta la corrida completa. En AMD (MI250X/MI300X con ROCm), SDPA funciona; valida FlexAttention y <code>torch.compile</code> en tu stack ROCm o desactiva la máscara por documento.</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># PyTorch reciente (nn.RMSNorm, SDPA con enable_gqa y FlexAttention); transformers v5 para el export
+pip install "torch&gt;=2.9" "transformers&gt;=5" "datasets&gt;=5" tokenizers wandb numpy "lm_eval[hf]"</code></pre>
+    </div>
+  </div>
+
+  <!-- 2. Anatomía -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-stack-2" aria-hidden="true"></i>2. Anatomía de un decoder en 2026</h2>
+
+    <p>Entre 2023 y 2026 los decoders densos abiertos convergieron en una receta muy parecida. Las diferencias reales están en la normalización, en cómo se codifica la posición y en el tamaño del vocabulario. Los modelos frontera de 2026 agregan MoE y atención híbrida o sparse encima de este mismo bloque (ver <a href="moe-desde-cero.html">MoE desde cero</a>), así que entender el decoder denso sigue siendo el punto de partida.</p>
+
+    <table class="model-table">
+      <tr><th>Componente</th><th>Llama 3</th><th>Qwen3 (denso)</th><th>OLMo 2</th><th>Gemma 3</th><th>SmolLM3</th><th>Esta guía</th></tr>
+      <tr><td>Normalización</td><td>Pre-RMSNorm</td><td>Pre-RMSNorm</td><td>RMSNorm reordenada (sobre la salida de cada subcapa)</td><td>RMSNorm antes y después de cada subcapa</td><td>Pre-RMSNorm</td><td>Pre-RMSNorm</td></tr>
+      <tr><td>Posición</td><td>RoPE</td><td>RoPE</td><td>RoPE</td><td>RoPE, capas locales y globales</td><td>RoPE + NoPE cada 4 capas</td><td>RoPE (NoPE como ablación)</td></tr>
+      <tr><td>Atención</td><td>GQA</td><td>GQA + QK-norm</td><td>MHA (GQA en 32B) + QK-norm</td><td>GQA + QK-norm + ventana local</td><td>GQA</td><td>GQA + QK-norm</td></tr>
+      <tr><td>MLP</td><td>SwiGLU</td><td>SwiGLU</td><td>SwiGLU</td><td>GeGLU</td><td>SwiGLU</td><td>SwiGLU</td></tr>
+      <tr><td>Vocabulario</td><td>128K</td><td>~151K</td><td>~100K</td><td>262K</td><td>128K</td><td>32K es/pt</td></tr>
+      <tr><td>Biases / tying</td><td>Sin bias</td><td>Sin bias; tying en los tamaños chicos</td><td>Sin bias</td><td>Sin bias; tying</td><td>Sin bias; tying</td><td>Sin bias; tying</td></tr>
+    </table>
+
+    <p>Por qué cada decisión:</p>
+    <ul style="font-size:14px;color:var(--text2);margin:0 0 12px 20px;line-height:1.7">
+      <li><strong>Pre-norm con RMSNorm</strong>: el residual queda limpio de normalizaciones, lo que estabiliza modelos profundos; RMSNorm es más barata que LayerNorm (no centra) y rinde igual.</li>
+      <li><strong>RoPE</strong>: codifica posición rotando pares de dimensiones de q y k, así que el producto q·k depende solo de la distancia relativa. Es lo que después permite extender contexto con ABF/YaRN.</li>
+      <li><strong>GQA</strong>: varias cabezas de query comparten una cabeza de K/V. Con 12 cabezas de query y 4 de K/V el KV cache baja 3× casi sin pérdida de calidad, algo crítico al servir.</li>
+      <li><strong>SwiGLU</strong> con dimensión oculta ≈ 8/3·d: tres matrices en vez de dos, mismo costo que un MLP 4·d y mejor loss.</li>
+      <li><strong>QK-norm</strong> (RMSNorm por cabeza sobre q y k): evita el crecimiento descontrolado de los logits de atención, una de las causas de divergencia a LR alto (Wortsman et al., 2023).</li>
+      <li><strong>Sin biases y con weight tying</strong>: los biases no aportan; en modelos chicos el embedding es una fracción grande de los parámetros y compartirlo con <code>lm_head</code> ahorra ~25M en nuestro caso.</li>
+    </ul>
+  </div>
+
+  <!-- 3. Datos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database" aria-hidden="true"></i>3. Datos: FineWeb-2 es/pt a shards binarios</h2>
+
+    <p>Usamos <code>HuggingFaceFW/fineweb-2</code> (no requiere aceptar licencia), con los configs <code>spa_Latn</code> y <code>por_Latn</code>, mezclados 80/20. El tokenizer es un BPE byte-level es/pt entrenado como en la guía <a href="tokenizer-training.html">Entrenar un tokenizador</a>, pero con <code>vocab_size=32_768</code>: a 100M parámetros un vocabulario de 64K o más se come demasiado presupuesto en el embedding. Con menos de 65.536 tokens cada id cabe en <code>uint16</code> y el corpus completo ocupa 2 bytes por token.</p>
+
+    <p>Cada documento termina en EOS y se concatena al siguiente: así no se desperdicia ni un token en padding. La validación sale del split <code>test</code> de cada idioma por separado, para medir bits-per-byte en español y en portugués de forma independiente.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># prepare_data.py — FineWeb-2 (es 80% / pt 20%) → data/train.bin, data/val_es.bin, data/val_pt.bin
+import json
+from itertools import chain
+from pathlib import Path
+
+import numpy as np
+from datasets import interleave_datasets, load_dataset
+from transformers import AutoTokenizer
+
+TOKENIZER = "latamgpt-tokenizer-32k"   # salida de la guía tokenizer-training con vocab_size=32_768
+TRAIN_TOKENS = 2_500_000_000
+VAL_TOKENS = 5_000_000                 # por idioma
+OUT = Path("data")
+OUT.mkdir(exist_ok=True)
+
+tok = AutoTokenizer.from_pretrained(TOKENIZER)
+assert len(tok) &lt;= 65_536, "el vocabulario no cabe en uint16"
+EOS = tok.eos_token_id
+
+
+def fineweb2(lang: str, split: str):
+    ds = load_dataset("HuggingFaceFW/fineweb-2", name=lang, split=split, streaming=True)
+    return ds.select_columns(["text"])
+
+
+def write_stream(ds, path: Path, max_tokens: int, batch_docs: int = 1000) -&gt; dict:
+    """Tokeniza en batches, agrega EOS por documento y escribe uint16 en disco."""
+    n_tokens, n_bytes = 0, 0
+    with open(path, "wb") as f:
+        for batch in ds.iter(batch_size=batch_docs):
+            texts = batch["text"]
+            ids = tok(texts, add_special_tokens=False)["input_ids"]   # sin BOS: el separador es EOS
+            arr = np.fromiter(chain.from_iterable(d + [EOS] for d in ids), dtype=np.uint16)
+            arr.tofile(f)
+            n_tokens += arr.size
+            n_bytes += sum(len(t.encode("utf-8")) for t in texts)
+            if n_tokens &gt;= max_tokens:
+                break
+    print(f"{path.name}: {n_tokens:,} tokens · {n_bytes / n_tokens:.2f} bytes/token")
+    return {"tokens": n_tokens, "bytes_per_token": n_bytes / n_tokens}
+
+
+meta = {
+    "eos_id": EOS,
+    "vocab_size": len(tok),
+    "val_es": write_stream(fineweb2("spa_Latn", "test"), OUT / "val_es.bin", VAL_TOKENS),
+    "val_pt": write_stream(fineweb2("por_Latn", "test"), OUT / "val_pt.bin", VAL_TOKENS),
+}
+mix = interleave_datasets(
+    [fineweb2("spa_Latn", "train"), fineweb2("por_Latn", "train")],
+    probabilities=[0.8, 0.2],
+    seed=42,
+)
+meta["train"] = write_stream(mix, OUT / "train.bin", TRAIN_TOKENS)
+(OUT / "meta.json").write_text(json.dumps(meta, indent=2))</code></pre>
+    </div>
+
+    <div class="tip"><strong>Bytes por token como métrica de tokenizer:</strong> el script imprime cuántos bytes UTF-8 cubre cada token en español y en portugués. Un tokenizer es/pt bien entrenado cubre bastantes más bytes por token que uno pensado para inglés, y eso se traduce directamente en más texto visto por el mismo cómputo. Guardamos el valor en <code>meta.json</code> porque lo necesitamos para calcular bits-per-byte.</div>
+
+    <div class="warn"><strong>Tiempo y disco:</strong> tokenizar 2.5B tokens en un solo proceso toma del orden de una hora (los tokenizers rápidos paralelizan cada batch en varios hilos) y <code>train.bin</code> pesa ~5 GB. Si tu corpus ya está filtrado (por ejemplo con <a href="fineweb-edu.html">FineWeb-Edu</a> o <a href="jql-filtrado-multilingue.html">JQL</a>), cambia solo la función <code>fineweb2</code>.</div>
+  </div>
+
+  <!-- 4. Modelo -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-puzzle" aria-hidden="true"></i>4. El modelo pieza por pieza</h2>
+
+    <p>Todo el modelo vive en <code>model.py</code>. Lo partimos en dos bloques para comentarlo; el segundo continúa el primero en el mismo archivo. Los nombres (<code>embed_tokens</code>, <code>layers.i.self_attn.q_proj</code>, <code>q_norm</code>, <code>mlp.gate_proj</code>, <code>input_layernorm</code>...) replican los de Qwen3 en transformers a propósito.</p>
+
+    <div class="sub-title">Configuración, RoPE y SwiGLU</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># model.py (parte 1 de 2)
+import math
+from dataclasses import dataclass
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.attention.flex_attention import flex_attention
+
+
+@dataclass
+class ModelConfig:
+    vocab_size: int = 32_768
+    d_model: int = 768
+    n_layers: int = 12
+    n_heads: int = 12
+    n_kv_heads: int = 4          # GQA: 3 cabezas de query por cabeza K/V
+    head_dim: int = 64
+    d_ff: int = 2048             # ≈ 8/3 · d_model, redondeado a múltiplo de 256
+    max_seq_len: int = 2048
+    rope_theta: float = 10_000.0
+    norm_eps: float = 1e-6
+    qk_norm: bool = True
+    gated_attn: bool = False     # ablación: gate sigmoide después de SDPA
+    nope_every: int = 0          # ablación: 4 = sin RoPE en una de cada 4 capas (estilo SmolLM3)
+    tie_embeddings: bool = True
+    z_loss: float = 0.0          # ablación: OLMo 2 usa 1e-5
+
+
+def rotate_half(x: torch.Tensor) -&gt; torch.Tensor:
+    # Convención "rotate_half" de Llama/Qwen: pares (i, i + d/2), no (2i, 2i + 1)
+    x1, x2 = x.chunk(2, dim=-1)
+    return torch.cat((-x2, x1), dim=-1)
+
+
+class Rotary(nn.Module):
+    def __init__(self, head_dim: int, max_seq_len: int, theta: float):
+        super().__init__()
+        inv_freq = 1.0 / (theta ** (torch.arange(0, head_dim, 2, dtype=torch.float) / head_dim))
+        freqs = torch.outer(torch.arange(max_seq_len, dtype=torch.float), inv_freq)
+        emb = torch.cat((freqs, freqs), dim=-1)            # [T, head_dim]
+        self.register_buffer("cos", emb.cos(), persistent=False)
+        self.register_buffer("sin", emb.sin(), persistent=False)
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:  # x: [B, H, T, D]
+        T = x.shape[-2]
+        cos, sin = self.cos[:T].to(x.dtype), self.sin[:T].to(x.dtype)
+        return x * cos + rotate_half(x) * sin
+
+
+class SwiGLU(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.gate_proj = nn.Linear(cfg.d_model, cfg.d_ff, bias=False)
+        self.up_proj = nn.Linear(cfg.d_model, cfg.d_ff, bias=False)
+        self.down_proj = nn.Linear(cfg.d_ff, cfg.d_model, bias=False)
+
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor:
+        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))</code></pre>
+    </div>
+
+    <div class="sub-title">Atención GQA con QK-norm, bloque y modelo completo</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># model.py (parte 2 de 2): continúa el bloque anterior en el mismo archivo
+class Attention(nn.Module):
+    def __init__(self, cfg: ModelConfig, layer_idx: int):
+        super().__init__()
+        self.cfg = cfg
+        self.n_heads, self.n_kv, self.hd = cfg.n_heads, cfg.n_kv_heads, cfg.head_dim
+        self.q_proj = nn.Linear(cfg.d_model, self.n_heads * self.hd, bias=False)
+        self.k_proj = nn.Linear(cfg.d_model, self.n_kv * self.hd, bias=False)
+        self.v_proj = nn.Linear(cfg.d_model, self.n_kv * self.hd, bias=False)
+        self.o_proj = nn.Linear(self.n_heads * self.hd, cfg.d_model, bias=False)
+        if cfg.qk_norm:
+            # Igual que Qwen3: RMSNorm sobre head_dim, por cabeza (OLMo 2 normaliza la proyección completa)
+            self.q_norm = nn.RMSNorm(self.hd, eps=cfg.norm_eps)
+            self.k_norm = nn.RMSNorm(self.hd, eps=cfg.norm_eps)
+        self.use_rope = not (cfg.nope_every and (layer_idx + 1) % cfg.nope_every == 0)
+        self.gate = nn.Linear(cfg.d_model, self.n_heads * self.hd, bias=False) if cfg.gated_attn else None
+
+    def qkv(self, x: torch.Tensor, rope: Rotary):
+        B, T, _ = x.shape
+        q = self.q_proj(x).view(B, T, self.n_heads, self.hd)
+        k = self.k_proj(x).view(B, T, self.n_kv, self.hd)
+        v = self.v_proj(x).view(B, T, self.n_kv, self.hd).transpose(1, 2)
+        if self.cfg.qk_norm:
+            q, k = self.q_norm(q), self.k_norm(k)        # QK-norm antes de RoPE
+        q, k = q.transpose(1, 2), k.transpose(1, 2)      # [B, H, T, D]
+        if self.use_rope:
+            q, k = rope(q), rope(k)
+        return q, k, v
+
+    def forward(self, x, rope, block_mask=None):
+        B, T, _ = x.shape
+        q, k, v = self.qkv(x, rope)
+        if block_mask is None:
+            # enable_gqa=True: SDPA reparte las 4 cabezas K/V entre las 12 de query sin repeat_interleave
+            y = F.scaled_dot_product_attention(q, k, v, is_causal=True, enable_gqa=True)
+        else:
+            y = flex_attention(q, k, v, block_mask=block_mask, enable_gqa=True)
+        y = y.transpose(1, 2).reshape(B, T, self.n_heads * self.hd)
+        if self.gate is not None:
+            y = y * torch.sigmoid(self.gate(x))          # gated attention (Qiu et al., 2025)
+        return self.o_proj(y)
+
+
+class Block(nn.Module):
+    def __init__(self, cfg: ModelConfig, layer_idx: int):
+        super().__init__()
+        self.input_layernorm = nn.RMSNorm(cfg.d_model, eps=cfg.norm_eps)
+        self.self_attn = Attention(cfg, layer_idx)
+        self.post_attention_layernorm = nn.RMSNorm(cfg.d_model, eps=cfg.norm_eps)
+        self.mlp = SwiGLU(cfg)
+
+    def forward(self, x, rope, block_mask=None):
+        x = x + self.self_attn(self.input_layernorm(x), rope, block_mask)   # pre-norm
+        x = x + self.mlp(self.post_attention_layernorm(x))
+        return x
+
+
+class LLM(nn.Module):
+    def __init__(self, cfg: ModelConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.embed_tokens = nn.Embedding(cfg.vocab_size, cfg.d_model)
+        self.layers = nn.ModuleList([Block(cfg, i) for i in range(cfg.n_layers)])
+        self.norm = nn.RMSNorm(cfg.d_model, eps=cfg.norm_eps)
+        self.lm_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
+        if cfg.tie_embeddings:
+            self.lm_head.weight = self.embed_tokens.weight
+        self.rope = Rotary(cfg.head_dim, cfg.max_seq_len, cfg.rope_theta)
+        self.apply(self._init_weights)
+        # Proyecciones que escriben en el residual: std reducida por profundidad (estilo GPT-2)
+        for name, p in self.named_parameters():
+            if name.endswith(("o_proj.weight", "down_proj.weight")):
+                nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * cfg.n_layers))
+
+    @staticmethod
+    def _init_weights(m: nn.Module):
+        if isinstance(m, (nn.Linear, nn.Embedding)):
+            nn.init.normal_(m.weight, mean=0.0, std=0.02)
+
+    def forward(self, idx, targets=None, block_mask=None):
+        x = self.embed_tokens(idx)
+        for layer in self.layers:
+            x = layer(x, self.rope, block_mask)
+        logits = self.lm_head(self.norm(x)).float()
+        if targets is None:
+            return logits, None, None
+        ce = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        loss = ce
+        if self.cfg.z_loss &gt; 0:
+            # z-loss: penaliza log Z grande para que los logits de salida no deriven
+            loss = ce + self.cfg.z_loss * torch.logsumexp(logits, dim=-1).pow(2).mean()
+        return logits, loss, ce.detach()
+
+
+if __name__ == "__main__":
+    model = LLM(ModelConfig())
+    n = sum(p.numel() for p in model.parameters())
+    n_emb = model.embed_tokens.weight.numel()
+    print(f"{n / 1e6:.1f}M parámetros ({(n - n_emb) / 1e6:.1f}M sin embeddings)")   # ~100.7M (~75.5M)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Cuenta de parámetros:</strong> por capa, la atención GQA suma 768·(768 + 256 + 256 + 768) ≈ 1.57M y el SwiGLU 3·768·2048 ≈ 4.72M; por 12 capas son ~75.5M. El embedding de 32.768 × 768 agrega ~25.2M, compartido con <code>lm_head</code>. Sin tying serían ~126M: en modelos chicos la decisión de vocabulario pesa tanto como la profundidad.</div>
+  </div>
+
+  <!-- 5. FlexAttention -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-mask" aria-hidden="true"></i>5. Máscara intra-documento con FlexAttention</h2>
+
+    <p>Con documentos concatenados, una ventana de 2048 tokens suele contener el final de un artículo de noticias argentino y el comienzo de un foro brasileño. Con la máscara causal simple, los tokens del segundo documento atienden al primero. Llama 3 y SmolLM3 enmascaran entre documentos (la condición es <em>causal y mismo documento</em>). FlexAttention permite expresarlo como una función de Python que se compila a un kernel con bloques dispersos: los bloques completamente enmascarados ni siquiera se calculan.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># masks.py
+import torch
+from torch.nn.attention.flex_attention import create_block_mask
+
+
+def doc_ids_from_eos(x: torch.Tensor, eos_id: int) -&gt; torch.Tensor:
+    """[B, T] → id de documento por posición. El EOS pertenece al documento que cierra."""
+    is_eos = (x == eos_id).int()
+    return is_eos.cumsum(dim=1) - is_eos
+
+
+def document_block_mask(doc_ids: torch.Tensor):
+    B, T = doc_ids.shape
+
+    def mask_mod(b, h, q_idx, kv_idx):
+        causal = q_idx &gt;= kv_idx
+        same_doc = doc_ids[b, q_idx] == doc_ids[b, kv_idx]
+        return causal &amp; same_doc
+
+    # H=None: la misma máscara para todas las cabezas
+    return create_block_mask(mask_mod, B=B, H=None, Q_LEN=T, KV_LEN=T, device=doc_ids.device)</code></pre>
+    </div>
+
+    <div class="tip"><strong>¿Y las posiciones?</strong> No hace falta reiniciar los position ids por documento: RoPE solo ve distancias relativas, y dentro de un documento las distancias son las mismas empiece donde empiece. Lo que cambia con la máscara es que el modelo deja de aprender a "leer" texto ajeno como contexto, algo que importa más al entrenar con contexto largo.</div>
+
+    <div class="warn"><strong>FlexAttention necesita <code>torch.compile</code>:</strong> en modo eager cae a una implementación de referencia lenta y que usa mucha memoria. En <code>train.py</code> compilamos el modelo entero, así que la llamada a <code>flex_attention</code> queda dentro del grafo compilado. La máscara se recalcula en cada micro-batch; con B=8 y T=2048 el costo es despreciable frente al forward.</div>
+  </div>
+
+  <!-- 6. Entrenamiento -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-player-play" aria-hidden="true"></i>6. Loop de entrenamiento</h2>
+
+    <p>Receta estándar de 2025-2026 para modelos chicos: autocast bf16 con pesos fp32, AdamW con β<sub>2</sub>=0.95 y weight decay 0.1 solo en matrices (no en normas ni embeddings), clipping a 1.0 y schedule WSD (warmup, plateau y decay lineal a cero) en vez de coseno. WSD tiene una ventaja práctica: puedes ramificar un cooldown desde cualquier checkpoint del plateau y obtener un modelo "terminado" sin reentrenar, la base de las scaling laws baratas.</p>
+
+    <p>Logueamos la cross-entropy en bits-per-byte (bpb) por idioma: a diferencia de la loss por token, el bpb es comparable entre tokenizers distintos, y es la métrica honesta para decidir si un tokenizer es/pt ayuda. Cada 250 pasos medimos además el logit máximo de atención por capa: si crece sin control, la corrida está a punto de divergir.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># train.py — uso: python train.py --run-name base   (1 GPU; ver nota de DDP/FSDP2 abajo)
+import argparse
+import json
+import math
+import time
+from dataclasses import asdict
+from pathlib import Path
+
+import numpy as np
+import torch
+import wandb
+from transformers import get_wsd_schedule
+
+from masks import doc_ids_from_eos, document_block_mask
+from model import LLM, ModelConfig
+
+p = argparse.ArgumentParser()
+p.add_argument("--run-name", default="base")
+p.add_argument("--steps", type=int, default=5000)      # 5000 × ~0.5M tokens ≈ 2.6B tokens
+p.add_argument("--lr", type=float, default=1e-3)
+p.add_argument("--micro-batch", type=int, default=8)
+p.add_argument("--accum", type=int, default=32)        # 8 × 32 × 2048 ≈ 0.5M tokens por paso
+p.add_argument("--seq-len", type=int, default=2048)
+p.add_argument("--seed", type=int, default=1234)
+p.add_argument("--no-qk-norm", action="store_true")
+p.add_argument("--z-loss", type=float, default=0.0)
+p.add_argument("--nope-every", type=int, default=0)
+p.add_argument("--gated-attn", action="store_true")
+p.add_argument("--doc-mask", action="store_true")
+args = p.parse_args()
+
+torch.manual_seed(args.seed)
+torch.set_float32_matmul_precision("high")   # TF32 en los matmuls que queden en fp32
+device = "cuda"
+meta = json.loads(Path("data/meta.json").read_text())
+EOS = meta["eos_id"]
+
+cfg = ModelConfig(
+    vocab_size=meta["vocab_size"], max_seq_len=args.seq_len, qk_norm=not args.no_qk_norm,
+    z_loss=args.z_loss, nope_every=args.nope_every, gated_attn=args.gated_attn,
+)
+raw_model = LLM(cfg).to(device)
+model = torch.compile(raw_model)
+
+# --- Datos: ventanas aleatorias sobre el memmap; generador propio para que todas
+#     las ablaciones vean exactamente los mismos batches aunque el init consuma RNG distinto
+data = {s: np.memmap(f"data/{s}.bin", dtype=np.uint16, mode="r") for s in ("train", "val_es", "val_pt")}
+gen = torch.Generator().manual_seed(args.seed)
+
+
+def get_batch(split: str, bs: int):
+    arr, T = data[split], args.seq_len
+    ix = torch.randint(len(arr) - T - 1, (bs,), generator=gen).tolist()
+    xy = torch.stack([torch.from_numpy(arr[i:i + T + 1].astype(np.int64)) for i in ix])
+    xy = xy.pin_memory().to(device, non_blocking=True)
+    return xy[:, :-1], xy[:, 1:]
+
+
+# --- Optimizador: weight decay solo en matrices 2D que no sean el embedding
+decay, no_decay = [], []
+for name, prm in raw_model.named_parameters():
+    (decay if prm.dim() == 2 and "embed_tokens" not in name else no_decay).append(prm)
+opt = torch.optim.AdamW(
+    [{"params": decay, "weight_decay": 0.1}, {"params": no_decay, "weight_decay": 0.0}],
+    lr=args.lr, betas=(0.9, 0.95), eps=1e-8, fused=True,
+)
+sched = get_wsd_schedule(
+    opt, num_warmup_steps=int(0.02 * args.steps), num_decay_steps=int(0.2 * args.steps),
+    num_training_steps=args.steps, decay_type="linear", min_lr_ratio=0.0,
+)
+
+
+@torch.no_grad()
+def evaluate(n_batches: int = 20) -&gt; dict:
+    model.eval()
+    out = {}
+    for split in ("val_es", "val_pt"):
+        losses = []
+        for _ in range(n_batches):
+            x, y = get_batch(split, args.micro_batch)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                _, _, ce = model(x, y)
+            losses.append(ce.item())
+        ce = sum(losses) / len(losses)
+        out[f"{split}/loss"] = ce
+        out[f"{split}/bpb"] = ce / math.log(2) / meta[split]["bytes_per_token"]
+    model.train()
+    return out
+
+
+@torch.no_grad()
+def max_attn_logits(x: torch.Tensor) -&gt; list[float]:
+    """Logit máximo q·k/√d por capa (modelo sin compilar + hooks); se dispara antes de una divergencia."""
+    maxes, hooks = [], []
+    for layer in raw_model.layers:
+        attn = layer.self_attn
+
+        def hook(mod, inputs, attn=attn):
+            q, k, _ = attn.qkv(inputs[0], raw_model.rope)
+            k = k.repeat_interleave(q.shape[1] // k.shape[1], dim=1)
+            maxes.append(((q @ k.transpose(-2, -1)) * q.shape[-1] ** -0.5).max().item())
+
+        hooks.append(attn.register_forward_pre_hook(hook))
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        raw_model(x)
+    for h in hooks:
+        h.remove()
+    return maxes
+
+
+wandb.init(project="llm-desde-cero-es-pt", name=args.run_name, config={**asdict(cfg), **vars(args)})
+ckpt_dir = Path("runs") / args.run_name
+ckpt_dir.mkdir(parents=True, exist_ok=True)
+tokens_per_step = args.micro_batch * args.accum * args.seq_len
+
+for step in range(args.steps):
+    t0 = time.time()
+    for _ in range(args.accum):
+        x, y = get_batch("train", args.micro_batch)
+        bm = document_block_mask(doc_ids_from_eos(x, EOS)) if args.doc_mask else None
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            _, loss, ce = model(x, y, bm)
+        (loss / args.accum).backward()
+    grad_norm = torch.nn.utils.clip_grad_norm_(raw_model.parameters(), 1.0)   # devuelve la norma previa al clip
+    opt.step()
+    sched.step()
+    opt.zero_grad(set_to_none=True)
+
+    if step % 10 == 0:
+        torch.cuda.synchronize()
+        log = {"train/loss": ce.item(), "train/grad_norm": grad_norm.item(),
+               "lr": sched.get_last_lr()[0], "tokens_per_s": tokens_per_step / (time.time() - t0)}
+        if step % 250 == 0 or step == args.steps - 1:
+            log.update(evaluate())
+            logits_max = max_attn_logits(x[:1, :512])
+            log.update({f"attn_logit_max/layer_{i}": v for i, v in enumerate(logits_max)})
+        wandb.log(log, step=step)
+        print(f"step {step} | loss {log['train/loss']:.3f} | gnorm {log['train/grad_norm']:.2f} "
+              f"| {log['tokens_per_s']:,.0f} tok/s")
+    if (step + 1) % 1000 == 0 or step == args.steps - 1:
+        torch.save({"model": raw_model.state_dict(), "cfg": asdict(cfg), "step": step + 1},
+                   ckpt_dir / "ckpt.pt")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Varias GPUs:</strong> para pasar a 8 GPUs basta envolver <code>raw_model</code> en DDP, lanzar con <code>torchrun --nproc_per_node=8</code>, dividir <code>--accum</code> por 8 y dar a cada rank un seed de datos distinto. Para modelos que ya no caben replicados en una GPU, el paso siguiente es FSDP2 (ver <a href="fsdp2-torchtitan.html">FSDP2, DCP y torchtitan</a>). Si quieres probar Muon, PyTorch trae <code>torch.optim.Muon</code> desde 2.9; úsalo solo para las matrices ocultas (embedding, <code>lm_head</code> y normas siguen con AdamW) y compáralo contra este AdamW con LR bien tuneado, no contra uno por defecto.</div>
+
+    <table class="model-table">
+      <tr><th>Señal en W&amp;B</th><th>Normal</th><th>Alarma</th></tr>
+      <tr><td><code>train/loss</code></td><td>Cae rápido los primeros ~500 pasos, luego lento; baja de nuevo de forma visible en el decay</td><td>Picos que no se recuperan en ~50 pasos</td></tr>
+      <tr><td><code>train/grad_norm</code></td><td>Alta en el warmup, luego estable o en baja suave</td><td>Crecimiento sostenido o picos repetidos</td></tr>
+      <tr><td><code>attn_logit_max/*</code></td><td>Acotado y estable (QK-norm lo garantiza)</td><td>Crece de forma monótona en alguna capa (típico sin QK-norm a LR alto)</td></tr>
+      <tr><td><code>val_es/bpb</code> vs <code>val_pt/bpb</code></td><td>El portugués queda algo por encima (ve 4× menos datos)</td><td>Brecha que crece: subir la proporción de pt o revisar el tokenizer</td></tr>
+    </table>
+    <p>Si algo se rompe, la guía de <a href="debugging.html">debugging de entrenamiento</a> cubre spikes de loss, NaNs y checkpoints corruptos.</p>
+  </div>
+
+  <!-- 7. Ablaciones -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-flask" aria-hidden="true"></i>7. Ablaciones rápidas con la misma semilla</h2>
+
+    <p>La gracia de tener un modelo propio de 100M es poder responder preguntas de arquitectura con evidencia en horas. Todas las variantes usan la misma semilla de datos y el mismo número de pasos, así que las curvas son directamente comparables. Con un decay corto al final (WSD), 2000 pasos alcanzan para ver diferencias relativas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+# ablate.sh — 7 variantes, mismos datos y semilla; compara val_es/bpb y attn_logit_max en W&amp;B
+set -euo pipefail
+COMMON="--steps 2000 --seed 1234"
+
+python train.py $COMMON --run-name abl-base
+python train.py $COMMON --run-name abl-lr3x            --lr 3e-3
+python train.py $COMMON --run-name abl-lr3x-sin-qknorm --lr 3e-3 --no-qk-norm
+python train.py $COMMON --run-name abl-zloss           --z-loss 1e-5
+python train.py $COMMON --run-name abl-nope4           --nope-every 4
+python train.py $COMMON --run-name abl-gated           --gated-attn
+python train.py $COMMON --run-name abl-docmask         --doc-mask</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Variante</th><th>Qué pregunta responde</th><th>Qué dice la literatura</th></tr>
+      <tr><td>LR 3× con y sin QK-norm</td><td>¿Cuánto margen de LR compra QK-norm?</td><td>Sin QK-norm los logits de atención crecen y la loss diverge a LR alto; con QK-norm la sensibilidad al LR baja (Wortsman et al., 2023)</td></tr>
+      <tr><td>z-loss 1e-5</td><td>¿Estabiliza los logits de salida sin costo?</td><td>Mitiga la deriva de log Z a LR alto; OLMo 2 lo usa con coeficiente 1e-5</td></tr>
+      <tr><td>NoPE cada 4 capas</td><td>¿Se puede quitar RoPE de algunas capas sin perder calidad?</td><td>SmolLM3 lo adopta para mejorar contexto largo sin degradar el contexto corto</td></tr>
+      <tr><td>Gated attention</td><td>¿Mejora loss y estabilidad un gate sigmoide tras SDPA?</td><td>Qiu et al. (2025) reportan mejor loss, mayor tolerancia al LR y menos attention sinks; Qwen3-Next lo usa</td></tr>
+      <tr><td>Máscara por documento</td><td>¿Importa no atender entre documentos?</td><td>Efecto chico con contexto corto; más relevante al extender contexto</td></tr>
+    </table>
+
+    <div class="warn"><strong>Ruido entre semillas:</strong> a esta escala, diferencias de ~0.01 bpb pueden ser ruido. Antes de concluir, corre la base con 2-3 semillas de inicialización distintas y mira la dispersión; si una ablación no se separa de esa banda, no hay evidencia. Las conclusiones a 100M tampoco se transfieren automáticamente a 7B: úsalas para descartar ideas, no para cerrar decisiones; para extrapolar hace falta una ley de escala con varios tamaños.</div>
+  </div>
+
+  <!-- 8. Export -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package-export" aria-hidden="true"></i>8. Exportar a Qwen3ForCausalLM y generar texto</h2>
+
+    <p>Como replicamos la arquitectura de Qwen3 (QK-norm por cabeza antes de RoPE, <code>rotate_half</code>, SwiGLU, sin biases, pre-norm), la variante base se carga en <code>Qwen3ForCausalLM</code> solo agregando el prefijo <code>model.</code> a los nombres. En transformers v5 la configuración de RoPE va en <code>rope_parameters</code> (<code>config.rope_theta</code> ya no existe). Las variantes con gated attention o NoPE no tienen equivalente en Qwen3 y no se pueden exportar así; la máscara por documento sí, porque solo afecta al entrenamiento.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># export_hf.py — runs/base/ckpt.pt → ./export (formato Qwen3, transformers v5)
+import torch
+from transformers import AutoTokenizer, Qwen3Config, Qwen3ForCausalLM
+
+from model import LLM, ModelConfig
+
+ck = torch.load("runs/base/ckpt.pt", map_location="cpu")
+cfg = ModelConfig(**ck["cfg"])
+assert cfg.qk_norm and not cfg.gated_attn and cfg.nope_every == 0, "variante no exportable a Qwen3"
+ours = LLM(cfg)
+ours.load_state_dict(ck["model"])
+ours.eval()
+
+tok = AutoTokenizer.from_pretrained("latamgpt-tokenizer-32k")
+hf_cfg = Qwen3Config(
+    vocab_size=cfg.vocab_size,
+    hidden_size=cfg.d_model,
+    intermediate_size=cfg.d_ff,
+    num_hidden_layers=cfg.n_layers,
+    num_attention_heads=cfg.n_heads,
+    num_key_value_heads=cfg.n_kv_heads,
+    head_dim=cfg.head_dim,
+    max_position_embeddings=cfg.max_seq_len,
+    rms_norm_eps=cfg.norm_eps,
+    tie_word_embeddings=cfg.tie_embeddings,
+    rope_parameters={"rope_type": "default", "rope_theta": cfg.rope_theta},
+    bos_token_id=tok.bos_token_id,
+    eos_token_id=tok.eos_token_id,
+    pad_token_id=tok.pad_token_id,
+)
+hf = Qwen3ForCausalLM(hf_cfg)
+
+# Nuestros nombres = los de Qwen3 sin el prefijo "model." (lm_head queda igual)
+sd = {(k if k.startswith("lm_head") else f"model.{k}"): v for k, v in ours.state_dict().items()}
+missing, unexpected = hf.load_state_dict(sd, strict=False)
+assert not unexpected and all(k.startswith("lm_head") for k in missing), (missing, unexpected)
+hf.eval()
+
+# Verificación: mismos logits en fp32 (si falla, revisa la convención de RoPE o dónde va QK-norm)
+x = torch.randint(0, cfg.vocab_size, (2, 128))
+with torch.no_grad():
+    ref, _, _ = ours(x)
+    out = hf(input_ids=x).logits.float()
+print(f"max |Δlogits| = {(ref - out).abs().max().item():.2e}")
+assert torch.allclose(ref, out, atol=1e-4, rtol=1e-4)
+
+hf.save_pretrained("export")
+tok.save_pretrained("export")
+# hf.push_to_hub("&lt;TU_ORG&gt;/&lt;modelo&gt;", private=True); tok.push_to_hub("&lt;TU_ORG&gt;/&lt;modelo&gt;", private=True)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># generate.py — probar el modelo exportado con prompts en español y portugués
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("export")
+model = AutoModelForCausalLM.from_pretrained("export", dtype=torch.bfloat16, device_map="cuda")
+
+prompts = [
+    "La cordillera de los Andes atraviesa",
+    "Em 1822, o Brasil",
+    "Receta de empanadas de pino: primero",
+]
+for prompt in prompts:
+    # Entrenamos sin BOS (solo EOS entre documentos): mantener la misma convención al generar
+    inputs = tok(prompt, return_tensors="pt", add_special_tokens=False).to(model.device)
+    out = model.generate(**inputs, max_new_tokens=48, do_sample=True, temperature=0.8, top_p=0.95)
+    print(tok.decode(out[0], skip_special_tokens=True), "\n---")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Expectativas:</strong> un modelo de 100M con 2.5B tokens produce español gramatical y con registro latinoamericano reconocible, pero sin conocimiento factual confiable. Es suficiente para comparar decisiones; no para un demo de producto. Al estar en formato Qwen3, el mismo directorio <code>export/</code> sirve para <code>vllm serve ./export</code> o para hacer SFT con TRL (ver <a href="lora-finetuning.html">LoRA/QLoRA</a>).</div>
+  </div>
+
+  <!-- 9. Evaluación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>9. Evaluar en español y portugués</h2>
+
+    <p>lm-eval-harness incluye los grupos <code>spanish_bench</code> (xstorycloze_es, copa_es, belebele_spa_Latn, xnli_es, openbookqa_es...) y <code>portuguese_bench</code> (belebele_por_Latn, assin_paraphrase, assin_entailment, FLORES). A 100M parámetros muchas tareas quedan en el azar, así que conviene elegir las que tienen señal temprana y compararse contra una referencia abierta de tamaño similar, como <code>Qwen/Qwen3-0.6B-Base</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">TASKS=xstorycloze_es,copa_es,belebele_spa_Latn,belebele_por_Latn,assin_entailment
+
+# Nuestro modelo (formato Qwen3, exportado en la sección 8)
+lm_eval --model hf \
+  --model_args pretrained=./export,dtype=bfloat16 \
+  --tasks "$TASKS" --batch_size auto --output_path results/llm-desde-cero
+
+# Referencia: Qwen3 0.6B base (36T tokens de pretraining, ~6× más parámetros)
+lm_eval --model hf \
+  --model_args pretrained=Qwen/Qwen3-0.6B-Base,dtype=bfloat16 \
+  --tasks "$TASKS" --batch_size auto --output_path results/qwen3-0.6b-base
+
+# lm-eval reciente también acepta la forma con subcomando: lm-eval run --model hf ...</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Tarea</th><th>Formato</th><th>Azar</th><th>Utilidad a 100M</th></tr>
+      <tr><td>xstorycloze_es</td><td>Elegir el final coherente de una historia</td><td>50%</td><td>Buena: suele separarse del azar temprano</td></tr>
+      <tr><td>copa_es</td><td>Causa/efecto entre 2 alternativas</td><td>50%</td><td>Media: pocas preguntas, intervalos anchos</td></tr>
+      <tr><td>belebele_spa_Latn / belebele_por_Latn</td><td>Comprensión lectora, 4 opciones</td><td>25%</td><td>Baja: cerca del azar hasta ~1B parámetros</td></tr>
+      <tr><td>assin_entailment</td><td>Inferencia textual en portugués</td><td>Depende de la proporción de clases</td><td>Baja; útil para seguir la tendencia entre checkpoints</td></tr>
+      <tr><td>bpb en FineWeb-2 test</td><td>Bits por byte sobre texto web es/pt</td><td>No aplica</td><td>La métrica más sensible para ablaciones</td></tr>
+    </table>
+
+    <p>Para comparar el bpb de nuestro modelo con el de Qwen3 (tokenizers distintos), medimos ambos sobre el mismo texto crudo y normalizamos por bytes:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># bpb_compare.py — bits-per-byte de cualquier modelo HF sobre FineWeb-2 test (es y pt)
+import math
+
+import torch
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+@torch.no_grad()
+def bits_per_byte(model_id: str, lang: str, n_docs: int = 500, max_len: int = 1024) -&gt; float:
+    tok = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.bfloat16, device_map="cuda").eval()
+    ds = load_dataset("HuggingFaceFW/fineweb-2", name=lang, split="test", streaming=True)
+    total_nats, total_bytes = 0.0, 0
+    for doc in ds.take(n_docs):
+        ids = tok(doc["text"], add_special_tokens=False, return_tensors="pt").input_ids[:, :max_len]
+        if ids.shape[1] &lt; 2:
+            continue
+        ids = ids.to(model.device)
+        loss = model(input_ids=ids, labels=ids).loss.float().item()   # media sobre ids.shape[1]-1 tokens
+        total_nats += loss * (ids.shape[1] - 1)
+        # Bytes de los tokens predichos (todos menos el primero), así ambos modelos se miden igual
+        total_bytes += len(tok.decode(ids[0, 1:]).encode("utf-8"))
+    return total_nats / math.log(2) / total_bytes
+
+
+for model_id in ["./export", "Qwen/Qwen3-0.6B-Base"]:
+    for lang in ["spa_Latn", "por_Latn"]:
+        print(f"{model_id:24s} {lang}: {bits_per_byte(model_id, lang):.3f} bpb")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Cómo leer la comparación:</strong> Qwen3-0.6B-Base tiene ~6× más parámetros y órdenes de magnitud más datos, así que va a ganar en todo. Lo interesante es la brecha español vs portugués de cada modelo y cómo cambia nuestro bpb al variar tokenizer, mezcla es/pt o filtrado del corpus. Para evaluaciones más finas (intervalos de confianza, benchmarks latinoamericanos) sigue con <a href="evaluacion-latam.html">Evaluación para Latam</a>.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2501.00656" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>OLMo 2: 2 OLMo 2 Furious (Team OLMo, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.09388" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Qwen3 Technical Report (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>The Llama 3 Herd of Models (2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.14322" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Small-scale proxies for large-scale Transformer training instabilities (Wortsman et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.06708" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Gated Attention for Large Language Models (Qiu et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2104.09864" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>RoFormer: Rotary Position Embedding (Su et al., 2021)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>GQA: Grouped-Query Attention (Ainslie et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2002.05202" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>GLU Variants Improve Transformer (Shazeer, 2020)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1910.07467" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Root Mean Square Layer Normalization (Zhang &amp; Sennrich, 2019)</a>
+      <a class="source-link" href="https://huggingface.co/blog/smollm3" target="_blank" rel="noopener"><i class="ti ti-school"></i>SmolLM3 (HF blog)</a>
+      <a class="source-link" href="https://pytorch.org/blog/flexattention/" target="_blank" rel="noopener"><i class="ti ti-book"></i>FlexAttention (PyTorch blog)</a>
+      <a class="source-link" href="https://huggingface.co/docs/transformers/main/en/model_doc/qwen3" target="_blank" rel="noopener"><i class="ti ti-book"></i>Qwen3 en transformers (docs)</a>
+      <a class="source-link" href="https://magazine.sebastianraschka.com/p/the-big-llm-architecture-comparison" target="_blank" rel="noopener"><i class="ti ti-table"></i>The Big LLM Architecture Comparison (Raschka)</a>
+      <a class="source-link" href="https://github.com/karpathy/nanoGPT" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>nanoGPT (Karpathy)</a>
+      <a class="source-link" href="https://github.com/karpathy/nanochat" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>nanochat (Karpathy)</a>
+      <a class="source-link" href="https://github.com/rasbt/LLMs-from-scratch" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>LLMs-from-scratch (Raschka)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-0.6B-Base" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-0.6B-Base (HF)</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>lm-evaluation-harness</a>
+      <a class="source-link" href="tokenizer-training.html"><i class="ti ti-cut"></i>Guía: Entrenar un tokenizador es/pt</a>
+      <a class="source-link" href="entrenamiento.html"><i class="ti ti-server-2"></i>Guía: Código de entrenamiento</a>
+      <a class="source-link" href="moe-desde-cero.html"><i class="ti ti-hierarchy-3"></i>Guía: MoE desde cero</a>
+      <a class="source-link" href="fsdp2-torchtitan.html"><i class="ti ti-server-2"></i>Guía: FSDP2 y torchtitan</a>
+      <a class="source-link" href="debugging.html"><i class="ti ti-bug"></i>Guía: Debugging de entrenamiento</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-language"></i>Guía: Evaluación para Latam</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

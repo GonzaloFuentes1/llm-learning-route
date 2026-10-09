@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrenamiento distribuido con FSDP2, DCP y torchtitan — LatamGPT</title>
+<meta name="description" content="Entrenamiento distribuido PyTorch-nativo para continual pretraining es/pt: un script FSDP2 mínimo, checkpoints DCP reanudables con otra topología, multi-nodo en SLURM con requeue automático, la misma receta en accelerate y torchtitan v0.3.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Arquitectura &amp; Pretraining</div>
+    <h1 class="guide-title">Entrenamiento distribuido con FSDP2, DCP y torchtitan</h1>
+    <div class="guide-desc">El stack PyTorch-nativo detrás de torchtitan, OLMo-core y el backend FSDP2 de accelerate: un script FSDP2 que se entiende línea por línea, checkpoints DCP que se reanudan con otro número de GPUs, multi-nodo en SLURM con requeue automático, la misma receta en accelerate y una receta torchtitan para continual pretraining de Llama 3.1 8B en español y portugués. Complementa la guía de <a href="entrenamiento.html">accelerate + DeepSpeed</a>.</div>
+  </div>
+
+  <!-- 1. Mapa mental -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. Mapa mental: qué paralelismo necesitas</h2>
+
+    <p>FSDP2 (<code>torch.distributed.fsdp.fully_shard</code>) es la API que PyTorch recomienda hoy para código nuevo en lugar de FSDP1 (<code>FullyShardedDataParallel</code>). En vez de aplanar cada módulo en un <code>FlatParameter</code>, cada parámetro pasa a ser un <code>DTensor</code> shardeado en la dimensión 0. Eso permite congelar pesos (LoRA), mezclar FP8 y BF16 en el mismo modelo y guardar checkpoints sin comunicación extra. Es el equivalente a ZeRO-3 de DeepSpeed, pero nativo, y se compone con tensor parallel (TP), pipeline parallel (PP) y context parallel (CP) sobre un mismo <code>DeviceMesh</code>.</p>
+
+    <table class="model-table">
+      <tr><th>Estrategia</th><th>Qué reparte</th><th>Cuándo basta</th><th>Comunicación</th></tr>
+      <tr><td>DDP</td><td>Solo datos (modelo replicado)</td><td>Modelo + optimizador caben en una GPU (≤ ~1B en 80 GB)</td><td>all-reduce de gradientes</td></tr>
+      <tr><td>FSDP2 (ZeRO-3)</td><td>Parámetros, gradientes y estados de Adam</td><td>Hasta ~70B en 1-4 nodos con buena red</td><td>all-gather + reduce-scatter por bloque</td></tr>
+      <tr><td>HSDP (FSDP2 2D)</td><td>Shard dentro del nodo, réplica entre nodos</td><td>Multi-nodo con red entre nodos más lenta que NVLink</td><td>Pesada intra-nodo, liviana inter-nodo</td></tr>
+      <tr><td>+ TP</td><td>Matmuls de cada capa</td><td>Modelos 70B+ o cuando el batch por GPU queda muy chico</td><td>Muy frecuente: solo dentro del nodo (NVLink)</td></tr>
+      <tr><td>+ PP</td><td>Capas en etapas</td><td>Cientos de GPUs, red inter-nodo limitada</td><td>Activaciones punto a punto</td></tr>
+      <tr><td>+ CP</td><td>La secuencia</td><td>Contexto de 32K+ tokens</td><td>K/V en anillo (Ring) o all-to-all (Ulysses)</td></tr>
+    </table>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">DeviceMesh</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">fully_shard por bloque + raíz</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Loop con AdamW y clip</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">dcp.async_save</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Requeue en SLURM</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Export HF → vLLM</div>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Escenario</th><th>Hardware</th><th>Tiempo orientativo</th></tr>
+      <tr><td>Script didáctico (Qwen3-0.6B-Base, seq 4096)</td><td>2-8 GPUs de 40-80 GB (con <code>MICRO_BS=4</code> los logits de un vocabulario de 152K ocupan varios GB)</td><td>Minutos para ver la loss bajar; ~1B tokens en horas con 8×H100</td></tr>
+      <tr><td>Receta torchtitan Llama 3.1 8B (seq 8192)</td><td>1 nodo 8×H100/H200 (FSDP 8); TP=2 o 2 nodos para secuencias más largas</td><td>Días por cada 10-20B tokens; mide tu throughput antes de prometer fechas</td></tr>
+      <tr><td>Presupuesto reducido</td><td>2×RTX 4090 (24 GB) o 1×A100 40 GB</td><td>Mismo script editando las constantes a <code>MICRO_BS=1</code>, <code>SEQ_LEN=2048</code> (y más <code>GRAD_ACCUM</code>); sirve para aprender, no para producir un modelo</td></tr>
+    </table>
+
+    <div class="warn"><strong>Almacenamiento:</strong> un checkpoint completo de 8B con pesos FP32 y los dos momentos de AdamW pesa ~96 GB (8B × 12 bytes). Con un checkpoint cada hora necesitas un filesystem compartido rápido (Lustre, GPFS, NVMe local + copia) y una política de borrado de checkpoints viejos. Float8 requiere Ada, Hopper o Blackwell; MXFP8 y NVFP4, solo Blackwell.</div>
+  </div>
+
+  <!-- 2. FSDP2 desde cero -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-stack-2" aria-hidden="true"></i>2. FSDP2 desde cero: continual pretraining es/pt en ~170 líneas</h2>
+
+    <p>El script hace continual pretraining de <code>Qwen/Qwen3-0.6B-Base</code> sobre una mezcla de FineWeb-2 (<code>spa_Latn</code> y <code>por_Latn</code>) con 15% de replay en inglés de FineWeb-Edu para no olvidar capacidades. Lo esencial: <code>fully_shard</code> primero en cada bloque transformer y después en la raíz, <code>MixedPrecisionPolicy</code> con cómputo en BF16 y reducción de gradientes en FP32, y checkpoints DCP con el estado del modelo, del optimizador, del scheduler y del stream de datos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · fsdp2_min.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import os
+import time
+from pathlib import Path
+
+import torch
+import torch.distributed as dist
+import torch.distributed.checkpoint as dcp
+from datasets import interleave_datasets, load_dataset
+from datasets.distributed import split_dataset_by_node
+from torch.distributed.checkpoint.state_dict import (
+    StateDictOptions, get_model_state_dict, get_state_dict, set_state_dict,
+)
+from torch.distributed.checkpoint.stateful import Stateful
+from torch.distributed.device_mesh import init_device_mesh
+from torch.distributed.fsdp import MixedPrecisionPolicy, fully_shard
+from torch.distributed.tensor import DTensor
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+MODEL_ID = os.environ.get("MODEL_ID", "Qwen/Qwen3-0.6B-Base")
+SEQ_LEN, MICRO_BS, GRAD_ACCUM = 4096, 4, 4      # 8 GPUs → 128 secuencias = 0.5M tokens por paso
+TOTAL_STEPS, WARMUP, DECAY = 5_000, 200, 1_000  # schedule WSD: warmup, estable, decay final
+PEAK_LR = 3e-5                                  # LR bajo: es continual pretraining, no desde cero
+SAVE_EVERY = 250
+PEAK_FLOPS = 989e12                             # BF16 denso por GPU: H100 SXM 989e12, A100 312e12
+CKPT_DIR = Path(os.environ.get("CKPT_DIR", "checkpoints/qwen3-0.6b-es-pt"))
+STOP_FLAG = Path(os.environ.get("STOP_FLAG", "STOP_AND_REQUEUE"))
+
+
+class PackedStream:
+    """Tokeniza documentos y los concatena (EOS entre docs) en bloques de seq_len tokens."""
+
+    def __init__(self, ds, tok, seq_len):
+        self.ds, self.tok, self.seq_len = ds, tok, seq_len
+        self.buffer: list[int] = []
+
+    def __iter__(self):
+        for ex in self.ds:
+            self.buffer += self.tok(ex["text"], add_special_tokens=False)["input_ids"]
+            self.buffer.append(self.tok.eos_token_id)
+            while len(self.buffer) &gt;= self.seq_len:
+                chunk, self.buffer = self.buffer[: self.seq_len], self.buffer[self.seq_len :]
+                yield torch.tensor(chunk, dtype=torch.long)
+
+    def state_dict(self):
+        return {"ds": self.ds.state_dict(), "buffer": list(self.buffer)}
+
+    def load_state_dict(self, sd):
+        self.ds.load_state_dict(sd["ds"])
+        self.buffer = sd["buffer"]
+
+
+def build_stream(tok, rank: int, world: int) -&gt; PackedStream:
+    def src(repo, name, cfg_split="train"):
+        ds = load_dataset(repo, name=name, split=cfg_split, streaming=True)
+        return ds.select_columns(["text"])  # interleave exige las mismas columnas
+
+    es = src("HuggingFaceFW/fineweb-2", "spa_Latn")
+    pt = src("HuggingFaceFW/fineweb-2", "por_Latn")
+    en = src("HuggingFaceFW/fineweb-edu", "sample-10BT")       # replay en inglés
+    mix = interleave_datasets([es, pt, en], probabilities=[0.5, 0.35, 0.15], seed=42)
+    mix = split_dataset_by_node(mix, rank=rank, world_size=world)
+    return PackedStream(mix, tok, SEQ_LEN)
+
+
+def batches(stream, bs):
+    it = iter(stream)
+    while True:
+        yield torch.stack([next(it) for _ in range(bs)])
+
+
+class AppState(Stateful):
+    """DCP llama a state_dict()/load_state_dict(): cada rank guarda y lee solo sus shards."""
+
+    def __init__(self, model, optim, sched):
+        self.model, self.optim, self.sched = model, optim, sched
+
+    def state_dict(self):
+        msd, osd = get_state_dict(self.model, self.optim)
+        return {"model": msd, "optim": osd, "sched": self.sched.state_dict()}
+
+    def load_state_dict(self, sd):
+        set_state_dict(self.model, self.optim, model_state_dict=sd["model"], optim_state_dict=sd["optim"])
+        self.sched.load_state_dict(sd["sched"])
+
+
+def latest_checkpoint(root: Path):
+    done = sorted(p for p in root.glob("step_*") if (p / ".metadata").exists())  # .metadata = guardado completo
+    return done[-1] if done else None
+
+
+def wsd(step: int) -&gt; float:
+    if step &lt; WARMUP:
+        return (step + 1) / WARMUP
+    if step &lt; TOTAL_STEPS - DECAY:
+        return 1.0
+    return max(0.0, (TOTAL_STEPS - step) / DECAY)
+
+
+def export_hf(model, tok, rank: int, out_dir: str = "export-hf"):
+    full = get_model_state_dict(model, options=StateDictOptions(full_state_dict=True, cpu_offload=True))
+    if rank == 0:
+        hf = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.bfloat16)
+        missing, unexpected = hf.load_state_dict({k: v.to(torch.bfloat16) for k, v in full.items()}, strict=False)
+        assert not unexpected, unexpected
+        print("faltantes (deben ser solo pesos atados):", missing)
+        hf.save_pretrained(out_dir)       # safetensors por defecto
+        tok.save_pretrained(out_dir)
+    dist.barrier()
+
+
+def main():
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+    dist.init_process_group(backend="cpu:gloo,cuda:nccl")  # gloo para el guardado asíncrono en CPU
+    rank, world = dist.get_rank(), dist.get_world_size()
+    # 1D = FSDP puro. HSDP multi-nodo: init_device_mesh("cuda", (n_nodos, 8), mesh_dim_names=("replicate", "shard"))
+    mesh = init_device_mesh("cuda", (world,), mesh_dim_names=("shard",))
+
+    tok = AutoTokenizer.from_pretrained(MODEL_ID)
+    # Modelo chico: cada rank lo carga en CPU en FP32 (pesos maestros); fully_shard lo mueve a la GPU ya shardeado.
+    model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.float32)
+    model.config.use_cache = False
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+    n_params = sum(p.numel() for p in model.parameters())
+
+    mp = MixedPrecisionPolicy(param_dtype=torch.bfloat16, reduce_dtype=torch.float32)
+    for layer in model.model.layers:
+        fully_shard(layer, mesh=mesh, mp_policy=mp)   # una unidad de all-gather por bloque
+    fully_shard(model, mesh=mesh, mp_policy=mp)       # raíz: embeddings, norm final y lm_head
+    model.train()
+
+    optim = torch.optim.AdamW(model.parameters(), lr=PEAK_LR, betas=(0.9, 0.95), weight_decay=0.1)
+    sched = torch.optim.lr_scheduler.LambdaLR(optim, wsd)
+    stream = build_stream(tok, rank, world)
+    app = AppState(model, optim, sched)
+
+    last = latest_checkpoint(CKPT_DIR)
+    if last is not None:
+        dcp.load({"app": app}, checkpoint_id=str(last))  # resharding automático si cambió el nº de GPUs
+        data_file = last / f"data_rank{rank}.pt"
+        if data_file.exists():
+            stream.load_state_dict(torch.load(data_file, weights_only=False))
+        if rank == 0:
+            print(f"Reanudando desde {last}")
+
+    step, pending, t0 = sched.last_epoch, None, time.perf_counter()
+    data = batches(stream, MICRO_BS)
+    while step &lt; TOTAL_STEPS:
+        loss_acc = torch.zeros((), device="cuda")
+        for micro in range(GRAD_ACCUM):
+            model.set_requires_gradient_sync(micro == GRAD_ACCUM - 1)  # reduce-scatter solo al final
+            ids = next(data).cuda(non_blocking=True)
+            loss = model(input_ids=ids, labels=ids).loss / GRAD_ACCUM
+            loss.backward()
+            loss_acc += loss.detach()
+        gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # norma global aun con DTensor
+        if isinstance(gnorm, DTensor):
+            gnorm = gnorm.full_tensor()
+        optim.step()
+        sched.step()
+        optim.zero_grad(set_to_none=True)
+        step += 1
+
+        if step % 10 == 0:
+            dist.all_reduce(loss_acc, op=dist.ReduceOp.AVG)
+            dt, t0 = time.perf_counter() - t0, time.perf_counter()
+            tok_s = 10 * GRAD_ACCUM * MICRO_BS * SEQ_LEN / dt          # tokens/s por GPU
+            mfu = tok_s * 6 * n_params / PEAK_FLOPS                      # ignora FLOPs de atención y recompute
+            if rank == 0:
+                print(f"step {step} | loss {loss_acc.item():.4f} | gnorm {gnorm.item():.2f} | "
+                      f"lr {sched.get_last_lr()[0]:.2e} | {tok_s:,.0f} tok/s/GPU | MFU {mfu:.1%}")
+
+        stop = torch.tensor(float(STOP_FLAG.exists()), device="cuda")
+        dist.all_reduce(stop, op=dist.ReduceOp.MAX)                     # todos los ranks deciden lo mismo
+        if step % SAVE_EVERY == 0 or stop.item() &gt; 0:
+            if pending is not None:
+                pending.result()                                         # un guardado a la vez
+            path = CKPT_DIR / f"step_{step:07d}"
+            path.mkdir(parents=True, exist_ok=True)
+            torch.save(stream.state_dict(), path / f"data_rank{rank}.pt")
+            if stop.item() &gt; 0:
+                dcp.save({"app": app}, checkpoint_id=str(path))          # síncrono: SLURM está por cortar
+                break
+            pending = dcp.async_save({"app": app}, checkpoint_id=str(path))
+
+    if pending is not None:
+        pending.result()
+    if step &gt;= TOTAL_STEPS:
+        export_hf(model, tok, rank)
+    dist.destroy_process_group()
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash · run_local.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install -U torch transformers datasets
+export PYTORCH_ALLOC_CONF=expandable_segments:True   # menos fragmentación (PYTORCH_CUDA_ALLOC_CONF es solo alias)
+torchrun --standalone --nproc_per_node=8 fsdp2_min.py</code></pre>
+    </div>
+
+    <div class="tip"><strong>Modelos grandes (8B+):</strong> cargar el modelo completo en CPU en cada rank cuesta 8 × 32 GB de RAM para un 8B en FP32. El patrón escalable es construirlo en <code>torch.device("meta")</code>, aplicar <code>fully_shard</code>, materializar con <code>model.to_empty(device="cuda")</code> y cargar los pesos HF solo en rank 0 con <code>set_model_state_dict(model, full_sd, options=StateDictOptions(full_state_dict=True, broadcast_from_rank0=True))</code>. Ojo con dos trampas de los modelos HF: los buffers no persistentes (el <code>inv_freq</code> de RoPE no viene en el checkpoint y hay que recalcularlo) y los pesos atados embeddings/lm_head. torchtitan (<code>initial_load_in_hf</code>) y accelerate (<code>fsdp_cpu_ram_efficient_loading: true</code>) ya resuelven ambos.</div>
+  </div>
+
+  <!-- 3. Memoria y eficiencia -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-gauge" aria-hidden="true"></i>3. Memoria y eficiencia: AC, offload y MFU</h2>
+
+    <p>Con FSDP2 la memoria por GPU es aproximadamente (pesos + gradientes + Adam) / N GPUs + activaciones del bloque actual. Las palancas, en orden de costo:</p>
+    <table class="model-table">
+      <tr><th>Palanca</th><th>Ahorro</th><th>Costo</th></tr>
+      <tr><td>Activation checkpointing (<code>use_reentrant=False</code>)</td><td>Activaciones de ~N capas a ~1</td><td>~30% más cómputo (un forward extra)</td></tr>
+      <tr><td><code>reshard_after_forward=False</code> en la raíz o en el último bloque</td><td>Evita un all-gather en el backward</td><td>Más memoria: mantiene ese bloque completo</td></tr>
+      <tr><td><code>CPUOffloadPolicy()</code> en <code>fully_shard(..., offload_policy=...)</code></td><td>Parámetros y estados de Adam a CPU</td><td>Mucho más lento; último recurso para GPUs de 24 GB</td></tr>
+      <tr><td>Liger Kernel o Cut Cross-Entropy</td><td>El pico de logits (vocab × seq) de la capa de salida</td><td>Una dependencia más; clave si extendiste el vocabulario es/pt</td></tr>
+    </table>
+
+    <p>El MFU (model FLOPs utilization) se calcula como <code>tokens/s × 6N / FLOP/s pico</code>, con N parámetros. En el log del script lo calculamos por GPU. Como referencia, Llama 3 405B reportó 38-43% en BF16 sobre H100. Un modelo de 0.6B va a dar bastante menos, porque la comunicación pesa más en proporción al cómputo, y eso es normal. Para ver dónde se va la memoria:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · continúa fsdp2_min.py (dentro de main, alrededor del loop)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+
+# Antes del loop: registrar asignaciones (solo en rank 0 para no generar 8 archivos)
+if rank == 0:
+    torch.cuda.memory._record_memory_history(max_entries=100_000)
+
+# ... 3-5 pasos del loop de entrenamiento ...
+
+if rank == 0:
+    torch.cuda.memory._dump_snapshot("mem_snapshot.pickle")   # arrástralo a https://pytorch.org/memory_viz
+    torch.cuda.memory._record_memory_history(enabled=None)
+    print(f"pico: {torch.cuda.max_memory_allocated() / 2**30:.1f} GiB")</code></pre>
+    </div>
+  </div>
+
+  <!-- 4. Checkpoints DCP -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-device-floppy" aria-hidden="true"></i>4. Checkpoints con DCP: asíncronos, reshardeables y exportables</h2>
+
+    <p>PyTorch Distributed Checkpoint (DCP) guarda cada shard en paralelo desde su rank, junto con un archivo <code>.metadata</code> que describe la partición. Hay tres propiedades que lo hacen la base de corridas largas:</p>
+    <p><strong>Asíncrono:</strong> <code>dcp.async_save</code> copia el estado a CPU y escribe a disco en otro hilo mientras el entrenamiento sigue. Por eso el script espera <code>pending.result()</code> antes del siguiente guardado. <strong>Resharding:</strong> al cargar, cada rank pide los trozos que corresponden a <em>su</em> sharding actual, así que un checkpoint de 16 GPUs se reanuda en 8 sin convertir nada. <strong>Atomicidad práctica:</strong> <code>.metadata</code> se escribe al final, y por eso <code>latest_checkpoint</code> ignora los directorios incompletos que deja un job que murió a mitad del guardado.</p>
+
+    <div class="warn"><strong>Estado del dataloader al cambiar de topología:</strong> el modelo y el optimizador se reshardean solos, pero el stream de datos se guarda por rank (<code>data_rank{i}.pt</code>). Si cambias el número de GPUs, esos archivos ya no corresponden y el script reinicia el stream desde el principio, así que vas a repetir datos. En producción conviene saltar por número de documentos consumidos o cambiar la semilla de la mezcla y registrarlo.</div>
+
+    <p>Para llevar un checkpoint intermedio a Hugging Face sin levantar el cluster, se convierte DCP a un <code>state_dict</code> normal en una sola máquina:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · dcp_to_hf.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from torch.distributed.checkpoint.format_utils import dcp_to_torch_save
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+BASE = "Qwen/Qwen3-0.6B-Base"
+CKPT = "checkpoints/qwen3-0.6b-es-pt/step_0002500"
+
+dcp_to_torch_save(CKPT, "full_step2500.pt")              # consolida todos los shards (necesita RAM ~ tamaño total)
+state = torch.load("full_step2500.pt", weights_only=False)
+model_sd = state["app"]["model"]                          # misma estructura que AppState.state_dict()
+
+model = AutoModelForCausalLM.from_pretrained(BASE, dtype=torch.bfloat16)
+missing, unexpected = model.load_state_dict({k: v.to(torch.bfloat16) for k, v in model_sd.items()}, strict=False)
+print("missing:", missing, "| unexpected:", unexpected)
+model.save_pretrained("export-step2500")
+AutoTokenizer.from_pretrained(BASE).save_pretrained("export-step2500")</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Multi-nodo SLURM -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-2" aria-hidden="true"></i>5. Multi-nodo en SLURM con guardado antes del timeout y requeue</h2>
+
+    <p>Los clusters académicos de la región suelen ser compartidos y limitan los jobs a 24-48 h. La receta: <code>--signal=B:USR1@300</code> le avisa al script batch 5 minutos antes del límite. El trap crea un archivo bandera que el loop detecta (todos los ranks se ponen de acuerdo con un <code>all_reduce</code>), se hace un checkpoint síncrono, el proceso sale y el batch se re-encola solo con <code>scontrol requeue</code>. Al volver a arrancar, <code>latest_checkpoint</code> encuentra el último guardado. El lanzamiento sigue el patrón de <code>multinode_trainer.slurm</code> de torchtitan: un <code>torchrun</code> por nodo con rendezvous <code>c10d</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash · train_multinode.sbatch</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/bin/bash
+#SBATCH --job-name=cpt-es-pt
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=1
+#SBATCH --gpus-per-node=8
+#SBATCH --cpus-per-task=64
+#SBATCH --time=24:00:00
+#SBATCH --signal=B:USR1@300
+#SBATCH --requeue
+#SBATCH --output=logs/%x-%j.out
+
+# Sin "set -e": "wait" devuelve &gt;128 cuando lo interrumpe la señal y no queremos abortar ahí
+set -uo pipefail
+
+nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
+HEAD_IP=$(srun --nodes=1 --ntasks=1 -w "${nodes[0]}" hostname --ip-address | awk '{print $1}')
+
+# Ajusta a tu red: revisa interfaces con "ip a" y HCAs con "ibv_devices"
+export NCCL_SOCKET_IFNAME=ib0
+export NCCL_IB_HCA=mlx5
+export PYTORCH_ALLOC_CONF=expandable_segments:True
+export TORCH_NCCL_TRACE_BUFFER_SIZE=2000
+export TORCH_NCCL_DUMP_ON_TIMEOUT=true
+export CKPT_DIR="/scratch/$USER/ckpt/qwen3-0.6b-es-pt"
+export STOP_FLAG="$SLURM_SUBMIT_DIR/STOP_$SLURM_JOB_ID"
+rm -f "$STOP_FLAG"
+
+trap 'echo "[$(date)] USR1: checkpoint y requeue"; touch "$STOP_FLAG"' USR1
+
+srun --kill-on-bad-exit=1 torchrun \
+  --nnodes "$SLURM_NNODES" --nproc_per_node 8 \
+  --rdzv_id "$SLURM_JOB_ID" --rdzv_backend c10d --rdzv_endpoint "$HEAD_IP:29500" \
+  fsdp2_min.py &amp;
+SRUN_PID=$!
+
+# bash solo ejecuta el trap entre comandos: srun va en background y esperamos en un loop
+wait "$SRUN_PID"
+while kill -0 "$SRUN_PID" 2&gt;/dev/null; do
+  wait "$SRUN_PID"
+done
+
+if [ -f "$STOP_FLAG" ]; then
+  rm -f "$STOP_FLAG"
+  scontrol requeue "$SLURM_JOB_ID"
+fi</code></pre>
+    </div>
+
+    <div class="tip"><strong>HSDP entre nodos:</strong> con 2 nodos y red inter-nodo más lenta que NVLink, cambia el mesh a <code>init_device_mesh("cuda", (2, 8), mesh_dim_names=("replicate", "shard"))</code>. <code>fully_shard</code> con un mesh 2D shardea dentro del nodo y replica entre nodos, así que entre nodos solo viaja un all-reduce de gradientes. Para 8B en 2 nodos suele bastar. Para 70B el shard dentro del nodo ya no alcanza y hay que sumar TP.</div>
+    <div class="warn"><strong>Ajusta los 300 segundos:</strong> el checkpoint síncrono de un 0.6B tarda segundos, pero uno de 8B con optimizador (~96 GB) puede tardar minutos en un filesystem lento. Mide cuánto tarda <code>dcp.save</code> en tu cluster y deja al menos el doble de margen en <code>--signal</code>.</div>
+  </div>
+
+  <!-- 6. accelerate -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>6. La misma receta con accelerate (FSDP2 + ND-parallel)</h2>
+
+    <p>Si prefieres quedarte en el ecosistema Hugging Face, accelerate expone FSDP2 con <code>fsdp_version: 2</code>. <code>fsdp_reshard_after_forward</code> reemplaza a <code>fsdp_sharding_strategy</code>; se eliminaron <code>fsdp_backward_prefetch</code>, <code>fsdp_sync_module_states</code> y <code>fsdp_use_orig_params</code>, y <code>SHARDED_STATE_DICT</code> (DCP por debajo) es el default. Para convertir un YAML viejo existe <code>accelerate to-fsdp2</code>. El bloque <code>parallelism_config</code> combina réplica, shard, TP y CP.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">yaml · accelerate_fsdp2.yaml</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-yaml">compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+mixed_precision: bf16
+num_machines: 1
+num_processes: 8
+fsdp_config:
+  fsdp_version: 2
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_reshard_after_forward: true
+  fsdp_state_dict_type: SHARDED_STATE_DICT
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_activation_checkpointing: true
+  fsdp_offload_params: false
+parallelism_config:
+  parallelism_config_dp_replicate_size: 1
+  parallelism_config_dp_shard_size: 8
+  parallelism_config_tp_size: 1
+  parallelism_config_cp_size: 1</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · train_accelerate.py (importa PackedStream y build_stream de fsdp2_min.py)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from accelerate import Accelerator
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from fsdp2_min import MODEL_ID, MICRO_BS, batches, build_stream, wsd
+
+acc = Accelerator()                          # lee FSDP2 y parallelism_config del YAML
+tok = AutoTokenizer.from_pretrained(MODEL_ID)
+model = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.float32)
+model.config.use_cache = False
+optim = torch.optim.AdamW(model.parameters(), lr=3e-5, betas=(0.9, 0.95), weight_decay=0.1)
+model, optim = acc.prepare(model, optim)     # con FSDP2, modelo y optimizador se preparan juntos
+sched = torch.optim.lr_scheduler.LambdaLR(optim, wsd)
+
+stream = build_stream(tok, acc.process_index, acc.num_processes)
+model.train()
+for step, ids in enumerate(batches(stream, MICRO_BS), start=1):
+    ids = ids.to(acc.device)
+    loss = model(input_ids=ids, labels=ids).loss
+    acc.backward(loss)
+    acc.clip_grad_norm_(model.parameters(), 1.0)
+    optim.step()
+    sched.step()
+    optim.zero_grad()
+    if step % 10 == 0:
+        acc.print(f"step {step} | loss {loss.item():.4f}")
+    if step % 250 == 0:
+        acc.save_state(f"ckpt-accelerate/step_{step:07d}")   # sharded (DCP); reanudar con acc.load_state(...)
+    if step == 5_000:
+        break</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install -U accelerate
+accelerate launch --config_file accelerate_fsdp2.yaml train_accelerate.py</code></pre>
+    </div>
+
+    <div class="tip"><strong>TP y CP en accelerate:</strong> con <code>parallelism_config_tp_size &gt; 1</code> o <code>parallelism_config_cp_size &gt; 1</code>, el modelo y el batch se tienen que preparar distinto: plan de TP al cargar el modelo y el context manager <code>accelerator.maybe_context_parallel</code> alrededor del forward. Sigue los ejemplos oficiales <code>examples/torch_native_parallelism</code> (<code>nd_parallel.py</code>, <code>configs/cp.yaml</code>) de la versión que instales. Para Ulysses/ALST, accelerate delega en DeepSpeed (<code>sp_backend="deepspeed"</code>).</div>
+  </div>
+
+  <!-- 7. torchtitan -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-flame" aria-hidden="true"></i>7. torchtitan v0.3: receta de continual pretraining Llama 3.1 8B es/pt</h2>
+
+    <p>torchtitan (paper en ICLR 2025) es la plataforma PyTorch-nativa de referencia para pretraining. Compone FSDP2, TP (incluido async TP), PP y CP sobre un <code>DeviceMesh</code>, con Float8/MXFP8, <code>torch.compile</code>, activation checkpointing selectivo y DCP asíncrono. Desde v0.3 las configs TOML desaparecieron. Ahora una config es una <strong>función Python que devuelve <code>Trainer.Config</code></strong> y se elige con <code>MODULE</code>/<code>CONFIG</code>. Los datos van sobre Grain (<code>HuggingFaceStreamingSource</code>, <code>DatasetMixConfig</code>, <code>ConcatThenSplitPackingConfig</code>).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">git clone https://github.com/pytorch/torchtitan &amp;&amp; cd torchtitan
+pip install -r requirements.txt
+# torchao NO se instala solo; hace falta para Float8/MXFP8 (ajusta cu130 a tu CUDA)
+USE_CPP=0 python -m pip install --pre --upgrade torchao --index-url https://download.pytorch.org/whl/nightly/cu130
+# Llama 3.1 es gated: acepta la licencia en HF y exporta HF_TOKEN
+python scripts/download_hf_assets.py --repo_id meta-llama/Llama-3.1-8B \
+  --assets tokenizer config index safetensors --hf_token="$HF_TOKEN"</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · latam_recipes/latam.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from torchtitan.components.checkpointer import CheckpointManager
+from torchtitan.components.data import ConcatThenSplitPackingConfig, GrainDataLoader
+from torchtitan.components.data.dataset import DatasetMixConfig, SingleDatasetConfig, WeightedDataset
+from torchtitan.components.data.sources import HuggingFaceStreamingSource
+from torchtitan.components.optim import AdamW, Optim, OptimizersContainer
+from torchtitan.config.parallelism import ParallelismConfig
+from torchtitan.hf_datasets.text_datasets import TextProcessor
+from torchtitan.trainer import Trainer
+from torchtitan_recipes.models.llama3 import llama3_8b
+
+
+def _web(path: str, name: str) -&gt; SingleDatasetConfig:
+    return SingleDatasetConfig(
+        source=HuggingFaceStreamingSource.Config(path=path, name=name, split="train"),
+        processor=TextProcessor.Config(),
+        post_filters=(lambda sample: sample is not None,),
+    )
+
+
+def llama3_8b_latam_cpt(seq_len: int = 8192) -&gt; Trainer.Config:
+    config = llama3_8b(seq_len=seq_len)                    # parte de la receta oficial
+    config.hf_assets_path = "./assets/hf/Llama-3.1-8B"
+    config.dataloader = GrainDataLoader.Config(
+        dataset=ConcatThenSplitPackingConfig(
+            dataset=DatasetMixConfig(datasets=(
+                WeightedDataset(dataset=_web("HuggingFaceFW/fineweb-2", "spa_Latn"), weight=0.50),
+                WeightedDataset(dataset=_web("HuggingFaceFW/fineweb-2", "por_Latn"), weight=0.35),
+                WeightedDataset(dataset=_web("HuggingFaceFW/fineweb-edu", "sample-10BT"), weight=0.15),
+            )),
+        ),
+    )
+    config.parallelism = ParallelismConfig(data_parallel_shard_degree=8, tensor_parallel_degree=1)
+    config.optim = Optim.Config(
+        optimizer=OptimizersContainer.Config(optimizers=[AdamW.Config(pattern=r".*", lr=3e-5)]),
+    )
+    config.training.steps = 20_000
+    config.checkpointer = CheckpointManager.Config(
+        folder="checkpoint-latam",
+        interval=500,
+        initial_load_in_hf=True,       # arranca desde los safetensors de HF
+        last_save_in_hf=True,          # el último guardado sale en formato HF, listo para vLLM
+        last_save_model_only=True,
+        export_dtype="bfloat16",
+        async_mode="async",            # DCP asíncrono ("async_with_pinned_mem" es más rápido)
+    )
+    # Float8/MXFP8, torch.compile y warmup/decay del LR: revisa los nombres exactos de esos
+    # campos con --print-config en tu versión (la API de configs cambia rápido en main).
+    return config</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># latam_recipes/ debe ser importable (paquete con __init__.py, en el PYTHONPATH)
+export PYTHONPATH="$PWD:$PYTHONPATH"
+
+# 1) Dry-run sin comunicación real: valida config, shapes y memoria en una sola GPU
+COMM_BACKEND=fake NGPU=8 MODULE=latam_recipes.latam CONFIG=llama3_8b_latam_cpt ./run_train.sh
+
+# 2) Entrenamiento real en un nodo de 8 GPUs
+NGPU=8 MODULE=latam_recipes.latam CONFIG=llama3_8b_latam_cpt ./run_train.sh
+
+# Multi-nodo: copia multinode_trainer.slurm, ajusta --nodes y apunta a --module/--config
+# (python -m torchtitan.train --module latam_recipes.latam --config llama3_8b_latam_cpt)</code></pre>
+    </div>
+
+    <div class="warn"><strong>Verifica contra tu versión:</strong> los nombres de clases y campos de arriba corresponden a la estructura de torchtitan v0.3 en <code>main</code> a octubre de 2026 (<code>torchtitan_recipes/models/llama3.py</code>, <code>torchtitan/config/README.md</code>, <code>docs/checkpoint.md</code>). Cada release fija versiones nightly de torch y torchao, y los campos de Float8 se documentan en el README de cuantización de la versión instalada. En multi-nodo, descarga FineWeb-2 antes (o usa una fuente de acceso aleatorio local) para evitar errores HTTP 429 del Hub cuando 16+ procesos hacen streaming a la vez.</div>
+  </div>
+
+  <!-- 8. Contexto largo -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-horizontal" aria-hidden="true"></i>8. Contexto largo: context parallelism</h2>
+
+    <p>Para extender el contexto de 8K a 32K-128K (por ejemplo, para documentos legales o actas en español) las activaciones de atención dejan de caber aunque el modelo quepa. Context parallelism reparte la <em>secuencia</em> entre GPUs:</p>
+    <table class="model-table">
+      <tr><th>Variante</th><th>Cómo comunica</th><th>Límite</th><th>Dónde está</th></tr>
+      <tr><td>Ring Attention</td><td>Circula bloques de K/V en anillo, solapando con cómputo</td><td>Ninguno sobre el nº de cabezas</td><td><code>torch.distributed.tensor.experimental.context_parallel</code>; <code>cp_size</code> en accelerate. torchtitan usa una variante que hace all-gather de K/V (<code>KVAllGatherCPFlexInnerAttention</code>)</td></tr>
+      <tr><td>Ulysses / ALST</td><td>all-to-all: cada GPU calcula atención completa sobre un subconjunto de cabezas</td><td>Grado limitado por el nº de cabezas de atención</td><td>torchtitan (<code>UlyssesCPFlexInnerAttention</code>); DeepSpeed (ALST); accelerate con <code>sp_backend="deepspeed"</code></td></tr>
+    </table>
+    <p>En torchtitan, CP son dos cambios en tu función de config: fijar el grado y aplicar <code>ContextParallelTransform</code>, que cambia la atención del modelo (flex por defecto en Llama 3) por su versión CP. Es el patrón de <code>llama3_debugmodel_fsdp2_cp2</code> en <code>torchtitan_recipes/tests/suites/features.py</code>:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · latam_recipes/latam.py (continúa)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from torchtitan.config.transform import ContextParallelTransform, apply_transforms
+from torchtitan.models.common.attention import FlexInnerAttention
+from torchtitan.models.common.attention.cp_attention import KVAllGatherCPFlexInnerAttention
+
+
+def llama3_8b_latam_cpt_32k() -&gt; Trainer.Config:
+    config = llama3_8b_latam_cpt(seq_len=32_768)
+    config.parallelism.data_parallel_shard_degree = 2
+    config.parallelism.context_parallel_degree = 4      # 2 × 4 = 8 GPUs
+    return apply_transforms(config, [
+        ContextParallelTransform(
+            inner_attention_map={FlexInnerAttention: KVAllGatherCPFlexInnerAttention},
+        ),
+    ])</code></pre>
+    </div>
+
+    <p>CP multiplica con FSDP: 8 GPUs con CP=4 dejan 2 grupos de shard de datos (<code>NGPU</code> tiene que ser el producto de los grados). Para Ulysses, cambia el destino del mapa por <code>UlyssesCPFlexInnerAttention</code>: comunica menos, pero su grado queda limitado por el número de cabezas (Llama 3.1 8B tiene 32 de query y 8 de K/V).</p>
+  </div>
+
+  <!-- 9. Exportar y validar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-file-export" aria-hidden="true"></i>9. Exportar y validar: vLLM + perplexity es/pt</h2>
+
+    <p>Un bug de exportación (pesos atados mal copiados, dtype, nombres de capas) puede pasar desapercibido hasta el deployment. Antes de anunciar el checkpoint, levántalo en vLLM y compara contra el modelo base con un decode greedy y con perplexity sobre los splits <code>test</code> de FineWeb-2 (es y pt) y un control en inglés.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">vllm serve ./export-hf --dtype bfloat16 --max-model-len 4096 --port 8000 &amp;
+sleep 60
+curl -s http://localhost:8000/v1/completions -H "Content-Type: application/json" -d '{
+  "model": "./export-hf",
+  "prompt": "La Revolución de Mayo de 1810 en Buenos Aires",
+  "max_tokens": 80, "temperature": 0
+}'</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · ppl_compare.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import math
+
+import torch
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+SETS = {
+    "es": ("HuggingFaceFW/fineweb-2", "spa_Latn", "test"),
+    "pt": ("HuggingFaceFW/fineweb-2", "por_Latn", "test"),
+    "en": ("HuggingFaceFW/fineweb-edu", "sample-10BT", "train"),  # control de olvido (no es held-out estricto)
+}
+
+
+@torch.no_grad()
+def perplexity(model, tok, texts, max_len=2048):
+    nll, n = 0.0, 0
+    for t in texts:
+        ids = tok(t, return_tensors="pt", truncation=True, max_length=max_len).input_ids.to(model.device)
+        if ids.shape[1] &lt; 2:
+            continue
+        loss = model(input_ids=ids, labels=ids).loss
+        nll += loss.item() * (ids.shape[1] - 1)
+        n += ids.shape[1] - 1
+    return math.exp(nll / n)
+
+
+texts = {k: [ex["text"] for ex in load_dataset(r, name=c, split=s, streaming=True).take(300)]
+         for k, (r, c, s) in SETS.items()}
+for model_id in ["Qwen/Qwen3-0.6B-Base", "./export-hf"]:
+    tok = AutoTokenizer.from_pretrained(model_id)
+    model = AutoModelForCausalLM.from_pretrained(model_id, dtype=torch.bfloat16, device_map="cuda").eval()
+    print(model_id, {k: round(perplexity(model, tok, v), 2) for k, v in texts.items()})
+    del model
+    torch.cuda.empty_cache()</code></pre>
+    </div>
+    <p>Lo esperable tras el continual pretraining: la perplexity baja en es y pt y sube poco en inglés. Si el inglés se dispara, aumenta el replay. Para evaluación downstream en español y portugués, sigue con la guía de <a href="evaluacion-latam.html">evaluación Latam</a>.</p>
+  </div>
+
+  <!-- 10. Debugging -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bug" aria-hidden="true"></i>10. Debugging distribuido</h2>
+
+    <table class="model-table">
+      <tr><th>Síntoma</th><th>Herramienta</th></tr>
+      <tr><td>Quieres validar config y memoria sin reservar el nodo</td><td><code>COMM_BACKEND=fake</code> en <code>run_train.sh</code> de torchtitan: corre en una GPU con el world size lógico</td></tr>
+      <tr><td>El job no arranca o se cuelga en el rendezvous</td><td><code>NCCL_DEBUG=INFO</code>, <code>NCCL_SOCKET_IFNAME</code> correcto, puerto 29500 abierto entre nodos</td></tr>
+      <tr><td>Colectivo colgado a mitad de corrida (timeout NCCL)</td><td>Flight Recorder: <code>TORCH_NCCL_TRACE_BUFFER_SIZE=2000</code>, <code>TORCH_NCCL_DUMP_ON_TIMEOUT=true</code>, <code>TORCH_FR_DUMP_TEMP_FILE=/ruta/trace_</code>; analizar con <code>torchfrtrace &lt;dir&gt;</code></td></tr>
+      <tr><td>OOM en un rank y no en otros</td><td>Memory snapshot (sección 3) y revisar desbalance de largo de secuencias</td></tr>
+      <tr><td>La loss diverge o hay spikes</td><td>Grad norm por paso (ya en el log), LR más bajo, ver la guía de <a href="debugging.html">debugging de entrenamiento</a></td></tr>
+    </table>
+
+    <div class="tip"><strong>Varias instituciones, varios clusters:</strong> si el cómputo de LatamGPT está repartido en clusters conectados por WAN, TorchFT con DiLoCo (sincronizar cada H pasos con un optimizador externo) permite entrenar entre islas mal conectadas. Es material avanzado, pero torchtitan ya lo integra.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.06511" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>TorchTitan (Liang et al., ICLR 2025)</a>
+      <a class="source-link" href="https://docs.pytorch.org/tutorials/intermediate/FSDP_tutorial.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Tutorial FSDP2 (PyTorch)</a>
+      <a class="source-link" href="https://docs.pytorch.org/tutorials/recipes/distributed_checkpoint_recipe.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Getting Started with DCP</a>
+      <a class="source-link" href="https://docs.pytorch.org/tutorials/recipes/distributed_async_checkpoint_recipe.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Guardado asíncrono con DCP</a>
+      <a class="source-link" href="https://docs.pytorch.org/tutorials/unstable/flight_recorder_tutorial.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Flight Recorder (PyTorch)</a>
+      <a class="source-link" href="https://github.com/pytorch/torchtitan" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>torchtitan (GitHub)</a>
+      <a class="source-link" href="https://github.com/pytorch/torchtitan/blob/main/torchtitan/config/README.md" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Configs en Python de torchtitan</a>
+      <a class="source-link" href="https://github.com/pytorch/torchtitan/blob/main/docs/checkpoint.md" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Checkpointing en torchtitan</a>
+      <a class="source-link" href="https://github.com/pytorch/torchtitan/blob/main/multinode_trainer.slurm" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>multinode_trainer.slurm</a>
+      <a class="source-link" href="https://huggingface.co/docs/accelerate/concept_guides/fsdp1_vs_fsdp2" target="_blank" rel="noopener"><i class="ti ti-book"></i>FSDP1 vs FSDP2 (Accelerate)</a>
+      <a class="source-link" href="https://huggingface.co/blog/accelerate-nd-parallel" target="_blank" rel="noopener"><i class="ti ti-book"></i>Accelerate ND-Parallel (HF blog)</a>
+      <a class="source-link" href="https://github.com/huggingface/accelerate/tree/main/examples/torch_native_parallelism" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Ejemplos torch_native_parallelism</a>
+      <a class="source-link" href="https://docs.pytorch.org/ao/main/workflows/training.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Entrenamiento cuantizado con torchao</a>
+      <a class="source-link" href="https://huggingface.co/spaces/nanotron/ultrascale-playbook" target="_blank" rel="noopener"><i class="ti ti-book"></i>The Ultra-Scale Playbook (HF)</a>
+      <a class="source-link" href="https://slurm.schedmd.com/sbatch.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>sbatch (SLURM)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-Edu (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-0.6B-Base" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-0.6B-Base (HF)</a>
+      <a class="source-link" href="https://huggingface.co/meta-llama/Llama-3.1-8B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Llama 3.1 8B (HF, gated)</a>
+      <a class="source-link" href="entrenamiento.html"><i class="ti ti-cpu"></i>Guía: Entrenamiento con accelerate y DeepSpeed</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+      <a class="source-link" href="cluster.html"><i class="ti ti-server-2"></i>Guía: Cluster y SLURM</a>
+      <a class="source-link" href="packing.html"><i class="ti ti-stack-2"></i>Guía: Packing de secuencias</a>
+      <a class="source-link" href="debugging.html"><i class="ti ti-bug"></i>Guía: Debugging de entrenamiento</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-ruler-measure"></i>Guía: Evaluación Latam</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>
