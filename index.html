@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Portal de ingeniería de LLMs con foco en español y portugués: ruta de aprendizaje de fundamentos a SOTA 2026 y guías prácticas con código, del equipo LatamGPT (CENIA).">
 <title>LatamGPT — Engineering Hub</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  [hidden] { display: none !important; }
 
   :root {
     --bg:       #ffffff;
@@ -57,7 +59,7 @@
     margin: 0 auto;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
     height: 56px;
   }
   .logo {
@@ -127,7 +129,7 @@
   .hero-desc {
     font-size: 14px;
     color: var(--text2);
-    max-width: 540px;
+    max-width: 560px;
     line-height: 1.7;
   }
   .hero-stats {
@@ -181,7 +183,7 @@
     flex-shrink: 0;
   }
   .card-content { flex: 1; min-width: 0; }
-  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .card-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
   .card-badge {
     font-size: 10px;
@@ -190,6 +192,16 @@
     border-radius: 4px;
     white-space: nowrap;
   }
+  .card-new {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #FCEBEB;
+    color: #A32D2D;
+    letter-spacing: 0.02em;
+  }
+  @media (prefers-color-scheme: dark) { .card-new { background: #501313; color: #F7C1C1; } }
   .card-arrow {
     font-size: 14px;
     color: var(--text3);
@@ -204,6 +216,12 @@
   .c-train   .card-icon { background: #E6F1FB; color: #0C447C; }
   .c-deploy  .card-icon { background: #FAEEDA; color: #633806; }
   .c-debug   .card-icon { background: #FAECE7; color: #712B13; }
+  .c-curso   .card-icon { background: #FFF3CD; color: #7B4F00; }
+  .c-post    .card-icon { background: #F3EEFE; color: #5B21B6; }
+  .c-safety  .card-icon { background: #FCEBEB; color: #791F1F; }
+  .c-eval    .card-icon { background: #FBEAF0; color: #72243E; }
+  .c-apps    .card-icon { background: #E8EEFC; color: #1E3A8A; }
+  .c-interp  .card-icon { background: #FBEDE7; color: #7A2A0F; }
 
   .badge-roadmap  { background: #EEEDFE; color: #3C3489; }
   .badge-infra    { background: #E1F5EE; color: #085041; }
@@ -211,10 +229,12 @@
   .badge-train    { background: #E6F1FB; color: #0C447C; }
   .badge-deploy   { background: #FAEEDA; color: #633806; }
   .badge-debug    { background: #FAECE7; color: #712B13; }
-  .c-curso   .card-icon { background: #FFF3CD; color: #7B4F00; }
   .badge-curso    { background: #FFF3CD; color: #7B4F00; }
-  .c-post    .card-icon { background: #F3EEFE; color: #5B21B6; }
   .badge-post     { background: #F3EEFE; color: #5B21B6; }
+  .badge-safety   { background: #FCEBEB; color: #791F1F; }
+  .badge-eval     { background: #FBEAF0; color: #72243E; }
+  .badge-apps     { background: #E8EEFC; color: #1E3A8A; }
+  .badge-interp   { background: #FBEDE7; color: #7A2A0F; }
 
   @media (prefers-color-scheme: dark) {
     .c-roadmap .card-icon { background: #26215C; color: #AFA9EC; }
@@ -223,30 +243,96 @@
     .c-train   .card-icon { background: #042C53; color: #B5D4F4; }
     .c-deploy  .card-icon { background: #412402; color: #FAC775; }
     .c-debug   .card-icon { background: #4A1B0C; color: #F5C4B3; }
+    .c-curso   .card-icon { background: #412402; color: #FAC775; }
+    .c-post    .card-icon { background: #2D1B69; color: #C4B5FD; }
+    .c-safety  .card-icon { background: #501313; color: #F7C1C1; }
+    .c-eval    .card-icon { background: #4B1528; color: #F4C0D1; }
+    .c-apps    .card-icon { background: #14265C; color: #C9D5F8; }
+    .c-interp  .card-icon { background: #4A1806; color: #F7C4B3; }
     .badge-roadmap  { background: #26215C; color: #AFA9EC; }
     .badge-infra    { background: #04342C; color: #9FE1CB; }
     .badge-datos    { background: #04342C; color: #9FE1CB; }
     .badge-train    { background: #042C53; color: #B5D4F4; }
     .badge-deploy   { background: #412402; color: #FAC775; }
     .badge-debug    { background: #4A1B0C; color: #F5C4B3; }
-    .c-curso .card-icon { background: #412402; color: #FAC775; }
     .badge-curso    { background: #412402; color: #FAC775; }
-    .c-post  .card-icon { background: #2D1B69; color: #C4B5FD; }
     .badge-post     { background: #2D1B69; color: #C4B5FD; }
+    .badge-safety   { background: #501313; color: #F7C1C1; }
+    .badge-eval     { background: #4B1528; color: #F4C0D1; }
+    .badge-apps     { background: #14265C; color: #C9D5F8; }
+    .badge-interp   { background: #4A1806; color: #F7C4B3; }
   }
 
   /* Roadmap card (big) */
-  .card-roadmap {
-    padding: 24px 28px;
-  }
+  .card-roadmap { padding: 22px 26px; }
   .card-roadmap .card-icon {
-    width: 48px;
-    height: 48px;
+    width: 46px;
+    height: 46px;
     font-size: 22px;
     border-radius: 10px;
   }
   .card-roadmap .card-title { font-size: 16px; }
   .card-roadmap .card-desc { font-size: 13px; }
+
+  /* Buscador y filtros de guías */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+    position: sticky;
+    top: 56px;
+    z-index: 50;
+    background: var(--bg2);
+    padding: 10px 0;
+  }
+  .search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 380px; }
+  .search-wrap i {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 15px;
+    color: var(--text3);
+    pointer-events: none;
+  }
+  #guide-search {
+    width: 100%;
+    background: var(--bg);
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px 8px 32px;
+    font-size: 13px;
+    color: var(--text);
+    outline: none;
+    font-family: inherit;
+  }
+  #guide-search:focus { border-color: var(--accent); }
+  #guide-search::placeholder { color: var(--text3); }
+  .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-btn {
+    font-size: 12px;
+    padding: 4px 11px;
+    border-radius: 99px;
+    border: 0.5px solid var(--border2);
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .filter-btn:hover { background: var(--bg3); color: var(--text); }
+  .filter-btn.active { background: var(--accent); color: #fff; border-color: transparent; }
+  @media (prefers-color-scheme: dark) { .filter-btn.active { color: #1c1c1a; } }
+  .result-count { font-size: 12px; color: var(--text3); margin-left: auto; }
+  .no-results {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text3);
+    font-size: 14px;
+  }
+  .no-results i { font-size: 32px; display: block; margin-bottom: 8px; }
 
   footer {
     text-align: center;
@@ -302,7 +388,11 @@
       <span class="logo-pill">Engineering Hub</span>
     </a>
     <div class="header-spacer"></div>
-    <a class="header-link" href="latamgpt-roadmap.html">
+    <a class="header-link" href="latamgpt-roadmap.html#ruta">
+      <i class="ti ti-route" aria-hidden="true"></i>
+      Ruta
+    </a>
+    <a class="header-link" href="latamgpt-roadmap.html#completo">
       <i class="ti ti-map-2" aria-hidden="true"></i>
       Roadmap
     </a>
@@ -314,310 +404,546 @@
   <div class="hero">
     <div class="hero-text">
       <div class="hero-eyebrow">CENIA · LatamGPT</div>
-      <h1 class="hero-title">Portal de ingeniería<br>para Latam LLMs</h1>
+      <h1 class="hero-title">Portal de ingeniería<br>de modelos de lenguaje</h1>
       <p class="hero-desc">
-        Recursos para ingenieros y practicantes que se suman al proyecto LatamGPT.
-        Encontrarás la ruta de aprendizaje teórica y guías prácticas con código
-        sobre el stack completo: desde datos hasta deployment.
+        Una ruta de aprendizaje de fundamentos a SOTA 2026 y guías prácticas con código
+        para quienes construyen LLMs: datos, pretraining, post-training, evaluación,
+        seguridad, inferencia y aplicaciones. Nació en el proyecto LatamGPT, así que los
+        ejemplos ponen foco en español y portugués, pero sirve para cualquier modelo.
       </p>
     </div>
     <div class="hero-stats">
-      <div class="hstat"><div class="hstat-n" data-stat="areas">7</div><div class="hstat-l">áreas temáticas</div></div>
-      <div class="hstat"><div class="hstat-n" data-stat="temas">115</div><div class="hstat-l">temas en roadmap</div></div>
-      <div class="hstat"><div class="hstat-n" data-stat="guias">22</div><div class="hstat-l">guías con código</div></div>
+      <div class="hstat"><div class="hstat-n" data-stat="areas">13</div><div class="hstat-l">áreas temáticas</div></div>
+      <div class="hstat"><div class="hstat-n" data-stat="temas">280</div><div class="hstat-l">temas en roadmap</div></div>
+      <div class="hstat"><div class="hstat-n" data-stat="guias">44</div><div class="hstat-l">guías con código</div></div>
     </div>
   </div>
 
   <!-- Ruta de Aprendizaje -->
-  <div class="section-label">Ruta de Aprendizaje</div>
-  <div class="grid grid-1" style="margin-bottom: 28px;">
-    <a class="card card-roadmap c-roadmap" href="latamgpt-roadmap.html">
+  <div class="section-label">Ruta de aprendizaje</div>
+  <div class="grid grid-2" style="margin-bottom: 28px;">
+    <a class="card card-roadmap c-roadmap" href="latamgpt-roadmap.html#ruta">
+      <div class="card-icon"><i class="ti ti-route" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">
+          Ruta recomendada
+          <span class="card-badge badge-roadmap">Empieza aquí</span>
+        </div>
+        <div class="card-desc">
+          El pipeline completo de un LLM en 7 etapas: fundamentos, Transformer, datos, pretraining,
+          post-training, evaluación y seguridad, y deployment. Lo mínimo de cada etapa, con una guía para practicarlo.
+        </div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card card-roadmap c-roadmap" href="latamgpt-roadmap.html#completo">
       <div class="card-icon"><i class="ti ti-map-2" aria-hidden="true"></i></div>
       <div class="card-content">
         <div class="card-title">
-          LatamGPT — Ruta de aprendizaje
-          <span class="card-badge badge-roadmap" data-stat="roadmap-badge">115 temas · 160+ papers</span>
+          Roadmap completo
+          <span class="card-badge badge-roadmap" data-stat="roadmap-badge">280 temas · 400+ papers</span>
         </div>
         <div class="card-desc">
-          Roadmap interactivo de fundamentos a SOTA 2026. 8 secciones: Fundamentos de ML, Modelos, Datos, Pretraining, Post-training,
-          Datos Sintéticos, Benchmarks &amp; Evaluación e Interpretabilidad. Con búsqueda y filtros por nivel.
+          De fundamentos a SOTA 2026 en 13 áreas, entre ellas modelos, datos, arquitecturas, post-training,
+          seguridad, inferencia, agentes, multimodal e interpretabilidad. Con búsqueda y filtros por nivel.
         </div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
   </div>
+
+  <!-- Buscador de guías -->
+  <div class="toolbar" role="search">
+    <div class="search-wrap">
+      <i class="ti ti-search" aria-hidden="true"></i>
+      <input type="search" id="guide-search" placeholder="Buscar guía: vLLM, HarmBench, JQL, LoRA…" autocomplete="off" aria-label="Buscar guías">
+    </div>
+    <div class="filter-btns" id="level-filters" aria-label="Filtrar por nivel">
+      <button class="filter-btn active" data-level="all">Todas</button>
+      <button class="filter-btn" data-level="basic">Básico</button>
+      <button class="filter-btn" data-level="core">Core</button>
+      <button class="filter-btn" data-level="advanced">Avanzado</button>
+    </div>
+    <span class="result-count" id="result-count" aria-live="polite"></span>
+  </div>
+
+  <div id="guides-root">
 
   <!-- Infraestructura -->
-  <div class="section-label">Infraestructura & MLOps</div>
+  <section class="hub-section">
+  <div class="section-label">Infraestructura &amp; MLOps</div>
   <div class="grid grid-2">
-    <a class="card c-infra" href="guias/cluster.html">
+    <a class="card c-infra" href="guias/cluster.html" data-level="basic">
       <div class="card-icon"><i class="ti ti-server" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Uso del Cluster HPC
-          <span class="card-badge badge-infra">Básico</span>
-        </div>
-        <div class="card-desc">SSH, llaves públicas, VS Code Remote, rsync, htop, nvtop, nvidia-smi, CUDA_VISIBLE_DEVICES, tmux, SLURM y Git en el cluster.</div>
+        <div class="card-title">Uso del Cluster HPC <span class="card-badge badge-infra">Básico</span></div>
+        <div class="card-desc">SSH, llaves públicas, VS Code Remote, rsync, htop, nvtop, nvidia-smi, tmux, SLURM y Git en el cluster.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-infra" href="guias/mlops.html">
+    <a class="card c-infra" href="guias/mlops.html" data-level="core">
       <div class="card-icon"><i class="ti ti-chart-line" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          MLOps: W&amp;B + SLURM
-          <span class="card-badge badge-infra">Core</span>
-        </div>
-        <div class="card-desc">Experiment tracking con Weights &amp; Biases, logging de métricas y artefactos, scripts SLURM para jobs de entrenamiento y array jobs.</div>
+        <div class="card-title">MLOps: W&amp;B + SLURM <span class="card-badge badge-infra">Core</span></div>
+        <div class="card-desc">Experiment tracking con Weights &amp; Biases, logging de métricas y artefactos, scripts SLURM para entrenamiento y array jobs.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
   </div>
+  </section>
 
   <!-- Datos -->
+  <section class="hub-section">
   <div class="section-label">Datos</div>
   <div class="grid grid-3">
-    <a class="card c-datos" href="guias/tokenizacion-cloud.html">
+    <a class="card c-datos" href="guias/tokenizacion-cloud.html" data-level="core">
       <div class="card-icon"><i class="ti ti-binary" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">Tokenización en Cloud</div>
+        <div class="card-title">Tokenización en Cloud <span class="card-badge badge-datos">Core</span></div>
         <div class="card-desc">Pipeline Datatrove, tokenización paralela a escala de TB, verificar cobertura del vocabulario en es/pt.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-datos" href="guias/filtrado.html">
+    <a class="card c-datos" href="guias/filtrado.html" data-level="core">
       <div class="card-icon"><i class="ti ti-filter" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">Filtrado de Calidad</div>
+        <div class="card-title">Filtrado de Calidad <span class="card-badge badge-datos">Core</span></div>
         <div class="card-desc">Clasificadores fastText, filtro de perplejidad KenLM, reglas Gopher/C4 y pipeline completo con Datatrove.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-datos" href="guias/fineweb-edu.html">
+    <a class="card c-datos" href="guias/fineweb-edu.html" data-level="advanced">
       <div class="card-icon"><i class="ti ti-school" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Clasificador FineWeb-Edu
-          <span class="card-badge badge-datos">Avanzado</span>
-        </div>
-        <div class="card-desc">Etiquetar calidad educativa con Llama 70B, entrenar un regresor XLM-R sobre esas etiquetas y correr inferencia masiva para filtrar billones de documentos en es/pt.</div>
+        <div class="card-title">Clasificador FineWeb-Edu <span class="card-badge badge-datos">Avanzado</span></div>
+        <div class="card-desc">Etiquetar calidad educativa con un LLM, entrenar un regresor XLM-R sobre esas etiquetas y correr inferencia masiva para filtrar corpus en es/pt.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-datos" href="guias/anonimizacion.html">
+    <a class="card c-datos" href="guias/jql-filtrado-multilingue.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-language" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">JQL: filtrado multilingüe <span class="card-badge badge-datos">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Judging Quality across Languages: elegir LLM-jueces contra un gold set humano, destilarlos en cabezas livianas sobre embeddings multilingües y filtrar FineWeb2 es/pt por percentil.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-datos" href="guias/mid-training.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-flask" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Mid-training y annealing <span class="card-badge badge-datos">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Diseñar la fase final del pretraining: mezcla de datos de alto valor, decay del learning rate y cómo medir lo que aporta, siguiendo las recetas abiertas de 2025-2026.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-datos" href="guias/anonimizacion.html" data-level="core">
       <div class="card-icon"><i class="ti ti-shield-lock" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">Anonimización de PII</div>
-        <div class="card-desc">Remoción de datos personales con Presidio y spaCy: nombres, emails, RUT/CUIT, teléfonos e IPs en es/pt.</div>
+        <div class="card-title">Anonimización de PII <span class="card-badge badge-datos">Core</span></div>
+        <div class="card-desc">Remoción de datos personales con Presidio y spaCy: nombres, emails, RUT/CPF, teléfonos e IPs en es/pt.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-datos" href="guias/packing.html">
+    <a class="card c-datos" href="guias/packing.html" data-level="core">
       <div class="card-icon"><i class="ti ti-box" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">Sequence Packing</div>
-        <div class="card-desc">Eliminar padding (~30-50% de tokens desperdiciados). Greedy bin-packing e integración con HuggingFace DataCollator.</div>
+        <div class="card-title">Sequence Packing <span class="card-badge badge-datos">Core</span></div>
+        <div class="card-desc">Eliminar padding (~30-50% de tokens desperdiciados): greedy bin-packing, máscaras por documento y padding-free con HuggingFace.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-datos" href="guias/tokenizer-training.html">
+    <a class="card c-datos" href="guias/tokenizer-training.html" data-level="advanced">
       <div class="card-icon"><i class="ti ti-binary-tree" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Entrenamiento de Tokenizadores
-          <span class="card-badge badge-datos">Avanzado</span>
-        </div>
-        <div class="card-desc">Entrenar BPE desde cero y extender el vocabulario de LLaMA 3 para español y portugués: fertility rate, embeddings para nuevos tokens y evaluación.</div>
+        <div class="card-title">Entrenamiento de Tokenizadores <span class="card-badge badge-datos">Avanzado</span></div>
+        <div class="card-desc">Entrenar BPE desde cero y extender el vocabulario de LLaMA 3 para español y portugués: fertility, embeddings para tokens nuevos y evaluación.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-datos" href="guias/synthetic-pipeline.html">
+    <a class="card c-datos" href="guias/synthetic-pipeline.html" data-level="advanced">
       <div class="card-icon"><i class="ti ti-refresh-dot" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Pipeline Sintético con Reward Model
-          <span class="card-badge badge-datos">Avanzado</span>
-        </div>
-        <div class="card-desc">Pipeline end-to-end: generar N respuestas, puntuar con RM, filtrar por umbral, curriculum learning e iteración con el modelo mejorado. Detección de model collapse.</div>
+        <div class="card-title">Pipeline Sintético con Reward Model <span class="card-badge badge-datos">Avanzado</span></div>
+        <div class="card-desc">Generar N respuestas, puntuar con un RM, filtrar por umbral, curriculum learning e iteración con el modelo mejorado. Detección de model collapse.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
   </div>
+  </section>
 
-  <!-- Entrenamiento -->
-  <div class="section-label">Entrenamiento & Modelos</div>
+  <!-- Arquitectura y Pretraining -->
+  <section class="hub-section">
+  <div class="section-label">Arquitectura &amp; Pretraining</div>
   <div class="grid grid-3">
-    <a class="card c-train" href="guias/entrenamiento.html">
+    <a class="card c-train" href="guias/llm-desde-cero.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-stack-2" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Un LLM moderno desde cero <span class="card-badge badge-train">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Implementar en PyTorch el decoder que comparten Llama 3, Qwen3 y OLMo (RMSNorm, RoPE, GQA, SwiGLU, QK-norm) y entrenar un modelo pequeño en español.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-train" href="guias/moe-desde-cero.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-hierarchy-3" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">MoE desde cero <span class="card-badge badge-train">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Router top-k, expertos fine-grained y compartidos, colapso de expertos y balanceo con y sin auxiliary loss: la arquitectura por defecto de los modelos abiertos de 2026.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-train" href="guias/scaling-laws.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-chart-dots" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Reproducir una scaling law <span class="card-badge badge-train">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Diseñar una grilla barata con WSD y cooldowns, ajustar Chinchilla por IsoFLOPs con intervalos de confianza y decidir tamaño y tokens para es/pt con evidencia propia.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-train" href="guias/entrenamiento.html" data-level="core">
       <div class="card-icon"><i class="ti ti-brain" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">Código de Entrenamiento</div>
-        <div class="card-desc">Loop de pretraining con accelerate, DeepSpeed ZeRO, gradient accumulation, bf16, checkpointing y cómo interpretar la loss curve.</div>
+        <div class="card-title">Código de Entrenamiento <span class="card-badge badge-train">Core</span></div>
+        <div class="card-desc">Loop de pretraining con accelerate y DeepSpeed ZeRO, gradient accumulation, bf16, checkpointing y cómo interpretar la loss curve.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-train" href="guias/bert.html">
-      <div class="card-icon"><i class="ti ti-topology-star-3" aria-hidden="true"></i></div>
+    <a class="card c-train" href="guias/fsdp2-torchtitan.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-topology-ring" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">Modelos BERT es/pt</div>
-        <div class="card-desc">Fine-tuning de BETO, BERTimbau y RoBERTa-BNE para clasificación y NER. Incluye inferencia batch y entrenamiento distribuido con Accelerate.</div>
+        <div class="card-title">FSDP2 y torchtitan <span class="card-badge badge-train">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Entrenamiento distribuido PyTorch-nativo: fully_shard, checkpoints DCP, paralelismo 4D con torchtitan y lanzamiento multi-nodo en SLURM.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-debug" href="guias/debugging.html">
-      <div class="card-icon"><i class="ti ti-bug" aria-hidden="true"></i></div>
-      <div class="card-content">
-        <div class="card-title">Debugging de Entrenamiento</div>
-        <div class="card-desc">Loss spikes, gradient norms, OOM errors, NaN en gradientes y memory profiling con torch.profiler.</div>
-      </div>
-      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
-    </a>
-    <a class="card c-train" href="guias/quantization.html">
-      <div class="card-icon"><i class="ti ti-database-cog" aria-hidden="true"></i></div>
-      <div class="card-content">
-        <div class="card-title">
-          Quantización para inferencia
-          <span class="card-badge badge-train">Core</span>
-        </div>
-        <div class="card-desc">GPTQ, AWQ y GGUF/llama.cpp: cuándo usar cada método, cómo quantizar modelos LatamGPT y benchmarking de calidad vs velocidad.</div>
-      </div>
-      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
-    </a>
-  </div>
-
-  <!-- Post-training y Alineamiento -->
-  <div class="section-label">Post-training & Alineamiento</div>
-  <div class="grid grid-2">
-    <a class="card c-post" href="guias/lora-finetuning.html">
-      <div class="card-icon"><i class="ti ti-adjustments-horizontal" aria-hidden="true"></i></div>
-      <div class="card-content">
-        <div class="card-title">
-          LoRA y QLoRA: Fine-tuning eficiente
-          <span class="card-badge badge-post">Core</span>
-        </div>
-        <div class="card-desc">Adapta LLaMA, Mistral o Qwen a español/portugués con adaptadores de bajo rango. Incluye selección de rank, módulos target y diagnóstico de convergencia.</div>
-      </div>
-      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
-    </a>
-    <a class="card c-post" href="guias/dpo-alignment.html">
-      <div class="card-icon"><i class="ti ti-scale" aria-hidden="true"></i></div>
-      <div class="card-content">
-        <div class="card-title">
-          Alineamiento con DPO y variantes
-          <span class="card-badge badge-post">Core</span>
-        </div>
-        <div class="card-desc">DPO clásico, ORPO (sin reference model) y KTO (sin pares). Código completo con TRL, formato de datos y métricas de diagnóstico en W&amp;B.</div>
-      </div>
-      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
-    </a>
-    <a class="card c-post" href="guias/sft-dataset.html">
-      <div class="card-icon"><i class="ti ti-database-plus" aria-hidden="true"></i></div>
-      <div class="card-content">
-        <div class="card-title">
-          Datasets SFT para Latam
-          <span class="card-badge badge-post">Avanzado</span>
-        </div>
-        <div class="card-desc">Construcción de datos de instrucción en español/portugués: Self-Instruct, Magpie, Evol-Instruct, filtrado por idioma y calidad, y publicación en HF Hub.</div>
-      </div>
-      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
-    </a>
-    <a class="card c-post" href="guias/continual-pretraining.html">
+    <a class="card c-train" href="guias/continual-pretraining.html" data-level="advanced">
       <div class="card-icon"><i class="ti ti-repeat" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Continual Pretraining es/pt
-          <span class="card-badge badge-post">Avanzado</span>
-        </div>
-        <div class="card-desc">Adapta LLaMA 3 o Mistral a español y portugués latinoamericano: mixture de datos, prevención de catastrophic forgetting y evaluación intermedia.</div>
+        <div class="card-title">Continual Pretraining es/pt <span class="card-badge badge-train">Avanzado</span></div>
+        <div class="card-desc">Adaptar un modelo base a español y portugués latinoamericano: mezcla de datos, prevención de catastrophic forgetting y evaluación intermedia.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-post" href="guias/reward-models.html">
+    <a class="card c-debug" href="guias/debugging.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-bug" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Debugging de Entrenamiento <span class="card-badge badge-debug">Core</span></div>
+        <div class="card-desc">Loss spikes, gradient norms, OOM, NaN en gradientes y memory profiling con torch.profiler.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  </section>
+
+  <!-- Post-training y Alineamiento -->
+  <section class="hub-section">
+  <div class="section-label">Post-training &amp; Alineamiento</div>
+  <div class="grid grid-3">
+    <a class="card c-post" href="guias/lora-finetuning.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-adjustments-horizontal" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">LoRA y QLoRA <span class="card-badge badge-post">Core</span></div>
+        <div class="card-desc">Adaptar modelos abiertos a español/portugués con adaptadores de bajo rango: rank, módulos target y diagnóstico de convergencia.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/sft-dataset.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-database-plus" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Datasets SFT para Latam <span class="card-badge badge-post">Avanzado</span></div>
+        <div class="card-desc">Datos de instrucción en español/portugués: Self-Instruct, Magpie, Evol-Instruct, filtrado por idioma y calidad, y publicación en HF Hub.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/dpo-alignment.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-scale" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Alineamiento con DPO y variantes <span class="card-badge badge-post">Core</span></div>
+        <div class="card-desc">DPO clásico, ORPO (sin reference model) y KTO (sin pares) con TRL: formato de datos y métricas de diagnóstico.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/reward-models.html" data-level="core">
       <div class="card-icon"><i class="ti ti-star" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Reward Models
-          <span class="card-badge badge-post">Core</span>
-        </div>
-        <div class="card-desc">Entrenar un RM con Bradley-Terry y TRL RewardTrainer. Scoring de respuestas, best-of-N, delta filtering para DPO online (receta OLMo 3) y diagnóstico de reward hacking.</div>
+        <div class="card-title">Reward Models <span class="card-badge badge-post">Core</span></div>
+        <div class="card-desc">Entrenar un RM Bradley-Terry con TRL, best-of-N, delta filtering para DPO online y diagnóstico de reward hacking.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-post" href="guias/grpo-rl.html">
+    <a class="card c-post" href="guias/grpo-rl.html" data-level="advanced">
       <div class="card-icon"><i class="ti ti-tournament" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          GRPO y RL para razonamiento
-          <span class="card-badge badge-post">Avanzado</span>
-        </div>
-        <div class="card-desc">Group Relative Policy Optimization: el algoritmo de DeepSeek-R1. Reward functions verificables para matemáticas y código, GRPOTrainer y diagnóstico de colapso de reward.</div>
+        <div class="card-title">GRPO y RL para razonamiento <span class="card-badge badge-post">Avanzado</span></div>
+        <div class="card-desc">El algoritmo de DeepSeek-R1 con GRPOTrainer: rewards verificables para matemáticas y código, y diagnóstico de colapso de reward.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/destilacion-razonamiento.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-bulb" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Destilación de razonamiento <span class="card-badge badge-post">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">SFT con trazas largas (el cold start de R1-Distill, OpenThinker y s1): generar, filtrar y entrenar para que el modelo razone en español y portugués.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/on-policy-distillation.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-arrows-exchange" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">On-policy distillation <span class="card-badge badge-post">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Señal densa por token sobre los rollouts del propio estudiante: transferir capacidades con mucho menos cómputo que RL y recuperar el chat tras continual pretraining.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/rl-agentico.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-robot" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">RL agéntico con herramientas <span class="card-badge badge-post">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">SFT de tool calling y RL multi-turn: formato de herramientas, entornos que se puntúan solos y escalado a sandboxes.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-post" href="guias/model-merging.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-git-merge" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Model merging con mergekit <span class="card-badge badge-post">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Model soups, SLERP, TIES/DARE y chat vectors: combinar un continual pretraining en español con un modelo instruct casi sin GPU.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
   </div>
+  </section>
 
-  <!-- Deployment -->
-  <div class="section-label">Deployment & Evaluación</div>
+  <!-- Seguridad -->
+  <section class="hub-section">
+  <div class="section-label">Seguridad &amp; Guardrails</div>
   <div class="grid grid-2">
-    <a class="card c-deploy" href="guias/inferencia.html">
-      <div class="card-icon"><i class="ti ti-server-bolt" aria-hidden="true"></i></div>
+    <a class="card c-safety" href="guias/clasificador-toxicidad-harmbench.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-shield-check" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Serving con vLLM
-          <span class="card-badge badge-deploy">Básico</span>
-        </div>
-        <div class="card-desc">Levantar un servidor vLLM con PagedAttention, hacer requests con la API OpenAI-compatible y monitorear throughput.</div>
+        <div class="card-title">Clasificadores de toxicidad con HarmBench <span class="card-badge badge-safety">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Behaviors de HarmBench adaptados a es/pt, etiquetado con el juez de HarmBench o un guard moderno, y destilación a un clasificador liviano para guardrails y filtrado de datos.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-deploy" href="guias/evaluacion-latam.html">
+    <a class="card c-safety" href="guias/red-teaming-evaluacion-seguridad.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-sword" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Red teaming y evaluación de seguridad <span class="card-badge badge-safety">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Pipeline HarmBench completo, StrongREJECT, over-refusal y ataques automatizados contra un endpoint vLLM, más sesgo social en español con SESGO.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-safety" href="guias/guardrails-produccion-vllm.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-shield-lock" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Guardrails en producción con vLLM <span class="card-badge badge-safety">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Defensa en profundidad: un guard multilingüe servido con vLLM antes y después del LLM, protección contra prompt injection y medición de latencia.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-safety" href="guias/filtrado-toxicidad-pretraining.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-filter-off" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Toxicidad en datos de pretraining <span class="card-badge badge-safety">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Clasificadores de toxicidad por idioma para corpus web es/pt, cuánto filtrar sin perder controlabilidad, y HarmFormer como referencia.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  </section>
+
+  <!-- Evaluación -->
+  <section class="hub-section">
+  <div class="section-label">Evaluación</div>
+  <div class="grid grid-2">
+    <a class="card c-eval" href="guias/evaluacion-latam.html" data-level="core">
       <div class="card-icon"><i class="ti ti-clipboard-check" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Evaluación para español/portugués
-          <span class="card-badge badge-deploy">Core</span>
-        </div>
-        <div class="card-desc">lm-eval-harness en la práctica: MGSM, FLORES-200, IFEval, tasks personalizados para Trueque/LatamQA, detección de contaminación y batch evaluation en SLURM.</div>
+        <div class="card-title">Evaluación para español/portugués <span class="card-badge badge-eval">Core</span></div>
+        <div class="card-desc">lm-eval-harness en la práctica: MGSM, FLORES-200, IFEval, tareas personalizadas, detección de contaminación y evaluación batch en SLURM.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-deploy" href="guias/speculative-decoding.html">
-      <div class="card-icon"><i class="ti ti-bolt" aria-hidden="true"></i></div>
+    <a class="card c-eval" href="guias/evaluacion-estadistica.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-chart-histogram" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Speculative Decoding
-          <span class="card-badge badge-deploy">Avanzado</span>
-        </div>
-        <div class="card-desc">2-3× más rápido sin degradar calidad: draft model + verificación paralela, vLLM nativo, Medusa heads y benchmarking de tokens/s.</div>
+        <div class="card-title">Evaluación estadísticamente rigurosa <span class="card-badge badge-eval">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Error bars, tests pareados y poder estadístico con los logs por muestra de lm-eval, lighteval o Inspect: saber si una mejora de 1-3 puntos es real.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-eval" href="guias/lighteval-multilingue.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-world" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Evaluación multilingüe con lighteval <span class="card-badge badge-eval">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Tareas nativas en español y portugués, formulaciones cloze vs opción múltiple, tareas custom y PoETa v2 para portugués.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-eval" href="guias/llm-judge-calibrado.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-gavel" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">LLM-as-a-judge calibrado <span class="card-badge badge-eval">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Rúbricas, validación contra etiquetas humanas y corrección estadística del puntaje de un juez abierto servido en vLLM.</div>
       </div>
       <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
     </a>
   </div>
+  </section>
+
+  <!-- Inferencia -->
+  <section class="hub-section">
+  <div class="section-label">Inferencia &amp; Deployment</div>
+  <div class="grid grid-2">
+    <a class="card c-deploy" href="guias/inferencia.html" data-level="basic">
+      <div class="card-icon"><i class="ti ti-server-bolt" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Serving con vLLM: primeros pasos <span class="card-badge badge-deploy">Básico</span></div>
+        <div class="card-desc">Instalar vLLM, levantar un servidor OpenAI-compatible con vllm serve, hacer requests y medir throughput.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-deploy" href="guias/serving-produccion.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-building-factory-2" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Serving en producción: vLLM V1 y SGLang <span class="card-badge badge-deploy">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Prefix caching, structured outputs, multi-LoRA, speculative decoding y benchmarking de TTFT/ITL con vllm bench y GuideLLM.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-deploy" href="guias/quantization.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-database-cog" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Cuantización para inferencia <span class="card-badge badge-deploy">Core</span></div>
+        <div class="card-desc">FP8, INT4 (W4A16) y NVFP4 con llm-compressor para vLLM, GGUF con llama.cpp, y cómo medir calidad vs velocidad en es/pt.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-deploy" href="guias/speculative-decoding.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-bolt" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Speculative Decoding <span class="card-badge badge-deploy">Avanzado</span></div>
+        <div class="card-desc">2-3× más rápido sin degradar calidad: draft model, EAGLE-3 y MTP en vLLM, y benchmarking de tokens/s.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  </section>
+
+  <!-- Aplicaciones -->
+  <section class="hub-section">
+  <div class="section-label">Aplicaciones: RAG, agentes y encoders</div>
+  <div class="grid grid-3">
+    <a class="card c-apps" href="guias/rag-espanol.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-database-search" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">RAG en español y portugués <span class="card-badge badge-apps">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Embeddings multilingües, búsqueda híbrida BM25 + densa, reranker y evaluación con datos latinoamericanos reales.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-apps" href="guias/agentes-mcp.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-plug-connected" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Agentes con tool calling y MCP <span class="card-badge badge-apps">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Servir un modelo propio con el tool parser correcto, exponer herramientas vía MCP, orquestar el agente y evaluarlo con seguridad.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-apps" href="guias/bert.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-topology-star-3" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Encoders para es/pt <span class="card-badge badge-apps">Core</span></div>
+        <div class="card-desc">De BETO y BERTimbau a mmBERT y ModernBERT: clasificación, NER e inferencia batch con las APIs actuales de transformers.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  </section>
+
+  <!-- Interpretabilidad -->
+  <section class="hub-section">
+  <div class="section-label">Interpretabilidad</div>
+  <div class="grid grid-2">
+    <a class="card c-interp" href="guias/interpretabilidad-practica.html" data-level="core">
+      <div class="card-icon"><i class="ti ti-microscope" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">Interpretabilidad práctica <span class="card-badge badge-interp">Core</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Logit lens, activation patching y steering vectors sobre un modelo multilingüe abierto, con prompts en español y portugués.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-interp" href="guias/idioma-latente-es-pt.html" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-language" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">¿En qué idioma piensa el modelo? <span class="card-badge badge-interp">Avanzado</span> <span class="card-new">Nuevo</span></div>
+        <div class="card-desc">Experimento es/pt: idioma latente por capa, neuronas de idioma y qué cambia con el continual pretraining en español.</div>
+      </div>
+      <i class="ti ti-arrow-right card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  </section>
 
   <!-- Cursos externos -->
-  <div class="section-label">Cursos externos</div>
+  <section class="hub-section">
+  <div class="section-label">Cursos y recursos externos</div>
   <div class="grid grid-2">
-    <a class="card c-curso" href="https://cs336.stanford.edu/" target="_blank" rel="noopener">
+    <a class="card c-curso" href="https://cs336.stanford.edu/" target="_blank" rel="noopener" data-level="advanced">
       <div class="card-icon"><i class="ti ti-school" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          Stanford CS336 — Language Model Systems
-          <span class="card-badge badge-curso">Avanzado</span>
-        </div>
-        <div class="card-desc">Curso universitario sobre construcción de LLMs desde cero: tokenizadores, implementación del Transformer, pretraining, RLHF e inferencia eficiente. Con assignments en código.</div>
+        <div class="card-title">Stanford CS336: Language Modeling from Scratch <span class="card-badge badge-curso">Avanzado</span></div>
+        <div class="card-desc">Curso universitario sobre construir LLMs desde cero: tokenizadores, Transformer, pretraining, alineamiento e inferencia eficiente, con assignments en código.</div>
       </div>
       <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
     </a>
-    <a class="card c-curso" href="https://huggingface.co/learn/llm-course/en/chapter1/1" target="_blank" rel="noopener">
+    <a class="card c-curso" href="https://huggingface.co/learn/llm-course/en/chapter1/1" target="_blank" rel="noopener" data-level="basic">
       <div class="card-icon"><i class="ti ti-book-2" aria-hidden="true"></i></div>
       <div class="card-content">
-        <div class="card-title">
-          HuggingFace LLM Course
-          <span class="card-badge badge-curso">Core</span>
-        </div>
-        <div class="card-desc">Curso práctico del ecosistema HuggingFace: transformers, fine-tuning, datasets y deployment. Punto de entrada ideal para el stack del proyecto.</div>
+        <div class="card-title">Hugging Face LLM Course <span class="card-badge badge-curso">Básico</span></div>
+        <div class="card-desc">Curso práctico del ecosistema Hugging Face: transformers, fine-tuning, datasets y deployment. Buen punto de entrada al stack del proyecto.</div>
       </div>
       <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
     </a>
+    <a class="card c-curso" href="https://huggingface.co/spaces/HuggingFaceTB/smol-training-playbook" target="_blank" rel="noopener" data-level="core">
+      <div class="card-icon"><i class="ti ti-notebook" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">The Smol Training Playbook <span class="card-badge badge-curso">Core</span></div>
+        <div class="card-desc">Hugging Face cuenta de punta a punta cómo entrenó SmolLM3: decisiones de arquitectura, datos, ablaciones, infraestructura y post-training.</div>
+      </div>
+      <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-curso" href="https://huggingface.co/spaces/nanotron/ultrascale-playbook" target="_blank" rel="noopener" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-cpu" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">The Ultra-Scale Playbook <span class="card-badge badge-curso">Avanzado</span></div>
+        <div class="card-desc">Entrenar LLMs en clusters de GPUs: data, tensor, pipeline, context y expert parallelism, ZeRO y overlap de comunicación, con miles de experimentos medidos.</div>
+      </div>
+      <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-curso" href="https://jax-ml.github.io/scaling-book/" target="_blank" rel="noopener" data-level="advanced">
+      <div class="card-icon"><i class="ti ti-math-function" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">How To Scale Your Model <span class="card-badge badge-curso">Avanzado</span></div>
+        <div class="card-desc">Libro de Google DeepMind sobre rooflines, sharding y costo de entrenar e inferir Transformers en TPUs y GPUs.</div>
+      </div>
+      <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
+    </a>
+    <a class="card c-curso" href="https://github.com/rasbt/LLMs-from-scratch" target="_blank" rel="noopener" data-level="basic">
+      <div class="card-icon"><i class="ti ti-code" aria-hidden="true"></i></div>
+      <div class="card-content">
+        <div class="card-title">LLMs from Scratch (Raschka) <span class="card-badge badge-curso">Básico</span></div>
+        <div class="card-desc">Código y notebooks para construir, preentrenar y ajustar un LLM tipo GPT paso a paso en PyTorch.</div>
+      </div>
+      <i class="ti ti-external-link card-arrow" aria-hidden="true"></i>
+    </a>
+  </div>
+  </section>
+
+  </div>
+
+  <div class="no-results" id="no-results" hidden>
+    <i class="ti ti-search-off" aria-hidden="true"></i>
+    No hay guías para esa búsqueda. Prueba en el <a href="latamgpt-roadmap.html#completo">roadmap completo</a>.
   </div>
 
 </main>
@@ -637,7 +963,7 @@
       </a>
     </div>
   </div>
-  Construido para CENIA · LatamGPT · Actualizado junio 2026
+  Construido para CENIA · LatamGPT · Actualizado octubre 2026
 </footer>
 
 <script>
@@ -672,6 +998,50 @@
     .catch(function () {
       // Si el fetch falla (ej. abierto como file:// sin servidor), quedan los números estáticos del HTML.
     });
+})();
+
+// Buscador y filtro por nivel de las guías.
+(function () {
+  var input = document.getElementById('guide-search');
+  var filters = document.getElementById('level-filters');
+  var count = document.getElementById('result-count');
+  var noResults = document.getElementById('no-results');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('#guides-root a.card'));
+  var level = 'all';
+
+  // Normaliza tildes para que "evaluacion" encuentre "Evaluación".
+  function norm(s) {
+    return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+  cards.forEach(function (c) { c.dataset.text = norm(c.textContent + ' ' + c.getAttribute('href')); });
+
+  function apply() {
+    var q = norm(input.value.trim());
+    var terms = q ? q.split(/\s+/) : [];
+    var visible = 0;
+    cards.forEach(function (c) {
+      var show = (level === 'all' || c.dataset.level === level) &&
+        terms.every(function (t) { return c.dataset.text.indexOf(t) !== -1; });
+      c.hidden = !show;
+      if (show) visible++;
+    });
+    document.querySelectorAll('#guides-root .hub-section').forEach(function (sec) {
+      sec.hidden = !sec.querySelector('a.card:not([hidden])');
+    });
+    noResults.hidden = visible > 0;
+    count.textContent = (q || level !== 'all') ? visible + ' de ' + cards.length : cards.length + ' recursos';
+  }
+
+  input.addEventListener('input', apply);
+  filters.addEventListener('click', function (e) {
+    var btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    filters.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    level = btn.dataset.level;
+    apply();
+  });
+  apply();
 })();
 </script>
 
