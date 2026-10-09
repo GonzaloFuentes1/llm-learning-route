@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reproducir una scaling law para es/pt — LatamGPT</title>
+<meta name="description" content="Diseñar una grilla barata de 5 tamaños con WSD y cooldowns ramificados, ajustar una scaling law tipo Chinchilla (IsoFLOP y paramétrica con intervalos bootstrap) por separado para español y portugués, y usarla con ATLAS para decidir tamaño de modelo y tokens.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Arquitectura &amp; Pretraining</div>
+    <h1 class="guide-title">Reproducir una scaling law para es/pt</h1>
+    <div class="guide-desc">Decidir tamaño de modelo y cantidad de tokens para LatamGPT con evidencia propia: una grilla barata de 5 tamaños (22M-330M) con un solo run WSD por tamaño y cooldowns ramificados, ajuste tipo Chinchilla por IsoFLOPs y paramétrico con intervalos bootstrap, leyes separadas para español y portugués, predicción de tareas con model ladders y cómo pasar de la curva a una decisión con ATLAS y datos limitados.</div>
+  </div>
+
+  <!-- 1. Qué predice -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-math-function" aria-hidden="true"></i>1. Qué predice una scaling law (y qué no)</h2>
+
+    <p>Una scaling law de pretraining modela la loss de validación de un modelo de <strong>N</strong> parámetros entrenado con <strong>D</strong> tokens. La forma de Chinchilla (Hoffmann et al., 2022) es <em>L(N, D) = E + A/N<sup>α</sup> + B/D<sup>β</sup></em>: <code>E</code> es la entropía irreducible del texto, y los otros dos términos son lo que se pierde por tener un modelo finito y datos finitos. Con el costo de entrenamiento aproximado como <code>C ≈ 6·N·D</code> FLOPs, minimizar <code>L</code> a <code>C</code> fijo da <em>N<sub>opt</sub> ∝ C<sup>β/(α+β)</sup></em> y <em>D<sub>opt</sub> ∝ C<sup>α/(α+β)</sup></em>. Si α ≈ β, ambos crecen como √C y la razón tokens/parámetro queda casi constante (los famosos ~20).</p>
+
+    <table class="model-table">
+      <tr><th>Estudio</th><th>Exponente a en N<sub>opt</sub> ∝ C<sup>a</sup></th><th>Qué aprendimos</th></tr>
+      <tr><td>Kaplan et al. (2020)</td><td>≈ 0.73</td><td>"Modelos grandes, pocos datos". Contaba solo parámetros sin embedding, usaba warmup fijo largo y no re-tuneaba por tamaño.</td></tr>
+      <tr><td>Chinchilla (2022)</td><td>≈ 0.5</td><td>Tres métodos (envolvente, IsoFLOP, paramétrico) apuntan a escalar N y D por igual: ~20 tokens/parámetro.</td></tr>
+      <tr><td>Besiroglu et al. (2024)</td><td>0.513 (réplica del enfoque 3)</td><td>El ajuste paramétrico publicado era inconsistente y sus intervalos imposiblemente estrechos; rehecho, coincide con los enfoques 1 y 2 (~20 tokens/parámetro).</td></tr>
+      <tr><td>Porian et al. (2024)</td><td>0.86 → ~0.50</td><td>Reproducen a Kaplan y corrigen paso a paso: contar la última capa en los FLOPs, warmup proporcional al tamaño y tunear LR, batch y β<sub>2</sub> por tamaño.</td></tr>
+      <tr><td>Pearce &amp; Song (2024)</td><td>—</td><td>Gran parte de la discrepancia sale de excluir los embeddings y de estudiar modelos chicos: con parámetros totales se recupera Chinchilla.</td></tr>
+    </table>
+
+    <p>La consecuencia práctica: <strong>cuenta parámetros totales (con embedding y <code>lm_head</code>), usa warmup corto y proporcional al tamaño, y ajusta el LR por tamaño</strong>. Los modelos chicos de una grilla tienen una fracción enorme de parámetros en el embedding (con vocabulario de 32K, más de la mitad en el más chico de esta guía), así que el error de Kaplan aparece justo donde vamos a medir.</p>
+
+    <div class="warn"><strong>Lo que no predice:</strong> una ley ajustada a una mezcla de datos, un tokenizer y una arquitectura vale para esa combinación. Cambiar la proporción es/pt, el filtrado o el vocabulario cambia <code>E</code>, <code>A</code> y <code>B</code>. Tampoco dice nada directo sobre benchmarks: para eso está la sección 5. Y extrapolar de 330M a 30B son dos órdenes de magnitud: el resultado es un rango con incertidumbre, no un número.</div>
+
+    <table class="model-table">
+      <tr><th>Versión</th><th>Grilla</th><th>Cómputo (A100, MFU 40%)</th><th>Datos únicos</th></tr>
+      <tr><td>Sanity check</td><td>3 tamaños chicos, presupuestos 3e17 y 1e18 (6 cooldowns)</td><td>≈ 10-15 A100-h</td><td>~8B tokens</td></tr>
+      <tr><td>Base de la guía</td><td>5 tamaños, presupuestos 1e17-1e19 FLOPs (16 cooldowns)</td><td>≈ 90 A100-h; en la práctica 120-180 (los modelos chicos rara vez llegan a 40% de MFU)</td><td>~21B tokens</td></tr>
+      <tr><td>Completa</td><td>La base con una segunda semilla de inicialización</td><td>≈ 180 A100-h; en la práctica 250-350</td><td>Los mismos ~21B</td></tr>
+    </table>
+  </div>
+
+  <!-- 2. Diseño -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-grid-dots" aria-hidden="true"></i>2. Diseño barato: un run WSD por tamaño, cooldowns ramificados</h2>
+
+    <p>Con el schedule coseno hay que fijar la duración antes de empezar, así que cada punto (N, D) cuesta un entrenamiento completo. Hägele et al. (2024) muestran que un LR constante con un cooldown corto al final escala de forma tan predecible como el coseno y permite <em>ramificar</em>: un solo run estable por tamaño, del que se sacan checkpoints, y desde cada checkpoint un cooldown lineal a cero que produce un modelo "terminado". Con cooldowns del 20% (lo que ellos usan para scaling laws) igualan al coseno; en su estimación tipo Chinchilla, reutilizar runs bajó el cómputo total a menos de la mitad.</p>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Fase estable por tamaño (warmup = N tokens, LR constante)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Checkpoint al 80% de cada rama → cooldown lineal a 0</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Loss es/pt en validación fija → IsoFLOP + ajuste paramétrico</div>
+    </div>
+
+    <p>Elegimos las ramas por <strong>presupuesto de cómputo</strong> (enfoque 2 de Chinchilla): para cada C en {1e17, 3e17, 1e18, 3e18, 1e19} y cada tamaño, la rama termina en <code>D = C / 6N</code> si eso da entre 2.5 y 400 tokens/parámetro. Así los presupuestos centrales quedan cubiertos por 3-4 tamaños a ambos lados del óptimo (los extremos tienen 2-3), y los mismos 16 puntos sirven para el ajuste paramétrico, que agradece razones D/N variadas (de ~5 a ~330). Los modelos chicos hacen las ramas largas (barato) y los grandes las cortas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># grid.py — tamaños de la grilla (forma casi fija) y plan de cooldowns por presupuesto IsoFLOP
+import math
+from dataclasses import dataclass
+
+VOCAB = 32_768
+SEQ_LEN = 2048
+HEAD_DIM = 64
+BUDGETS = (1e17, 3e17, 1e18, 3e18, 1e19)         # FLOPs, convención Chinchilla C = 6·N·D
+MIN_RATIO, MAX_RATIO = 2.5, 400                    # tokens por parámetro admitidos por rama
+COOLDOWN_FRAC = 0.2                                # cooldown = 20% final de cada rama (Hägele et al.)
+A100_FLOPS, MFU = 312e12, 0.40                     # bf16 denso; mide tu MFU real y ajusta
+
+
+@dataclass
+class GridPoint:
+    name: str
+    d_model: int
+    n_layers: int
+    n_heads: int
+    n_kv_heads: int
+    d_ff: int
+    batch_seqs: int      # lote global en secuencias de SEQ_LEN
+    lr: float            # punto de partida; confirmar con el mini-barrido de la sección 3
+    beta2: float         # 0.99 con lotes chicos (Porian et al.), 0.95 en el resto
+    n_params: int = 0    # totales: embedding (atado a lm_head) contado una vez
+    flops_per_token: float = 0.0
+
+    def __post_init__(self):
+        attn = self.d_model * HEAD_DIM * (2 * self.n_heads + 2 * self.n_kv_heads) + 2 * HEAD_DIM
+        per_layer = attn + 3 * self.d_model * self.d_ff + 2 * self.d_model
+        self.n_params = self.n_layers * per_layer + self.d_model + VOCAB * self.d_model
+        # 6N + atención causal (≈ 6·L·T·d_attn / 2); solo para estimar horas, no entra en el ajuste
+        self.flops_per_token = 6 * self.n_params + 3 * self.n_layers * SEQ_LEN * self.n_heads * HEAD_DIM
+
+    @property
+    def tokens_per_step(self) -&gt; int:
+        return self.batch_seqs * SEQ_LEN
+
+    @property
+    def warmup_steps(self) -&gt; int:
+        return math.ceil(self.n_params / self.tokens_per_step)   # warmup = N tokens (Porian et al.)
+
+    def branches(self) -&gt; list[dict]:
+        out = []
+        for c in BUDGETS:
+            tokens = c / (6 * self.n_params)
+            if MIN_RATIO &lt;= tokens / self.n_params &lt;= MAX_RATIO:
+                total = round(tokens / self.tokens_per_step)
+                out.append({"budget": c, "ratio": round(tokens / self.n_params, 1),
+                            "branch_step": round((1 - COOLDOWN_FRAC) * total), "total_steps": total})
+        return out
+
+
+def point(name, d, L, batch, lr, beta2):
+    h = d // HEAD_DIM
+    return GridPoint(name, d, L, h, max(1, h // 2), round(8 / 3 * d / 128) * 128, batch, lr, beta2)
+
+
+GRID = {g.name: g for g in [
+    point("s22m", 384, 6, 32, 3e-3, 0.99),
+    point("s40m", 512, 8, 64, 3e-3, 0.99),
+    point("s83m", 640, 14, 128, 2e-3, 0.99),
+    point("s164m", 896, 15, 192, 1.5e-3, 0.95),
+    point("s330m", 1152, 20, 256, 1e-3, 0.95),
+]}
+
+if __name__ == "__main__":
+    total_h = 0.0
+    for g in GRID.values():
+        br = g.branches()
+        stable = max(b["branch_step"] for b in br)
+        steps = stable + sum(b["total_steps"] - b["branch_step"] for b in br)
+        hours = steps * g.tokens_per_step * g.flops_per_token / (A100_FLOPS * MFU * 3600)
+        total_h += hours
+        print(f"{g.name:6s} N={g.n_params / 1e6:6.1f}M  ratios={[b['ratio'] for b in br]}  "
+              f"pasos estables={stable:,}  ≈{hours:5.1f} A100-h")
+    print(f"Total ≈ {total_h:.0f} A100-h")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Tamaño</th><th>d · capas · cabezas (KV)</th><th>N total (sin embedding)</th><th>Lote</th><th>Ramas (tokens/parámetro)</th><th>A100-h</th></tr>
+      <tr><td>s22m</td><td>384 · 6 · 6 (3)</td><td>22.3M (9.7M)</td><td>65K tokens</td><td>34, 100, 335</td><td>~3</td></tr>
+      <tr><td>s40m</td><td>512 · 8 · 8 (4)</td><td>40.4M (23.6M)</td><td>131K</td><td>10, 31, 102, 307</td><td>~8</td></tr>
+      <tr><td>s83m</td><td>640 · 14 · 10 (5)</td><td>82.9M (62.0M)</td><td>262K</td><td>7, 24, 73, 242</td><td>~27</td></tr>
+      <tr><td>s164m</td><td>896 · 15 · 14 (7)</td><td>163.6M (134.2M)</td><td>393K</td><td>6, 19, 62</td><td>~26</td></tr>
+      <tr><td>s330m</td><td>1152 · 20 · 18 (9)</td><td>329.8M (292.0M)</td><td>524K</td><td>5, 15</td><td>~25</td></tr>
+    </table>
+
+    <div class="tip"><strong>Por qué estos números:</strong> la razón ancho/profundidad se mantiene entre ~45 y ~65 para que la forma no confunda el efecto del tamaño; el lote crece con N para que hasta la rama más corta tenga miles de pasos; el warmup dura N tokens, como en Porian et al. (con el warmup fijo de Kaplan, los modelos chicos llegaban a su óptimo de cómputo todavía en warmup); y β<sub>2</sub> = 0.99 en los lotes chicos, otra de sus correcciones. Para el sanity check deja en <code>BUDGETS</code> solo 3e17 y 1e18, y en <code>GRID</code> los tres tamaños chicos.</div>
+  </div>
+
+  <!-- 3. Correr -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-2" aria-hidden="true"></i>3. Correr la grilla en SLURM con el código de "LLM desde cero"</h2>
+
+    <p>Reutilizamos <code>model.py</code> y <code>prepare_data.py</code> de <a href="llm-desde-cero.html">Un LLM moderno desde cero</a>: mismo decoder (RMSNorm, RoPE, GQA, SwiGLU, QK-norm), mismo tokenizer es/pt de 32K y los mismos shards <code>uint16</code> con validación separada <code>val_es.bin</code> y <code>val_pt.bin</code>. Solo hay que subir <code>TRAIN_TOKENS</code> a ~21B (unos 42 GB en disco) para que ninguna rama repita datos: la repetición es otra variable, y la tratamos aparte en la sección 6.</p>
+
+    <p><code>train_grid.py</code> tiene dos modos. En <code>stable</code> entrena con warmup y LR constante, y guarda modelo y optimizador en el paso de ramificación de cada presupuesto. En <code>cooldown</code> carga ese checkpoint, decae el LR linealmente a cero con <code>get_wsd_schedule</code> y mide la loss en un conjunto fijo de 4M tokens por idioma. Los datos se leen en orden y sin repetición, así que el cooldown ve exactamente los tokens que el run estable habría visto a continuación.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># train_grid.py — fase estable (LR constante) o cooldown ramificado de un tamaño de la grilla
+# uso: torchrun --standalone --nproc_per_node=1 train_grid.py --size s83m --mode stable
+#      torchrun --standalone --nproc_per_node=1 train_grid.py --size s83m --mode cooldown --branch 2
+import argparse
+import json
+import math
+import os
+from dataclasses import asdict
+from pathlib import Path
+
+import numpy as np
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from transformers import get_wsd_schedule
+
+from grid import GRID, HEAD_DIM, SEQ_LEN
+from model import LLM, ModelConfig          # model.py de la guía "LLM desde cero"
+
+p = argparse.ArgumentParser()
+p.add_argument("--size", required=True, choices=list(GRID))
+p.add_argument("--mode", required=True, choices=["stable", "cooldown"])
+p.add_argument("--branch", type=int, default=0)          # índice en GRID[size].branches()
+p.add_argument("--max-branch", type=int, default=None)   # cortar la fase estable (mini-barrido de LR)
+p.add_argument("--lr", type=float, default=None)
+p.add_argument("--micro-batch", type=int, default=16)    # 8 en GPUs de 40 GB
+p.add_argument("--out", default="sl_runs")
+p.add_argument("--seed", type=int, default=0)
+args = p.parse_args()
+
+g = GRID[args.size]
+branches = g.branches()
+out = Path(args.out) / args.size
+out.mkdir(parents=True, exist_ok=True)
+
+ddp = int(os.environ.get("WORLD_SIZE", 1)) &gt; 1
+if ddp:
+    dist.init_process_group("nccl")
+rank, world = (dist.get_rank(), dist.get_world_size()) if ddp else (0, 1)
+local_rank = int(os.environ.get("LOCAL_RANK", 0))
+torch.cuda.set_device(local_rank)
+device = f"cuda:{local_rank}"
+torch.set_float32_matmul_precision("high")
+assert g.batch_seqs % (args.micro_batch * world) == 0, "batch_seqs debe ser múltiplo de micro_batch × GPUs"
+accum = g.batch_seqs // (args.micro_batch * world)
+
+meta = json.loads(Path("data/meta.json").read_text())
+train = np.memmap("data/train.bin", dtype=np.uint16, mode="r")
+need = max(b["total_steps"] for b in branches) * g.tokens_per_step + 1
+assert len(train) &gt;= need, f"train.bin tiene {len(train):,} tokens y la rama más larga usa {need:,}"
+
+
+def get_batch(step: int, micro: int):   # lectura secuencial sin repetición: el paso s siempre ve los mismos tokens
+    seq0 = step * g.batch_seqs + (rank * accum + micro) * args.micro_batch
+    start = seq0 * SEQ_LEN
+    buf = torch.from_numpy(train[start:start + args.micro_batch * SEQ_LEN + 1].astype(np.int64))
+    buf = buf.pin_memory().to(device, non_blocking=True)
+    return buf[:-1].view(args.micro_batch, SEQ_LEN), buf[1:].view(args.micro_batch, SEQ_LEN)
+
+
+@torch.no_grad()
+def evaluate(model: LLM, n_tokens: int = 4_000_000) -&gt; dict:   # mismo conjunto fijo para todos los puntos
+    model.eval()
+    res = {}
+    for lang in ("es", "pt"):
+        arr = np.memmap(f"data/val_{lang}.bin", dtype=np.uint16, mode="r")
+        n_seq = min(n_tokens, len(arr) - 1) // SEQ_LEN
+        total = 0.0
+        for i in range(0, n_seq, args.micro_batch):
+            b = min(args.micro_batch, n_seq - i)
+            buf = torch.from_numpy(arr[i * SEQ_LEN:(i + b) * SEQ_LEN + 1].astype(np.int64)).to(device)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                _, _, ce = model(buf[:-1].view(b, SEQ_LEN), buf[1:].view(b, SEQ_LEN))
+            total += ce.item() * b
+        res[f"loss_{lang}"] = total / n_seq
+        res[f"bpb_{lang}"] = res[f"loss_{lang}"] / math.log(2) / meta[f"val_{lang}"]["bytes_per_token"]
+    model.train()
+    return res
+
+
+cfg = ModelConfig(vocab_size=meta["vocab_size"], d_model=g.d_model, n_layers=g.n_layers,
+                  n_heads=g.n_heads, n_kv_heads=g.n_kv_heads, head_dim=HEAD_DIM, d_ff=g.d_ff,
+                  max_seq_len=SEQ_LEN)
+torch.manual_seed(args.seed)
+raw = LLM(cfg).to(device)
+n_real = sum(prm.numel() for prm in raw.parameters())   # parameters() no duplica el peso atado
+assert abs(n_real - g.n_params) / g.n_params &lt; 0.01, (n_real, g.n_params)
+
+decay, no_decay = [], []
+for name, prm in raw.named_parameters():
+    (decay if prm.dim() == 2 and "embed_tokens" not in name else no_decay).append(prm)
+lr = args.lr or g.lr
+opt = torch.optim.AdamW(
+    [{"params": decay, "weight_decay": 0.1}, {"params": no_decay, "weight_decay": 0.0}],
+    lr=lr, betas=(0.9, g.beta2), eps=1e-8, fused=True,
+)
+
+if args.mode == "stable":
+    todo = branches if args.max_branch is None else branches[:args.max_branch + 1]
+    ckpt_steps = {b["branch_step"] for b in todo}
+    start, end = 0, max(ckpt_steps)
+    # Warmup lineal de N tokens y después LR constante: la fase de decay nunca se alcanza
+    sched = get_wsd_schedule(opt, num_warmup_steps=g.warmup_steps, num_decay_steps=0,
+                             num_stable_steps=end)
+else:
+    br = branches[args.branch]
+    ck = torch.load(out / f"stable_{br['branch_step']}.pt", map_location=device)
+    raw.load_state_dict(ck["model"])
+    opt.load_state_dict(ck["opt"])
+    lr = ck["lr"]
+    for group in opt.param_groups:
+        group["lr"] = group["initial_lr"] = lr
+    start, end = br["branch_step"], br["total_steps"]
+    sched = get_wsd_schedule(opt, num_warmup_steps=0, num_decay_steps=end - start,
+                             num_stable_steps=0, decay_type="linear", min_lr_ratio=0.0)
+
+model = torch.compile(raw)
+if ddp:
+    model = DDP(model, device_ids=[local_rank])
+
+for step in range(start, end):
+    for micro in range(accum):
+        x, y = get_batch(step, micro)
+        if ddp:
+            model.require_backward_grad_sync = micro == accum - 1   # sincroniza solo en el último
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            _, loss, _ = model(x, y)
+        (loss / accum).backward()
+    torch.nn.utils.clip_grad_norm_(raw.parameters(), 1.0)
+    opt.step()
+    sched.step()
+    opt.zero_grad(set_to_none=True)
+    if rank == 0 and step % 200 == 0:
+        print(f"{args.size} {args.mode} paso {step}/{end} loss {loss.item():.3f} "
+              f"lr {sched.get_last_lr()[0]:.2e}", flush=True)
+    if args.mode == "stable" and rank == 0 and step + 1 in ckpt_steps:
+        torch.save({"model": raw.state_dict(), "opt": opt.state_dict(), "cfg": asdict(cfg),
+                    "lr": lr, "step": step + 1}, out / f"stable_{step + 1}.pt")
+
+if args.mode == "cooldown" and rank == 0:
+    tag = f"{br['budget']:.0e}"
+    res = {"size": args.size, "seed": args.seed, "n_params": g.n_params, "budget": br["budget"], "ratio": br["ratio"],
+           "tokens": end * g.tokens_per_step, "lr": lr, **evaluate(raw)}
+    torch.save({"model": raw.state_dict(), "cfg": asdict(cfg), "step": end}, out / f"final_{tag}.pt")
+    (out / f"cooldown_{tag}.json").write_text(json.dumps(res, indent=2))
+if ddp:
+    dist.destroy_process_group()</code></pre>
+    </div>
+
+    <p>El lanzador encola, por tamaño, el run estable y un job array con sus cooldowns que arranca cuando el estable termina. Los tamaños grandes usan varias GPUs con DDP; el lote global no cambia, solo la acumulación.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+# submit_grid.sh — fase estable por tamaño + array de cooldowns dependiente (SLURM)
+set -euo pipefail
+mkdir -p logs
+declare -A GPUS=([s22m]=1 [s40m]=1 [s83m]=1 [s164m]=2 [s330m]=2)
+
+for SIZE in s22m s40m s83m s164m s330m; do
+  G=${GPUS[$SIZE]}
+  LAST=$(python -c "from grid import GRID; print(len(GRID['$SIZE'].branches()) - 1)")
+  COMMON=(--gpus-per-node="$G" --cpus-per-task=$((8 * G)) --time=2-00:00:00)
+  JID=$(sbatch --parsable "${COMMON[@]}" --job-name="st-$SIZE" --output="logs/%x-%j.out" \
+    --wrap="torchrun --standalone --nproc_per_node=$G train_grid.py --size $SIZE --mode stable")
+  sbatch "${COMMON[@]}" --job-name="cd-$SIZE" --array="0-$LAST" --dependency="afterok:$JID" \
+    --output="logs/%x-%A_%a.out" \
+    --wrap="torchrun --standalone --nproc_per_node=$G train_grid.py --size $SIZE --mode cooldown --branch \$SLURM_ARRAY_TASK_ID"
+done</code></pre>
+    </div>
+
+    <div class="sub-title">Mini-barrido de LR por tamaño</div>
+    <p>El error más caro de una scaling law es comparar tamaños con LR mal elegido: el tamaño desfavorecido parece peor de lo que es y el exponente se tuerce (es una de las correcciones de Porian et al.). Antes de lanzar la grilla, barre ×0.5, ×1 y ×2 del LR de partida usando solo la rama más corta de cada tamaño, que es barata. Para cada LR: <code>train_grid.py --mode stable --max-branch 0 --lr 2e-3 --out sweep/lr2e-3</code> y después <code>--mode cooldown --branch 0</code> con el mismo <code>--out</code>; compara <code>loss_es</code> en los JSON resultantes. Si el mejor queda en un extremo, amplía el barrido. Si no tienes presupuesto para barrer todo, μP permite transferir el LR del modelo chico, pero exige cambiar la inicialización y el escalado por capa del modelo.</p>
+
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># collect.py — junta los cooldowns en results.csv y muestra qué celdas faltan
+import json
+from pathlib import Path
+
+import pandas as pd
+
+from grid import GRID
+
+# sl_runs/ = semilla 0; la versión completa agrega sl_runs_seed1/ (--seed 1 --out sl_runs_seed1)
+rows = [json.loads(p.read_text()) for p in sorted(Path(".").glob("sl_runs*/*/cooldown_*.json"))]
+df = pd.DataFrame(rows).sort_values(["budget", "n_params"])
+df.to_csv("results.csv", index=False)
+print(df.pivot_table(index="size", columns="budget", values="loss_es").round(3))   # media entre semillas
+
+expected = {(name, b["budget"]) for name, g in GRID.items() for b in g.branches()}
+missing = expected - set(zip(df["size"], df["budget"]))
+print(f"{len(df)} puntos; faltan {len(missing)}: {sorted(missing)}")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Compara solo modelos después del cooldown.</strong> La loss durante la fase estable está inflada por el LR alto, y la caída del cooldown no es la misma para todos los tamaños: mezclar checkpoints estables con modelos terminados sesga el ajuste. Por la misma razón, la loss de validación sale siempre del mismo conjunto fijo de tokens y no de batches aleatorios.</div>
+  </div>
+
+  <!-- 4. IsoFLOP + paramétrico -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-dots" aria-hidden="true"></i>4. Ajustar: IsoFLOPs y ley paramétrica con bootstrap</h2>
+
+    <p><strong>Enfoque 2 (IsoFLOP):</strong> dentro de cada presupuesto, la loss en función de log N tiene forma de valle. Una parábola da el N<sub>opt</sub> de ese presupuesto, y una recta en log-log entre presupuestos da el exponente <code>a</code>. Es robusto porque no supone ninguna forma funcional, pero con 3-4 tamaños por presupuesto cada mínimo es ruidoso, y solo vale cuando el mínimo cae dentro de los tamaños medidos.</p>
+
+    <p><strong>Enfoque 3 (paramétrico):</strong> ajusta <code>E, A, B, α, β</code> con todos los puntos a la vez. Seguimos la receta de Hoffmann et al. tal como la reconstruyen Besiroglu et al.: parametrizar <code>log L̂ = LSE(a − α·log N, b − β·log D, e)</code> con <em>A = e<sup>a</sup></em>, <em>B = e<sup>b</sup></em> y <em>E = e<sup>e</sup></em>; usar pérdida de Huber con δ = 10<sup>-3</sup> sobre los residuos en log; probar una grilla de inicializaciones; y sumar la pérdida en vez de promediarla. Besiroglu et al. señalan que promediarla deja la pérdida en una escala tan chica que el optimizador termina antes de tiempo. Los intervalos salen de un bootstrap sobre los puntos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># fit_scaling.py — IsoFLOP (enfoque 2) + ajuste paramétrico con bootstrap (enfoque 3)
+# uso: python fit_scaling.py --target-flops 1e23 --lang es
+import argparse
+import itertools
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+from scipy.special import huber, logsumexp
+
+p = argparse.ArgumentParser()
+p.add_argument("--results", default="results.csv")
+p.add_argument("--lang", choices=["es", "pt"], default="es")
+p.add_argument("--target-flops", type=float, default=1e23)
+p.add_argument("--n-boot", type=int, default=1000)
+args = p.parse_args()
+
+df = pd.read_csv(args.results)
+N = df["n_params"].to_numpy(float)
+D = df["tokens"].to_numpy(float)
+L = df[f"loss_{args.lang}"].to_numpy(float)
+
+# ---------- (a) IsoFLOP: dentro de cada presupuesto, parábola de la loss en log N ----------
+iso = []
+for c, g in df.groupby("budget"):
+    if len(g) &lt; 3:
+        continue                                  # con menos de 3 tamaños no hay parábola
+    a2, a1, _ = np.polyfit(np.log(g["n_params"]), g[f"loss_{args.lang}"], 2)
+    n_opt = np.exp(-a1 / (2 * a2))
+    if a2 &gt; 0 and g["n_params"].min() &lt; n_opt &lt; g["n_params"].max():   # mínimo real y medido
+        iso.append((c, n_opt, c / (6 * n_opt), len(g)))
+iso = pd.DataFrame(iso, columns=["C", "N_opt", "D_opt", "n_sizes"])
+print(iso.to_string(index=False, float_format="%.3g"))
+if len(iso) &gt;= 2:
+    a_iso = np.polyfit(np.log(iso["C"]), np.log(iso["N_opt"]), 1)[0]
+    print(f"IsoFLOP: N_opt ∝ C^{a_iso:.3f}   D_opt ∝ C^{1 - a_iso:.3f}")
+
+# ---------- (b) Paramétrico: log L = LSE(a - α log N, b - β log D, e) ----------
+logN, logD, logL = np.log(N), np.log(D), np.log(L)
+
+
+def objective(theta, idx, delta=1e-3):
+    """Σ Huber(log L̂ − log L) y su gradiente analítico (con jac, L-BFGS-B es mucho más rápido)."""
+    a, b, e, alpha, beta = theta
+    lnN, lnD = logN[idx], logD[idx]
+    u = np.stack([a - alpha * lnN, b - beta * lnD, np.full(len(idx), e)])
+    pred = logsumexp(u, axis=0)
+    r = pred - logL[idx]
+    w = np.exp(u - pred)                                 # softmax: ∂pred/∂u
+    dr = np.clip(r, -delta, delta)                       # derivada de la pérdida de Huber
+    grad = np.array([dr @ w[0], dr @ w[1], dr @ w[2], -dr @ (w[0] * lnN), -dr @ (w[1] * lnD)])
+    return huber(delta, r).sum(), grad                   # suma, no media: con la media L-BFGS corta antes
+
+
+def fit(idx, inits):
+    best = None
+    for x0 in inits:
+        r = minimize(objective, x0, args=(idx,), jac=True, method="L-BFGS-B",
+                     bounds=[(None, None)] * 3 + [(0.0, 2.0)] * 2,
+                     options={"ftol": 1e-14, "gtol": 1e-12, "maxiter": 5000})   # la pérdida es ~1e-4: tolerancias finas
+        if best is None or r.fun &lt; best.fun:
+            best = r
+    return best.x
+
+
+# Grilla de inicializaciones (a, b, e, α, β): el óptimo de L-BFGS depende mucho del punto de partida
+grid = list(itertools.product(range(0, 26, 5), range(0, 26, 5), (-1.0, 0.0, 1.0),
+                              (0.2, 0.5, 1.0), (0.2, 0.5, 1.0)))
+all_idx = np.arange(len(df))
+theta = fit(all_idx, grid)
+
+
+def compute_optimal(theta, c):
+    a, b, e, alpha, beta = theta
+    A, B, E = np.exp(a), np.exp(b), np.exp(e)
+    G = (alpha * A / (beta * B)) ** (1 / (alpha + beta))
+    n_opt = G * (c / 6) ** (beta / (alpha + beta))
+    return n_opt, (c / 6) / n_opt, E
+
+
+rng = np.random.default_rng(0)
+boot = []
+for _ in range(args.n_boot):
+    idx = rng.choice(all_idx, size=len(all_idx), replace=True)
+    boot.append(fit(idx, [theta]))                # el bootstrap parte del óptimo, no de la grilla
+boot = np.array(boot)
+
+a, b, e, alpha, beta = theta
+print(f"\nE={np.exp(e):.3f}  A={np.exp(a):.1f}  B={np.exp(b):.1f}  α={alpha:.3f}  β={beta:.3f}")
+lo, hi = np.percentile(boot[:, 3:], [2.5, 97.5], axis=0)
+print(f"IC 95%: α ∈ [{lo[0]:.3f}, {hi[0]:.3f}]  β ∈ [{lo[1]:.3f}, {hi[1]:.3f}]")
+a_param = beta / (alpha + beta)
+a_boot = boot[:, 4] / (boot[:, 3] + boot[:, 4])
+print(f"N_opt ∝ C^{a_param:.3f}  (IC 95% [{np.percentile(a_boot, 2.5):.3f}, {np.percentile(a_boot, 97.5):.3f}])")
+
+n_opt, d_opt, _ = compute_optimal(theta, args.target_flops)
+bo = np.array([compute_optimal(t, args.target_flops)[:2] for t in boot])
+(n_lo, d_lo), (n_hi, d_hi) = np.percentile(bo, [2.5, 97.5], axis=0)
+print(f"\nC = {args.target_flops:.1e} FLOPs ({args.lang}):")
+print(f"  N_opt = {n_opt / 1e9:.2f}B  (IC 95% {n_lo / 1e9:.2f}-{n_hi / 1e9:.2f}B)")
+print(f"  D_opt = {d_opt / 1e9:.0f}B tokens  (IC 95% {d_lo / 1e9:.0f}-{d_hi / 1e9:.0f}B)  "
+      f"→ {d_opt / n_opt:.0f} tokens/parámetro")</code></pre>
+    </div>
+
+    <p>Con 16 puntos (32 con dos semillas) el ajuste completo (grilla de 972 inicializaciones más 1000 remuestreos) tarda del orden de 10-20 minutos en una CPU. Corre ambos idiomas: <code>--lang es</code> y <code>--lang pt</code>.</p>
+
+    <div class="tip"><strong>Cómo leer tu salida:</strong> como referencia en inglés (MassiveText), la réplica de Besiroglu et al. obtiene E = 1.82, A = 482.0, B = 2085.4, α = 0.348 y β = 0.366 (~20 tokens/parámetro), mientras que los valores publicados por Hoffmann et al. (E = 1.69, A = 406.4, B = 410.7, α = 0.34, β = 0.28) implican ~70, inconsistentes con sus propios ~20. No compares tus <code>E</code>, <code>A</code> y <code>B</code> con esos valores, porque dependen del tokenizer (nats por token de un BPE es/pt de 32K no son los de MassiveText). Lo comparable es el exponente <code>a = β/(α+β)</code> y la razón tokens/parámetro en el óptimo. Si el IsoFLOP y el paramétrico difieren mucho, o el intervalo de <code>a</code> cruza 0.4-0.6 de punta a punta, la grilla no alcanza: agrega un tamaño intermedio o semillas. Choshen et al. (2024) muestran que la variabilidad entre semillas es grande y que a veces rinde más entrenar varios modelos chicos que uno grande.</div>
+    <div class="warn"><strong>Tres trampas del ajuste:</strong> (1) intervalos estrechísimos suelen indicar que el optimizador no se movió: revisa las tolerancias (la pérdida vale ~10<sup>-4</sup>) y que el bootstrap realmente cambie θ; (2) α y A están muy correlacionados, y también β y B, así que los parámetros sueltos tienen intervalos amplios aunque <code>a</code> esté bien determinado; (3) si al quitar un tamaño el exponente salta más que su intervalo, el bootstrap sobre puntos subestima la incertidumbre. Remuestrear por tamaño en vez de por punto es una variante más conservadora. Para fundamentos de bootstrap e intervalos, ver <a href="evaluacion-estadistica.html">Evaluación estadística</a>.</div>
+  </div>
+
+  <!-- 5. Tareas -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-target" aria-hidden="true"></i>5. De loss a tareas: model ladder en dos pasos</h2>
+
+    <p>La loss de validación no es lo que reporta un paper de modelo. Bhagia et al. (2024) predicen la accuracy por tarea de modelos de 7B y 13B en dos pasos: (N, D) → loss de la respuesta correcta → accuracy, con una ley tipo Chinchilla para el primer paso y una sigmoide para el segundo. Con modelos ladder que costaron ~1% del cómputo de los objetivos, el error absoluto quedó dentro de 2 puntos en cuatro tareas de opción múltiple.</p>
+
+    <p>A la escala de esta grilla hay que elegir bien la tarea. Con 4 opciones, Belebele suele quedar cerca del azar (25%) en modelos de este tamaño, así que el paso 2 tendría poca señal; XStoryCloze en español (2 opciones) sí se separa del 50% con modelos chicos. Aun así, el paso 1 (la loss de la respuesta correcta) es útil en ambas: es continuo y baja de forma predecible aunque la accuracy todavía esté plana. Exporta cada modelo terminado a formato Qwen3 con <code>export_hf.py</code> de la guía base (cambiando su ruta de entrada y de salida por <code>sys.argv[1]</code> y <code>sys.argv[2]</code>) y evalúa con lm-eval guardando las muestras.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+# eval_ladder.sh — exporta cada modelo terminado y guarda log-likelihoods por ejemplo
+set -euo pipefail
+for CK in sl_runs/*/final_*.pt; do
+  BUDGET=$(basename "$CK" .pt)
+  TAG="$(basename "$(dirname "$CK")")_${BUDGET#final_}"
+  python export_hf.py "$CK" "export/$TAG"
+  lm_eval --model hf --model_args "pretrained=export/$TAG,dtype=bfloat16" \
+    --tasks xstorycloze_es,belebele_spa_Latn,belebele_por_Latn \
+    --batch_size 32 --log_samples --output_path "evals/$TAG"
+done</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># predict_tasks.py — ladder de dos pasos: (N, D) → NLL de la respuesta correcta → accuracy
+import glob
+import json
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import curve_fit
+from scipy.special import expit
+
+TASK, CHANCE = "xstorycloze_es", 0.5
+TARGET_N, TARGET_D = 8e9, 2e12          # el modelo que quieres predecir
+
+
+def task_stats(run_dir: str, task: str) -&gt; tuple[float, float]:
+    path = sorted(glob.glob(f"{run_dir}/**/samples_{task}_*.jsonl", recursive=True))[-1]
+    nll, acc = [], []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            s = json.loads(line)
+            lls = [float(r[0]) for r in s["filtered_resps"]]   # (loglik, is_greedy) por opción
+            gold = int(s["target"])
+            nll.append(-lls[gold])
+            acc.append(float(np.argmax(lls) == gold))
+    return float(np.mean(nll)), float(np.mean(acc))
+
+
+res = pd.read_csv("results.csv").query("seed == 0")   # eval_ladder.sh evalúa solo la semilla 0
+stats = [task_stats(f"evals/{r.size}_{r.budget:.0e}", TASK) for r in res.itertuples()]
+res["task_nll"], res["task_acc"] = zip(*stats)
+N, D = res["n_params"].to_numpy(float), res["tokens"].to_numpy(float)
+
+
+def step1(X, E, A, alpha, B, beta):
+    n, d = X
+    return E + A / n**alpha + B / d**beta
+
+
+def step2(x, a, x0, k, b):
+    return a * expit(k * (x - x0)) + b      # sigmoide (estable numéricamente); decrece en la loss si a &lt; 0
+
+
+p1, _ = curve_fit(step1, (N, D), res["task_nll"], p0=[0.5, 50, 0.3, 50, 0.3],
+                  bounds=([0, 0, 0, 0, 0], [10, 1e6, 2, 1e6, 2]), maxfev=20_000)
+p2, _ = curve_fit(step2, res["task_nll"], res["task_acc"],
+                  p0=[-(1 - CHANCE), res["task_nll"].median(), 5.0, 1.0], maxfev=20_000)
+
+nll_hat = step1((np.array([TARGET_N]), np.array([TARGET_D])), *p1)[0]
+acc_hat = step2(nll_hat, *p2)
+print(f"{TASK}: NLL predicha {nll_hat:.3f} (mínima medida {res['task_nll'].min():.3f})")
+print(f"accuracy predicha {acc_hat:.3f}  · accuracy máxima en la ladder {res['task_acc'].max():.3f}")   # si está ~CHANCE, el paso 2 no sirve</code></pre>
+    </div>
+
+    <div class="tip"><strong>Variantes:</strong> Bhagia et al. normalizan la loss de la respuesta según la tarea; aquí usamos la NLL media sin normalizar, lo que basta para una sola tarea con respuestas de largo parecido. Gadre et al. (2024) proponen otra vía, que es ajustar una ley entre la perplejidad y el error top-1 promedio de un conjunto de tareas. Con ~1500 ejemplos, una accuracy de XStoryCloze tiene un error estándar de ~1.3 puntos, así que diferencias de 1-2 puntos entre predicción y medición son ruido.</div>
+  </div>
+
+  <!-- 6. es/pt -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-language" aria-hidden="true"></i>6. Español, portugués y la mezcla: qué cambia</h2>
+
+    <p>Ajusta dos leyes, una con <code>loss_es</code> y otra con <code>loss_pt</code>. Ambas comparten N y D <em>totales</em> con una mezcla 80/20 fija, así que la ley de portugués describe cómo mejora el portugués cuando ve el 20% de los tokens. Si los exponentes coinciden y solo cambia la loss, la mezcla está bien calibrada; si el portugués tiene un β claramente menor, está limitado por datos y conviene subir su proporción. Para decidir proporciones sin reentrenar la grilla para cada mezcla:</p>
+    <ul style="font-size:14px;color:var(--text2);margin:0 0 12px 20px;line-height:1.7">
+      <li><strong>He et al. (2024)</strong>: en más de 100 modelos y 23 idiomas, la loss de cada familia lingüística depende casi solo de su propia proporción de muestreo, y las proporciones óptimas halladas a 85M transfieren a 1.2B. Español y portugués son de la misma familia: basta barrer la proporción es+pt vs el resto con la grilla chica.</li>
+      <li><strong>ATLAS (Longpre et al., 2025)</strong>: 774 entrenamientos de 10M a 8B y más de 400 idiomas. La ley separa los tokens del idioma objetivo, los de 3 idiomas de transferencia (con pesos inicializados desde una matriz de transferencia 38×38, en la que español, catalán y portugués aparecen como grupo con transferencia positiva notable) y el resto, e incluye una función de saturación para tokens repetidos. Su ley de la "maldición del multilingüismo" estima que, para cuadruplicar los idiomas sin perder calidad, el modelo crece ~1.4× y los datos totales ~2.7×.</li>
+      <li><strong>Desde cero vs continuar</strong>: ATLAS estima para un modelo de 2B que continuar desde un checkpoint multilingüe conviene por debajo de ~144B tokens y entrenar desde cero rinde más desde ~283B, con un cruce que depende del idioma. Si tu presupuesto cae en la zona de continuar, sigue con <a href="mid-training.html">Mid-training</a> y <a href="continual-pretraining.html">Continual pretraining</a>.</li>
+    </ul>
+
+    <div class="sub-title">Datos limitados: cuántas épocas tolera es/pt</div>
+    <p>El texto es/pt de alta calidad se termina antes que el inglés. Muennighoff et al. (2023), con 400 entrenamientos de hasta 9B parámetros y 900B tokens, encuentran que hasta ~4 épocas sobre los mismos datos cambian la loss de forma despreciable frente a datos únicos; más allá, el valor de cada token repetido decae hasta volverse nulo. Regla práctica: si <em>D<sub>opt</sub> × proporción es/pt</em> supera ~4× tus tokens únicos de calidad, estás limitado por datos. Las salidas son mezclar más inglés y código (con transferencia estimada vía ATLAS), relajar el filtrado o entrenar un modelo más chico. Para verificarlo con tu propia ley, agrega a la grilla unas pocas ramas sobre un <code>train.bin</code> truncado (2 y 4 épocas) y compáralas con las de datos únicos.</p>
+  </div>
+
+  <!-- 7. Decidir -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>7. De la curva a la decisión: tamaño y tokens para LatamGPT</h2>
+
+    <p>Ejemplo ilustrativo con la ley de Besiroglu et al. (inglés): con <em>C = 10<sup>23</sup></em> FLOPs, del orden de 128 H100 durante ~23 días a 40% de MFU, el óptimo es N ≈ 29B y D ≈ 570B tokens (~19 tokens/parámetro). Pero el óptimo de entrenamiento casi nunca es el óptimo del proyecto:</p>
+
+    <table class="model-table">
+      <tr><th>Opción con el mismo C = 1e23</th><th>Tokens/parámetro</th><th>Loss predicha</th><th>Lectura</th></tr>
+      <tr><td>29B × 570B tokens</td><td>~19</td><td>2.032</td><td>Óptimo de entrenamiento; caro de servir y necesita 570B tokens</td></tr>
+      <tr><td>14B × 1.2T</td><td>~85</td><td>2.040</td><td>+0.4% de loss, la mitad del costo de inferencia</td></tr>
+      <tr><td>8B × 2.1T</td><td>~260</td><td>2.055</td><td>+1.1% de loss, ~3.6× más barato de servir; necesita 2T tokens</td></tr>
+      <tr><td>3B × 5.6T</td><td>~1850</td><td>2.106</td><td>Fuera del rango ajustado: no confíes en la extrapolación</td></tr>
+    </table>
+
+    <p>Sardana et al. (2023) formalizan el compromiso: con una demanda de inferencia del orden de mil millones de requests, conviene entrenar modelos más chicos por más tiempo. Además observan que ajustar solo con razones típicas de tokens/parámetro sobreestima el beneficio de seguir agregando tokens en razones extremas. Gadre et al. (2024) muestran que se puede extrapolar en el régimen sobreentrenado: predijeron la loss de un 1.4B con 900B tokens (32× sobreentrenado) usando 300× menos cómputo. Por eso la grilla incluye ramas de hasta ~330 tokens/parámetro, y por eso la decisión de LatamGPT sale de cruzar tres curvas: la ley es/pt propia, los tokens únicos disponibles (con ≤4 épocas) y el costo de servir.</p>
+
+    <div class="sub-title">Entregable y checklist</div>
+    <p>Lo que debería salir de este trabajo es una tabla con N<sub>opt</sub>, D<sub>opt</sub> e intervalo bootstrap para 2-3 presupuestos realistas, por idioma, junto con la loss predicha de las alternativas sobreentrenadas que el equipo esté considerando. Antes de presentarla, revisa:</p>
+
+    <table class="model-table">
+      <tr><th>Error común</th><th>Síntoma</th><th>Prevención</th></tr>
+      <tr><td>Contar parámetros sin embedding</td><td>Exponente <code>a</code> inflado, hacia 0.7 (como Kaplan)</td><td><code>n_params</code> totales, con el embedding atado contado una vez</td></tr>
+      <tr><td>Warmup fijo y largo</td><td>Los tamaños chicos rinden mal en las ramas cortas</td><td>Warmup = N tokens</td></tr>
+      <tr><td>Mismo LR para todos</td><td>Un tamaño queda fuera de la tendencia</td><td>Mini-barrido por tamaño; el mejor no puede quedar en el borde</td></tr>
+      <tr><td>Comparar sin cooldown</td><td>Curvas que se cruzan sin explicación</td><td>Solo modelos terminados, con validación fija</td></tr>
+      <tr><td>Repetir datos sin querer</td><td>Las ramas largas de los modelos chicos se aplanan</td><td><code>train.bin</code> ≥ la rama más larga y lectura secuencial</td></tr>
+      <tr><td>Extrapolar demasiado</td><td>Intervalos enormes, o estrechísimos que no son creíbles</td><td>Reportar rangos; validar con un modelo ~1B antes del run final</td></tr>
+    </table>
+
+    <div class="tip"><strong>Valida antes de gastar:</strong> el paso más útil después de ajustar es entrenar un modelo de verificación algo mayor que la grilla (por ejemplo ~1B en su óptimo, unos 1.2e20 FLOPs), sin usarlo en el ajuste, y comprobar que su loss cae dentro del intervalo predicho. Si cae afuera, el problema suele estar en la grilla (LR, warmup, datos) y no en la forma de la ley. Para preparar ese modelo y el run final a escala, ver <a href="entrenamiento.html">Código de entrenamiento</a> y <a href="fsdp2-torchtitan.html">FSDP2 y torchtitan</a>.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Scaling Laws for Neural Language Models (Kaplan et al., 2020)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Training Compute-Optimal LLMs / Chinchilla (Hoffmann et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2404.10102" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Chinchilla Scaling: A replication attempt (Besiroglu et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.19146" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Resolving Discrepancies in Compute-Optimal Scaling (Porian et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.12907" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Reconciling Kaplan and Chinchilla Scaling Laws (Pearce &amp; Song, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2405.18392" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Scaling Laws and Compute-Optimal Training Beyond Fixed Training Durations (Hägele et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.11840" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>A Hitchhiker's Guide to Scaling Law Estimation (Choshen et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2412.04403" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Establishing Task Scaling Laws via Model Ladders (Bhagia et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2403.08540" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Language models scale reliably with over-training (Gadre et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2401.00448" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Beyond Chinchilla-Optimal (Sardana et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2305.16264" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Scaling Data-Constrained Language Models (Muennighoff et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2510.22037" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>ATLAS: Adaptive Transfer Scaling Laws (Longpre et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.12883" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Scaling Laws for Multilingual Language Models (He et al., 2024)</a>
+      <a class="source-link" href="https://github.com/epfml/schedules-and-scaling" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>epfml/schedules-and-scaling</a>
+      <a class="source-link" href="https://github.com/mlfoundations/scaling" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>mlfoundations/scaling</a>
+      <a class="source-link" href="https://github.com/huggingface/datablations" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>huggingface/datablations</a>
+      <a class="source-link" href="https://huggingface.co/docs/transformers/main_classes/optimizer_schedules" target="_blank" rel="noopener"><i class="ti ti-book"></i>transformers: get_wsd_schedule (docs)</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>lm-evaluation-harness</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="llm-desde-cero.html"><i class="ti ti-brain"></i>Guía: Un LLM moderno desde cero</a>
+      <a class="source-link" href="evaluacion-estadistica.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación estadística</a>
+      <a class="source-link" href="mid-training.html"><i class="ti ti-route"></i>Guía: Mid-training</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-refresh"></i>Guía: Continual pretraining</a>
+      <a class="source-link" href="entrenamiento.html"><i class="ti ti-server-2"></i>Guía: Código de entrenamiento</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

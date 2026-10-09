@@ -444,7 +444,7 @@ def document_block_mask(doc_ids: torch.Tensor):
   <div class="guide-section">
     <h2 class="section-title"><i class="ti ti-player-play" aria-hidden="true"></i>6. Loop de entrenamiento</h2>
 
-    <p>Receta estándar de 2025-2026 para modelos chicos: autocast bf16 con pesos fp32, AdamW con β<sub>2</sub>=0.95 y weight decay 0.1 solo en matrices (no en normas ni embeddings), clipping a 1.0 y schedule WSD (warmup, plateau y decay lineal a cero) en vez de coseno. WSD tiene una ventaja práctica: puedes ramificar un cooldown desde cualquier checkpoint del plateau y obtener un modelo "terminado" sin reentrenar, la base de las scaling laws baratas.</p>
+    <p>Receta estándar de 2025-2026 para modelos chicos: autocast bf16 con pesos fp32, AdamW con β<sub>2</sub>=0.95 y weight decay 0.1 solo en matrices (no en normas ni embeddings), clipping a 1.0 y schedule WSD (warmup, plateau y decay lineal a cero) en vez de coseno. WSD tiene una ventaja práctica: puedes ramificar un cooldown desde cualquier checkpoint del plateau y obtener un modelo "terminado" sin reentrenar, la base de las scaling laws baratas (ver la guía <a href="scaling-laws.html">Reproducir una scaling law</a>).</p>
 
     <p>Logueamos la cross-entropy en bits-per-byte (bpb) por idioma: a diferencia de la loss por token, el bpb es comparable entre tokenizers distintos, y es la métrica honesta para decidir si un tokenizer es/pt ayuda. Cada 250 pasos medimos además el logit máximo de atención por capa: si crece sin control, la corrida está a punto de divergir.</p>
 
@@ -818,6 +818,7 @@ for model_id in ["./export", "Qwen/Qwen3-0.6B-Base"]:
       <a class="source-link" href="tokenizer-training.html"><i class="ti ti-cut"></i>Guía: Entrenar un tokenizador es/pt</a>
       <a class="source-link" href="entrenamiento.html"><i class="ti ti-server-2"></i>Guía: Código de entrenamiento</a>
       <a class="source-link" href="moe-desde-cero.html"><i class="ti ti-hierarchy-3"></i>Guía: MoE desde cero</a>
+      <a class="source-link" href="scaling-laws.html"><i class="ti ti-chart-dots"></i>Guía: Reproducir una scaling law</a>
       <a class="source-link" href="fsdp2-torchtitan.html"><i class="ti ti-server-2"></i>Guía: FSDP2 y torchtitan</a>
       <a class="source-link" href="debugging.html"><i class="ti ti-bug"></i>Guía: Debugging de entrenamiento</a>
       <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-language"></i>Guía: Evaluación para Latam</a>
