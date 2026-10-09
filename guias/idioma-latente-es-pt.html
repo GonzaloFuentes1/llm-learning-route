@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Experimento reproducible para medir en qué idioma &quot;piensa&quot; un LLM con español y portugués: logit lens, similitud entre idiomas, patching concepto vs idioma, neuronas de idioma (LAPE) y steering con DiffMean.">
+<title>¿En qué idioma piensa el modelo? Experimento es/pt — LatamGPT</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Interpretabilidad</div>
+    <h1 class="guide-title">¿En qué idioma piensa el modelo? Experimento es/pt</h1>
+    <div class="guide-desc">Un experimento reproducible para responder con datos si un LLM procesa el español y el portugués "pasando por el inglés": curvas de idioma latente con logit lens, similitud entre idiomas capa a capa, patching concepto vs idioma, neuronas específicas de idioma (LAPE) y steering de idioma con DiffMean, comparando un modelo anglocéntrico con uno entrenado con mucho español.</div>
+  </div>
+
+  <!-- 1. Pregunta e hipótesis -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-bulb" aria-hidden="true"></i>1. La pregunta y por qué importa para LatamGPT</h2>
+
+    <div class="tip"><strong>Prerrequisito:</strong> esta guía asume que ya manejas <code>nnsight</code>/<code>nnterp</code>, el logit lens y el activation patching. Si no, empieza por <a href="interpretabilidad-practica.html">Interpretabilidad práctica: logit lens, patching y steering</a>.</div>
+
+    <p>Cuando un modelo traduce "perro" al portugués, ¿la representación intermedia se parece más a <em>dog</em>, a <em>perro</em> o a un concepto sin idioma? La respuesta no es académica: decide cuánto conocimiento aprendido en inglés transfiere al español y al portugués, qué cambia un continual pretraining, en qué capas conviene intervenir (steering, probes de seguridad) y cómo atacar el code-switching, el problema de que el modelo responda en inglés o mezcle es/pt sin que se lo pidan.</p>
+
+    <table class="model-table">
+      <tr><th>Hipótesis</th><th>Qué dice</th><th>Evidencia principal</th></tr>
+      <tr><td>Pivote en inglés</td><td>Las capas intermedias operan en un espacio de conceptos cercano al inglés; las últimas "traducen" al idioma de salida</td><td>Wendler et al. (Llama-2, logit lens); Schut et al. (2025): las palabras con carga semántica pasan cerca del inglés y el steering en inglés funciona mejor</td></tr>
+      <tr><td>Semantic hub</td><td>Entradas equivalentes en distintos idiomas convergen en capas medias a representaciones compartidas, legibles vía el idioma dominante</td><td>Wu et al. (2024)</td></tr>
+      <tr><td>Conceptos agnósticos al idioma</td><td>El idioma de salida se decide antes que el concepto, y el concepto vive en una representación independiente del idioma</td><td>Dumas et al. (activation patching); Brinkmann et al. (features gramaticales compartidas)</td></tr>
+      <tr><td>Interlingua</td><td>La traducción lee y escribe en un espacio latente tipo interlingua, con procesos separables de sintaxis e idioma de superficie</td><td>Brinton et al. (2026); Sonkin et al. (2026)</td></tr>
+    </table>
+
+    <p>Las hipótesis no son excluyentes: la evidencia publicada es mixta y depende mucho de la mezcla de datos del modelo. Por eso el experimento compara tres modelos con perfiles distintos y, si tienes acceso, los checkpoints de LatamGPT antes y después del continual pretraining.</p>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Tríos en/es/pt</div> <div class="flow-arrow">→</div> <div class="flow-step">Logit lens por capa</div> <div class="flow-arrow">→</div> <div class="flow-step">CKA + retrieval FLORES+</div> <div class="flow-arrow">→</div> <div class="flow-step">Patching concepto vs idioma</div> <div class="flow-arrow">→</div> <div class="flow-step">Neuronas LAPE + ablación</div> <div class="flow-arrow">→</div> <div class="flow-step">Steering DiffMean es→pt</div>
+    </div>
+  </div>
+
+  <!-- 2. Setup -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-cpu" aria-hidden="true"></i>2. Modelos, hardware y entorno</h2>
+
+    <table class="model-table">
+      <tr><th>Modelo</th><th>Capas</th><th>Perfil</th><th>Por qué está</th></tr>
+      <tr><td>Qwen/Qwen3-1.7B-Base</td><td>28</td><td>Multilingüe amplio, vocab 151k</td><td>Base principal; tiene SAEs oficiales de Qwen-Scope para extender el análisis</td></tr>
+      <tr><td>meta-llama/Llama-3.2-1B</td><td>16</td><td>Anglocéntrico, vocab 128k (gated)</td><td>Referencia "pivote en inglés" esperable</td></tr>
+      <tr><td>BSC-LT/salamandra-2b</td><td>24</td><td>35 idiomas europeos, mucho español, vocab 256k</td><td>¿Un modelo con mucho español sigue pivotando por el inglés?</td></tr>
+      <tr><td>&lt;TU_ORG&gt;/&lt;modelo&gt;</td><td>—</td><td>Checkpoints propios</td><td>Antes vs después del CPT en es/pt</td></tr>
+    </table>
+
+    <p><strong>Hardware:</strong> una GPU de 16-24 GB (L4, A10, RTX 4090) basta para los tres modelos en bf16. Las curvas de logit lens y el patching toman minutos; LAPE sobre 2M tokens por idioma tarda del orden de 10-30 min por modelo en una L4, y el experimento completo con tres modelos cabe en una tarde (~1-3 h de GPU). <strong>Presupuesto reducido:</strong> Colab con T4 (16 GB) usando <code>Qwen/Qwen3-0.6B-Base</code> en fp16 y 500k tokens por idioma en LAPE; las conclusiones cualitativas suelen mantenerse.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">uv venv .venv-lang --python 3.11
+source .venv-lang/bin/activate
+uv pip install "torch&gt;=2.6" "transformers&gt;=5.17,&lt;6" "nnsight==0.7.0" "nnterp==1.3.0" \
+  "datasets&gt;=5,&lt;6" "sentence-transformers&gt;=6" fasttext-numpy2 scikit-learn matplotlib
+
+# Llama-3.2-1B y FLORES+ son gated: acepta los términos en sus páginas de HF antes
+hf auth login</code></pre>
+    </div>
+
+    <div class="warn"><strong>Versiones fijadas:</strong> nnsight 0.8 (en release candidate) renombra <code>LanguageModel</code> a <code>TransformersModel</code> y cambia <code>generate()</code>. El código usa nnsight 0.7 + nnterp 1.3, que es la combinación estable. Las capas decoder de transformers 5 devuelven un tensor, no una tupla: con nnterp no tienes que preocuparte, pero en hooks de PyTorch el código contempla ambos casos.</div>
+  </div>
+
+  <!-- 3. Dataset -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database" aria-hidden="true"></i>3. Dataset: tríos de palabras y prompts de traducción</h2>
+
+    <p>Seguimos el diseño de Wendler et al.: prompts few-shot de traducción de una palabra, del tipo <code>Español: "flor" - Português: "</code>, donde el siguiente token revela el idioma y el concepto. El detalle crítico en es/pt es que muchas palabras comparten prefijo (<em>mesa/mesa</em>, <em>leche/leite</em>): si el primer token de la palabra en español, portugués e inglés coincide, no se puede atribuir la probabilidad a un idioma. Por eso el filtro es <strong>por tokenizer</strong>: el mismo trío puede servir en Qwen3 y descartarse en Salamandra.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · build_prompts.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+from transformers import AutoTokenizer
+
+MODELS = ["Qwen/Qwen3-1.7B-Base", "meta-llama/Llama-3.2-1B", "BSC-LT/salamandra-2b"]
+LANG_NAME = {"en": "English", "es": "Español", "pt": "Português"}
+
+# (en, es, pt) con traducción inequívoca y vocabulario latinoamericano / pt-BR.
+# Amplía la lista a 200-500 tríos (listas curadas, revisadas por hablantes nativos).
+TRIOS = [
+    ("dog", "perro", "cão"), ("window", "ventana", "janela"), ("brother", "hermano", "irmão"), ("knife", "cuchillo", "faca"),
+    ("butterfly", "mariposa", "borboleta"), ("spoon", "cuchara", "colher"), ("rabbit", "conejo", "coelho"), ("pillow", "almohada", "travesseiro"),
+    ("street", "calle", "rua"), ("red", "rojo", "vermelho"), ("boy", "niño", "menino"), ("girl", "niña", "menina"),
+    ("monkey", "mono", "macaco"), ("garbage", "basura", "lixo"), ("shop", "tienda", "loja"), ("kitchen", "cocina", "cozinha"),
+    ("bread", "pan", "pão"), ("dinner", "cena", "jantar"), ("hat", "sombrero", "chapéu"), ("cloud", "nube", "nuvem"),
+    ("moon", "luna", "lua"), ("bridge", "puente", "ponte"), ("key", "llave", "chave"), ("egg", "huevo", "ovo"),
+    ("night", "noche", "noite"), ("black", "negro", "preto"), ("fish", "pez", "peixe"), ("grandmother", "abuela", "avó"),
+    ("cup", "taza", "xícara"), ("tree", "árbol", "árvore"), ("horse", "caballo", "cavalo"), ("beach", "playa", "praia"),
+    ("eye", "ojo", "olho"), ("blood", "sangre", "sangue"), ("tooth", "diente", "dente"),
+]
+SHOTS = [("book", "libro", "livro"), ("mountain", "montaña", "montanha"),
+         ("city", "ciudad", "cidade"), ("water", "agua", "água")]
+DIRECTIONS = [("es", "pt"), ("pt", "es"), ("en", "es"), ("en", "pt")]
+IDX = {"en": 0, "es": 1, "pt": 2}
+
+
+def first_tokens(tok, word):
+    """Ids del primer token de la palabra en variantes plausibles tras la comilla."""
+    ids = set()
+    for variant in (word, word.capitalize(), " " + word):
+        toks = tok(variant, add_special_tokens=False).input_ids
+        if not toks:
+            continue
+        # descarta tokens de 0-1 caracteres: son demasiado genéricos para atribuir idioma
+        if len(tok.decode([toks[0]]).strip()) &gt;= 2:
+            ids.add(toks[0])
+    return sorted(ids)
+
+
+def translation_prompt(word, src, dst):
+    lines = [f'{LANG_NAME[src]}: "{s[IDX[src]]}" - {LANG_NAME[dst]}: "{s[IDX[dst]]}"' for s in SHOTS]
+    lines.append(f'{LANG_NAME[src]}: "{word}" - {LANG_NAME[dst]}: "')
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    for name in MODELS:
+        tok = AutoTokenizer.from_pretrained(name)
+        items = []
+        for trio in TRIOS:
+            ids = {lang: first_tokens(tok, trio[i]) for lang, i in IDX.items()}
+            sets = [set(v) for v in ids.values()]
+            disjoint = all(sets) and not (sets[0] &amp; sets[1] or sets[0] &amp; sets[2] or sets[1] &amp; sets[2])
+            if not disjoint:
+                continue
+            for src, dst in DIRECTIONS:
+                items.append({"concept": trio[0], "src": src, "dst": dst, "ids": ids,
+                              "prompt": translation_prompt(trio[IDX[src]], src, dst)})
+        tag = name.split("/")[-1]
+        with open(f"prompts_{tag}.json", "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=1)
+        print(f"{tag}: {len(items) // len(DIRECTIONS)} tríos válidos de {len(TRIOS)}")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Calidad de la lista:</strong> evita palabras con sentidos múltiples en inglés (<em>left</em>, <em>light</em>) y regionalismos ambiguos (<em>piso</em> es "suelo" en gran parte de Latam pero "departamento" en España). Para más señal, Wendler también usa tareas de repetición y cloze; puedes añadirlas con la misma estructura.</div>
+  </div>
+
+  <!-- 4. Curvas de idioma latente -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>4. Curvas de idioma latente con logit lens</h2>
+
+    <p>Para cada prompt es→pt aplicamos el logit lens en todas las capas (norma final + <code>lm_head</code> sobre el residual stream del último token) y sumamos la probabilidad de los tokens de la palabra en tres idiomas: inglés (el pivote hipotético), español (el idioma de entrada) y portugués (el de salida). Las bandas de confianza salen de un bootstrap sobre los tríos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · latent_curves.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+from nnterp import StandardizedTransformer
+from nnterp.interventions import logit_lens
+
+MODEL = "Qwen/Qwen3-1.7B-Base"   # repite con Llama-3.2-1B y salamandra-2b
+TAG = MODEL.split("/")[-1]
+SRC, DST = "es", "pt"
+
+data = json.load(open(f"prompts_{TAG}.json", encoding="utf-8"))
+items = [d for d in data if d["src"] == SRC and d["dst"] == DST]
+
+model = StandardizedTransformer(MODEL, dtype=torch.bfloat16)
+model.tokenizer.padding_side = "left"          # el último token queda en la posición -1
+if model.tokenizer.pad_token is None:
+    model.tokenizer.pad_token = model.tokenizer.eos_token
+
+curves = {"en": [], "es": [], "pt": []}
+for i in range(0, len(items), 8):
+    batch = items[i:i + 8]
+    probs = logit_lens(model, [d["prompt"] for d in batch]).float()   # (B, capas, vocab), en CPU
+    for b, d in enumerate(batch):
+        for lang in curves:
+            curves[lang].append(probs[b][:, d["ids"][lang]].sum(-1).numpy())
+
+
+def bootstrap_ci(x, n=1000, seed=0):
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(x), size=(n, len(x)))
+    return np.percentile(x[idx].mean(1), [2.5, 97.5], axis=0)
+
+
+fig, ax = plt.subplots(figsize=(7, 4))
+for lang, color in [("en", "tab:blue"), ("es", "tab:orange"), ("pt", "tab:green")]:
+    x = np.stack(curves[lang])                     # (n_tríos, capas)
+    lo, hi = bootstrap_ci(x)
+    layers = np.arange(x.shape[1])
+    ax.plot(layers, x.mean(0), label=f"P({lang})", color=color)
+    ax.fill_between(layers, lo, hi, alpha=0.2, color=color)
+ax.set_xlabel("capa"); ax.set_ylabel("probabilidad (logit lens)")
+ax.set_title(f"{TAG}: traducción {SRC}→{DST}, n={len(items)}")
+ax.legend(); fig.tight_layout(); fig.savefig(f"latent_{TAG}_{SRC}{DST}.png", dpi=150)
+np.savez(f"latent_{TAG}_{SRC}{DST}.npz", **{k: np.stack(v) for k, v in curves.items()})</code></pre>
+    </div>
+
+    <p><strong>Cómo leer la figura.</strong> En Llama-2, Wendler et al. vieron tres fases: probabilidades casi nulas en las primeras capas, un tramo medio donde el token en inglés domina aunque nadie lo pidió, y un salto final al idioma de salida. Lo interesante para es/pt es comparar modelos: si en Salamandra o en tu checkpoint post-CPT el tramo medio favorece al español (el idioma de entrada) o no favorece a ninguno, el "pivote" depende de la mezcla de datos y no es una propiedad universal. Corre también la dirección pt→es y en→es: asimetrías grandes entre es→pt y pt→es suelen indicar desbalance de datos entre los dos idiomas.</p>
+
+    <div class="warn"><strong>Límites del logit lens:</strong> en capas tempranas el residual stream no está en la "base" del unembedding y las probabilidades son ruido; el tuned lens corrige ese sesgo entrenando una traslación afín por capa. No interpretes nada antes de ~1/3 de la profundidad. Además, una probabilidad alta en inglés no prueba que el modelo "piense en inglés": puede reflejar que el espacio de conceptos está más alineado con el unembedding inglés, porque fue el idioma más frecuente en el entrenamiento.</div>
+  </div>
+
+  <!-- 5. Variantes regionales -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-map-pin" aria-hidden="true"></i>5. Extensión latinoamericana: ¿el modelo separa variedades regionales?</h2>
+
+    <p>El mismo método permite preguntar algo que ningún paper estándar responde: si pides "bus" en español de Chile, ¿el modelo recupera primero la forma más frecuente (<em>autobús</em>) y la corrige a <em>micro</em> en las últimas capas, o nunca llega a la variante regional? Este bloque <strong>continúa el anterior</strong> (reusa <code>model</code> y <code>logit_lens</code>) e importa <code>first_tokens</code> de <code>build_prompts.py</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · regional.py (continúa latent_curves.py)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from build_prompts import first_tokens
+
+REGION_NAME = {"es-MX": "Español de México", "es-AR": "Español de Argentina",
+               "es-CL": "Español de Chile", "es-ES": "Español de España",
+               "pt-BR": "Português do Brasil", "pt-PT": "Português de Portugal"}
+# concepto en inglés -> {variedad: palabra}
+REGIONAL = {
+    "bus": {"es-ES": "autobús", "es-MX": "camión", "es-AR": "colectivo", "es-CL": "micro",
+            "pt-BR": "ônibus", "pt-PT": "autocarro"},
+    "avocado": {"es-MX": "aguacate", "es-AR": "palta", "es-CL": "palta", "pt-BR": "abacate"},
+    "strawberry": {"es-ES": "fresa", "es-MX": "fresa", "es-CL": "frutilla", "pt-BR": "morango"},
+    "juice": {"es-ES": "zumo", "es-MX": "jugo", "es-CL": "jugo", "pt-BR": "suco", "pt-PT": "sumo"},
+    "pineapple": {"es-MX": "piña", "es-AR": "ananá", "pt-BR": "abacaxi", "pt-PT": "ananás"},
+}
+SHOTS_EN = [("book", "libro", "livro"), ("city", "ciudad", "cidade"), ("water", "agua", "água")]
+
+for concept, variants in REGIONAL.items():
+    words = sorted(set(variants.values()))
+    ids = {w: first_tokens(model.tokenizer, w) for w in words}
+    for region in variants:
+        k = 1 if region.startswith("es") else 2
+        label = REGION_NAME[region]
+        shots = [f'English: "{s[0]}" - {label}: "{s[k]}"' for s in SHOTS_EN]
+        prompt = "\n".join(shots + [f'English: "{concept}" - {label}: "'])
+        probs = logit_lens(model, [prompt]).float()[0]            # (capas, vocab)
+        last = {w: probs[-1, ids[w]].sum().item() for w in words}
+        # capa donde cada variante alcanza su máximo: ¿la regional aparece tarde?
+        peak = {w: int(probs[:, ids[w]].sum(-1).argmax()) for w in words}
+        best = max(last, key=last.get)
+        print(f"{concept:10s} {region}: esperado={variants[region]:10s} "
+              f"predicho={best:10s} pico_por_capa={peak}")</code></pre>
+    </div>
+
+    <p>Con los ids del primer token, algunas variantes pueden colisionar (por ejemplo <em>fresa</em>/<em>frutilla</em> si ambas empiezan con el mismo token); revisa <code>ids</code> antes de concluir. Lo que buscas es un patrón: si la variante regional solo gana en las 2-3 últimas capas, el modelo trata la variedad como una "traducción de superficie" encima de un concepto compartido; si nunca gana, el modelo colapsa las variedades hacia la forma dominante en sus datos. Este es un buen test de regresión para el continual pretraining con datos regionales.</p>
+  </div>
+
+  <!-- 6. Similitud entre idiomas -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-git-compare" aria-hidden="true"></i>6. Similitud de representaciones entre idiomas por capa</h2>
+
+    <p>El logit lens mira un token; para ubicar el "hub" semántico usamos oraciones completas. FLORES+ trae las mismas oraciones traducidas a cada idioma (revisa la columna <code>glottocode</code> para confirmar qué variedad de portugués es <code>por_Latn</code>). Promediamos los estados ocultos de cada oración por capa y medimos dos cosas: CKA lineal entre los conjuntos es/pt/en y precisión de retrieval (¿la oración más cercana en portugués es la traducción correcta?).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · repr_similarity.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+import torch
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+MODEL = "Qwen/Qwen3-1.7B-Base"
+N = 500
+LANGS = {"es": "spa_Latn", "pt": "por_Latn", "en": "eng_Latn"}
+
+# devtest está alineado por "id" entre idiomas; ordenar garantiza el paralelismo
+texts = {k: load_dataset("openlanguagedata/flores_plus", cfg, split="devtest").sort("id")["text"][:N]
+         for k, cfg in LANGS.items()}
+
+tok = AutoTokenizer.from_pretrained(MODEL)
+tok.padding_side = "right"
+if tok.pad_token is None:
+    tok.pad_token = tok.eos_token
+model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.bfloat16, device_map="auto").eval()
+
+
+@torch.no_grad()
+def mean_states(sents, bs=16):
+    out = []
+    for i in range(0, len(sents), bs):
+        enc = tok(sents[i:i + bs], return_tensors="pt", padding=True).to(model.device)
+        hs = model(**enc, output_hidden_states=True).hidden_states     # L+1 x (B, T, d)
+        m = enc["attention_mask"].unsqueeze(-1).to(hs[0].dtype)
+        m[:, 0] = 0      # excluye la 1.ª posición: concentra activaciones masivas (attention sink)
+        out.append(torch.stack([(h * m).sum(1) / m.sum(1) for h in hs], 1).float().cpu())
+    return torch.cat(out).numpy().astype(np.float64)                   # (N, L+1, d)
+
+
+def linear_cka(X, Y):
+    X = X - X.mean(0)
+    Y = Y - Y.mean(0)
+    hsic = np.linalg.norm(Y.T @ X, "fro") ** 2
+    return hsic / (np.linalg.norm(X.T @ X, "fro") * np.linalg.norm(Y.T @ Y, "fro"))
+
+
+def retrieval_acc(X, Y):
+    X = X - X.mean(0)    # centrar por idioma quita el "offset" de idioma y deja el contenido
+    Y = Y - Y.mean(0)
+    X = X / np.linalg.norm(X, axis=1, keepdims=True)
+    Y = Y / np.linalg.norm(Y, axis=1, keepdims=True)
+    return float(((X @ Y.T).argmax(1) == np.arange(len(X))).mean())
+
+
+H = {k: mean_states(v) for k, v in texts.items()}
+print("capa  CKA(es,pt) CKA(es,en) CKA(pt,en) | R@1(es→pt) R@1(es→en)")
+for layer in range(H["es"].shape[1]):
+    e, p, n = H["es"][:, layer], H["pt"][:, layer], H["en"][:, layer]
+    print(f"{layer:4d}  {linear_cka(e, p):10.3f} {linear_cka(e, n):10.3f} {linear_cka(p, n):10.3f}"
+          f" | {retrieval_acc(e, p):10.2f} {retrieval_acc(e, n):10.2f}")</code></pre>
+    </div>
+
+    <p>El patrón típico es una "U invertida": similitud baja en las primeras capas (dominan los tokens de superficie), máxima en las capas medias (el hub) y en descenso al final, cuando el modelo vuelve a especializarse en el idioma de salida. Marca la capa del máximo de <code>R@1(es→pt)</code>: es la candidata natural para calcular vectores de steering y entrenar probes que deban transferir entre idiomas. Que es-pt sea mucho más alto que es-en no sorprende (lenguas hermanas); lo informativo es cómo cambian las brechas entre modelos y tras el CPT.</p>
+  </div>
+
+  <!-- 7. Patching concepto vs idioma -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-replace" aria-hidden="true"></i>7. Patching concepto vs idioma (método de Dumas et al.)</h2>
+
+    <p>El experimento causal: un prompt <em>fuente</em> traduce el concepto C<sub>S</sub> del inglés al español y un prompt <em>destino</em> traduce otro concepto C<sub>T</sub> al portugués. Copiamos el residual stream del último token de la fuente en la capa <em>l</em> dentro del destino y medimos cuatro probabilidades: C<sub>S</sub> en es, C<sub>S</sub> en pt, C<sub>T</sub> en es y C<sub>T</sub> en pt. En Llama-2 7B, Dumas et al. encontraron tres regímenes: en capas tempranas el parche no cambia nada (C<sub>T</sub> en pt), en un tramo intermedio sale C<sub>T</sub> en <em>español</em> (el idioma ya viajó en el latente, el concepto todavía no) y en capas posteriores sale C<sub>S</sub> en español. Conclusión: el idioma de salida se fija antes que el concepto.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · patch_concept_language.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import random
+import torch
+import matplotlib.pyplot as plt
+from nnterp import StandardizedTransformer
+
+torch.set_grad_enabled(False)
+MODEL = "Qwen/Qwen3-1.7B-Base"
+TAG = MODEL.split("/")[-1]
+
+data = json.load(open(f"prompts_{TAG}.json", encoding="utf-8"))
+src_items = {d["concept"]: d for d in data if (d["src"], d["dst"]) == ("en", "es")}
+tgt_items = {d["concept"]: d for d in data if (d["src"], d["dst"]) == ("en", "pt")}
+concepts = sorted(set(src_items) &amp; set(tgt_items))
+random.seed(0)
+pairs = [(a, b) for a, b in zip(concepts, random.sample(concepts, len(concepts))) if a != b]
+
+model = StandardizedTransformer(MODEL, dtype=torch.bfloat16)
+model.tokenizer.padding_side = "left"
+if model.tokenizer.pad_token is None:
+    model.tokenizer.pad_token = model.tokenizer.eos_token
+
+src_prompts = [src_items[a]["prompt"] for a, _ in pairs]
+tgt_prompts = [tgt_items[b]["prompt"] for _, b in pairs]
+
+# 1) cachea el último token de la fuente en todas las capas (en orden del forward)
+src_h = []
+with model.trace(src_prompts):
+    for layer in range(model.num_layers):
+        src_h.append(model.layers_output[layer][:, -1, :].save())
+
+ids = {  # para cada par: ids de C_S y C_T en es y pt
+    "C_S en es": [src_items[a]["ids"]["es"] for a, _ in pairs],
+    "C_S en pt": [src_items[a]["ids"]["pt"] for a, _ in pairs],
+    "C_T en es": [tgt_items[b]["ids"]["es"] for _, b in pairs],
+    "C_T en pt": [tgt_items[b]["ids"]["pt"] for _, b in pairs],
+}
+results = {k: [] for k in ids}
+
+# 2) para cada capa, parchea el destino y lee la distribución del siguiente token
+for layer in range(model.num_layers):
+    with model.trace(tgt_prompts):
+        model.layers_output[layer][:, -1, :] = src_h[layer]
+        probs = model.logits[:, -1, :].softmax(-1).save()
+    probs = probs.float().cpu()
+    for k, id_lists in ids.items():
+        results[k].append(torch.stack([probs[i, t].sum() for i, t in enumerate(id_lists)]).mean().item())
+
+fig, ax = plt.subplots(figsize=(7, 4))
+for k, ys in results.items():
+    ax.plot(ys, label=k)
+ax.set_xlabel("capa parcheada"); ax.set_ylabel("probabilidad media")
+ax.set_title(f"{TAG}: patching fuente en→es sobre destino en→pt (n={len(pairs)})")
+ax.legend(); fig.tight_layout(); fig.savefig(f"patch_{TAG}.png", dpi=150)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Variantes que vale la pena correr:</strong> (1) usa idiomas de entrada distintos en fuente y destino (por ejemplo fuente fr→es) para asegurarte de que el concepto transferido no depende del idioma de entrada; (2) promedia el latente de C<sub>S</sub> sobre varias traducciones (mean patching) y verás que P(C<sub>S</sub>) sube: señal de un concepto independiente del idioma; (3) compara la capa en que "salta" el idioma entre Qwen3, Llama y Salamandra. El código oficial de los autores está en <code>Butanium/llm-lang-agnostic</code>.</div>
+  </div>
+
+  <!-- 8. Neuronas de idioma -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-sitemap" aria-hidden="true"></i>8. Neuronas específicas de idioma con LAPE</h2>
+
+    <p>LAPE (Language Activation Probability Entropy, Tang et al. 2024) mide, para cada neurona de las MLP, la probabilidad de activarse en cada idioma y selecciona las de menor entropía entre idiomas: neuronas que se encienden casi solo con un idioma. El paper reporta que son pocas y se concentran en las primeras y últimas capas. En las MLP SwiGLU de Qwen3 y Llama la activación es <code>act_fn(gate_proj(x)) * up_proj(x)</code>; como SiLU(z) &gt; 0 si y solo si z &gt; 0, contar <code>gate_proj(x) &gt; 0</code> equivale a contar activaciones positivas de <code>act_fn</code>, igual que el código original. Para estadísticas sobre millones de tokens usamos hooks de PyTorch directos: son más rápidos que trazar con nnsight y no necesitamos intervenir.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · lape.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+torch.set_grad_enabled(False)
+MODEL = "Qwen/Qwen3-1.7B-Base"
+TAG = MODEL.split("/")[-1]
+TOKENS_PER_LANG = 2_000_000          # 500_000 en presupuesto reducido
+SOURCES = {"es": ("HuggingFaceFW/fineweb-2", "spa_Latn"),
+           "pt": ("HuggingFaceFW/fineweb-2", "por_Latn"),
+           "en": ("HuggingFaceFW/fineweb", "sample-10BT")}
+
+tok = AutoTokenizer.from_pretrained(MODEL)
+tok.padding_side = "right"
+if tok.pad_token is None:
+    tok.pad_token = tok.eos_token
+model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.bfloat16, device_map="auto").eval()
+layers = model.model.layers
+over_zero = torch.zeros(len(layers), model.config.intermediate_size, dtype=torch.int64, device=model.device)
+state = {}
+
+
+def make_hook(i):
+    def hook(module, inputs, output):          # output: gate_proj(x), (B, T, intermediate)
+        active = (output &gt; 0) &amp; state["mask"].unsqueeze(-1)
+        over_zero[i] += active.sum(dim=(0, 1)).to(over_zero.device)
+    return hook
+
+
+handles = [layer.mlp.gate_proj.register_forward_hook(make_hook(i)) for i, layer in enumerate(layers)]
+stats = {}
+for lang, (repo, cfg) in SOURCES.items():
+    over_zero.zero_()
+    n_tokens, batch = 0, []
+    for row in load_dataset(repo, name=cfg, split="train", streaming=True):
+        batch.append(row["text"])
+        if len(batch) &lt; 8:
+            continue
+        enc = tok(batch, return_tensors="pt", truncation=True, max_length=512, padding=True).to(model.device)
+        state["mask"] = enc["attention_mask"].bool()
+        model(**enc, logits_to_keep=1)         # no materializa logits de todo el vocabulario
+        n_tokens += int(enc["attention_mask"].sum())
+        batch = []
+        if n_tokens &gt;= TOKENS_PER_LANG:
+            break
+    stats[lang] = {"n": n_tokens, "over_zero": over_zero.cpu().clone()}
+    print(lang, n_tokens, "tokens")
+for h in handles:
+    h.remove()
+torch.save(stats, f"lape_stats_{TAG}.pt")
+
+# --- selección LAPE (umbrales del código original: top 1% por entropía, percentil 95) ---
+langs = list(stats)
+probs = torch.stack([stats[l]["over_zero"].double() / stats[l]["n"] for l in langs], -1)  # (L, I, n_lang)
+norm = probs / probs.sum(-1, keepdim=True).clamp_min(1e-12)
+entropy = -(norm * norm.clamp_min(1e-12).log()).sum(-1)
+flat = probs.flatten()
+thr = flat.kthvalue(int(flat.numel() * 0.95)).values
+entropy[(probs &gt; thr).sum(-1) == 0] = float("inf")   # descarta neuronas que casi nunca se activan
+_, idx = entropy.flatten().topk(int(entropy.numel() * 0.01), largest=False)
+rows, cols = idx // entropy.size(1), idx % entropy.size(1)
+neurons = {lang: [] for lang in langs}
+for r, c, p in zip(rows.tolist(), cols.tolist(), probs[rows, cols]):
+    for j, lang in enumerate(langs):
+        if p[j] &gt; thr:
+            neurons[lang].append((r, c))
+torch.save(neurons, f"lape_neurons_{TAG}.pt")
+for lang in langs:
+    per_layer = torch.bincount(torch.tensor([r for r, _ in neurons[lang]], dtype=torch.long), minlength=len(layers))
+    print(lang, len(neurons[lang]), "neuronas · por capa:", per_layer.tolist())
+print("compartidas es∩pt:", len(set(neurons["es"]) &amp; set(neurons["pt"])))</code></pre>
+    </div>
+
+    <p>Con solo tres idiomas, dos de ellos hermanos, LAPE encuentra muchas neuronas "iberorromances" activas en es y pt a la vez, y pocas exclusivas de cada uno. Eso es un resultado en sí mismo: mide cuánto separa el modelo ambos idiomas. Si quieres neuronas más limpias, agrega idiomas de control (<code>fra_Latn</code>, <code>ita_Latn</code> de FineWeb-2) para que la entropía discrimine mejor.</p>
+
+    <p class="sub-title">Ablación: ¿las neuronas son causales?</p>
+    <p>Este bloque <strong>continúa <code>lape.py</code></strong> (reusa <code>tok</code>, <code>model</code>, <code>layers</code>, <code>neurons</code>). Anulamos las neuronas de un idioma con un pre-hook en <code>down_proj</code> (su entrada es exactamente <code>act_fn(gate) * up</code>) y medimos la perplejidad en FLORES+ para cada idioma. La predicción de LAPE: la perplejidad sube sobre todo en el idioma ablado.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · lape_ablation.py (continúa lape.py)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import math
+
+FLORES = {"es": "spa_Latn", "pt": "por_Latn", "en": "eng_Latn"}
+eval_texts = {k: load_dataset("openlanguagedata/flores_plus", cfg, split="devtest")["text"][:200]
+              for k, cfg in FLORES.items()}
+
+
+def perplexity(texts, bs=8):
+    nll, ntok = 0.0, 0
+    for i in range(0, len(texts), bs):
+        enc = tok(texts[i:i + bs], return_tensors="pt", padding=True).to(model.device)
+        labels = enc["input_ids"].masked_fill(enc["attention_mask"] == 0, -100)
+        loss = model(**enc, labels=labels).loss
+        n = int((labels[:, 1:] != -100).sum())
+        nll += loss.item() * n
+        ntok += n
+    return math.exp(nll / ntok)
+
+
+def ablate(lang):
+    by_layer = {}
+    for layer, col in neurons[lang]:
+        by_layer.setdefault(layer, []).append(col)
+    handles = []
+    for layer, cols in by_layer.items():
+        idx = torch.tensor(cols, device=model.device)
+
+        def pre_hook(module, args, idx=idx):
+            x = args[0].clone()
+            x[..., idx] = 0
+            return (x,)
+        handles.append(layers[layer].mlp.down_proj.register_forward_pre_hook(pre_hook))
+    return handles
+
+
+print(f"{'ablación':10s}" + "".join(f"{'ppl_' + k:&gt;10s}" for k in FLORES))
+for target in [None, "es", "pt", "en"]:
+    handles = ablate(target) if target else []
+    row = [perplexity(eval_texts[k]) for k in FLORES]
+    for h in handles:
+        h.remove()
+    print(f"{str(target):10s}" + "".join(f"{v:10.2f}" for v in row))</code></pre>
+    </div>
+
+    <div class="warn"><strong>Control obligatorio:</strong> anula también un conjunto aleatorio del mismo tamaño y en las mismas capas. Si la perplejidad sube parecido, el efecto no es específico del idioma sino de quitar neuronas. Reporta siempre el Δ respecto a ese control.</div>
+  </div>
+
+  <!-- 9. Steering de idioma -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-steering-wheel" aria-hidden="true"></i>9. Steering de idioma es→pt con DiffMean</h2>
+
+    <p>CLaS-Bench (32 idiomas) comparó métodos de steering de idioma y encontró que el más simple, DiffMean (diferencia de medias de activaciones entre dos idiomas en el residual stream), supera a neuronas, probes, PCA/LDA y SAEs. Como FLORES+ es paralelo, la diferencia entre las medias de pt y es cancela el contenido y deja casi solo la dirección de idioma. Evaluamos dos ejes análogos a los de CLaS-Bench (control de idioma y relevancia semántica): aquí, % de salidas en portugués según fastText LID y similitud LaBSE con la continuación sin steering como aproximación barata a la preservación del contenido.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · steer_language.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import fasttext
+import torch
+from datasets import load_dataset
+from huggingface_hub import hf_hub_download
+from sentence_transformers import SentenceTransformer
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+torch.set_grad_enabled(False)
+MODEL = "Qwen/Qwen3-1.7B-Base"
+LAYER = 14           # usa la capa del máximo de R@1 de la sección 6; barre 8-20
+tok = AutoTokenizer.from_pretrained(MODEL)
+if tok.pad_token is None:
+    tok.pad_token = tok.eos_token
+model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.bfloat16, device_map="auto").eval()
+
+
+def flores(cfg, split, n):
+    return load_dataset("openlanguagedata/flores_plus", cfg, split=split).sort("id")["text"][:n]
+
+
+def mean_resid(texts, layer, bs=16):
+    tok.padding_side = "right"
+    acc = []
+    for i in range(0, len(texts), bs):
+        enc = tok(texts[i:i + bs], return_tensors="pt", padding=True).to(model.device)
+        h = model(**enc, output_hidden_states=True).hidden_states[layer + 1]   # salida del bloque `layer`
+        m = enc["attention_mask"].unsqueeze(-1).to(h.dtype)
+        m[:, 0] = 0
+        acc.append(((h * m).sum(1) / m.sum(1)).float())
+    return torch.cat(acc).mean(0)
+
+
+# vector es→pt calculado en dev; la evaluación usa devtest (sin fuga)
+v = mean_resid(flores("por_Latn", "dev", 300), LAYER) - mean_resid(flores("spa_Latn", "dev", 300), LAYER)
+
+
+def generate(prompts, alpha):
+    def hook(module, args, output):
+        if isinstance(output, tuple):
+            return (output[0] + alpha * v.to(output[0].dtype),) + tuple(output[1:])
+        return output + alpha * v.to(output.dtype)
+    handle = model.model.layers[LAYER].register_forward_hook(hook)
+    tok.padding_side = "left"
+    enc = tok(prompts, return_tensors="pt", padding=True).to(model.device)
+    out = model.generate(**enc, max_new_tokens=40, do_sample=False)
+    handle.remove()
+    return tok.batch_decode(out[:, enc["input_ids"].shape[1]:], skip_special_tokens=True)
+
+
+# prompts: primera mitad de oraciones en español; el modelo base continúa el texto
+es_test = flores("spa_Latn", "devtest", 100)
+prompts = [" ".join(s.split()[: max(4, len(s.split()) // 2)]) for s in es_test]
+
+lid = fasttext.load_model(hf_hub_download("facebook/fasttext-language-identification", "model.bin"))
+labse = SentenceTransformer("sentence-transformers/LaBSE")
+lang_of = lambda t: lid.predict(t.replace("\n", " "), k=1)[0][0].replace("__label__", "")
+
+base = generate(prompts, 0.0)
+base_emb = labse.encode(base, normalize_embeddings=True)
+for alpha in [0.0, 1.0, 2.0, 4.0, 8.0]:
+    gen = base if alpha == 0 else generate(prompts, alpha)
+    pct_pt = sum(lang_of(g) == "por_Latn" for g in gen) / len(gen)
+    sim = float((labse.encode(gen, normalize_embeddings=True) * base_emb).sum(1).mean())
+    print(f"alpha={alpha:4.1f}  salida en pt={pct_pt:6.1%}  LaBSE vs base={sim:.3f}  ej: {gen[0][:70]!r}")</code></pre>
+    </div>
+
+    <p>Lo esperable es una curva de compromiso: con α bajo casi nada cambia, en un rango intermedio el modelo pasa a portugués conservando el contenido y con α alto la salida se degrada (repeticiones, mezcla de idiomas, pérdida de sentido). Reporta el α y la capa que maximizan "% en pt" con LaBSE por encima de un umbral fijo. Para comparar con features de SAE, Qwen-Scope publica SAEs del residual stream para Qwen3-1.7B-Base (por ejemplo <code>Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50</code>); anular sus features de idioma es una buena extensión, siempre contra DiffMean como baseline.</p>
+  </div>
+
+  <!-- 10. Lecturas para LatamGPT -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-target" aria-hidden="true"></i>10. Cómo traducir los resultados en decisiones para LatamGPT</h2>
+
+    <table class="model-table">
+      <tr><th>Si observas…</th><th>Lectura probable</th><th>Acción</th></tr>
+      <tr><td>Fuerte pico de P(en) en capas medias, también en es↔pt</td><td>El modelo base pivota por el inglés; el conocimiento en es/pt depende de la alineación con ese espacio</td><td>Continual pretraining con datos es/pt + datos paralelos; medir si el pico baja tras el CPT</td></tr>
+      <tr><td>Retrieval es→pt alto en capas medias, pero salida mezclada</td><td>Los conceptos se comparten bien; el problema está en las últimas capas (idioma de superficie)</td><td>SFT con respuestas en el idioma del prompt; considerar SASFT o steering en capas finales</td></tr>
+      <tr><td>Variante regional nunca gana (<em>micro</em> → <em>autobús</em>)</td><td>Colapso hacia la variedad dominante en los datos</td><td>Más datos regionales en CPT/SFT; tests de regresión por variedad</td></tr>
+      <tr><td>Ablar neuronas de pt sube mucho la ppl en es</td><td>Las representaciones es/pt están entrelazadas</td><td>Cuidado al "forzar" idioma por neuronas: preferir DiffMean y evaluarlo en ambos idiomas</td></tr>
+      <tr><td>Steering es→pt funciona con α moderado</td><td>Existe una dirección de idioma lineal y barata</td><td>Usarla como diagnóstico de code-switching o como probe de idioma en producción</td></tr>
+    </table>
+
+    <p><strong>Antes vs después del CPT.</strong> Repite las secciones 4, 6 y 8 con <code>&lt;TU_ORG&gt;/&lt;modelo-base&gt;</code> y <code>&lt;TU_ORG&gt;/&lt;modelo-cpt&gt;</code> con los mismos prompts y semillas. Es una de las formas más baratas de saber qué hizo realmente el continual pretraining en las representaciones, más allá de los benchmarks.</p>
+
+    <p><strong>Safety multilingüe.</strong> La dirección de rechazo resultó casi paralela en 14 idiomas (un vector extraído en inglés desactiva rechazos en los demás). Es buena noticia para transferir probes de seguridad entrenados en inglés, pero también significa que un ataque en un idioma transfiere a los otros. Evalúa la seguridad explícitamente en es/pt (ver <a href="red-teaming-evaluacion-seguridad.html">Red teaming y evaluación de seguridad</a>).</p>
+
+    <div class="warn"><strong>Errores comunes:</strong> (1) usar modelos instruct con prompts sin chat template: estos experimentos están pensados para modelos base; (2) sacar conclusiones con 20 tríos: reporta intervalos de confianza y usa 200+; (3) confundir "probabilidad del token inglés" con "el modelo razona en inglés"; (4) olvidar el control aleatorio en ablaciones; (5) comparar modelos con tokenizers distintos sin revisar cuántos tríos sobrevivieron al filtro en cada uno.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2402.10588" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Do Llamas Work in English? (Wendler et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.15603" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Do Multilingual LLMs Think In English? (Schut et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.04986" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>The Semantic Hub Hypothesis (Wu et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.08745" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Separating Tongue from Thought (Dumas et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2501.06346" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>LLMs Share Representations of Latent Grammatical Concepts (Brinkmann et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2609.00515" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>The Interlingua Hypothesis (Brinton et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2609.01356" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Separating Syntax from Language in Translation (Sonkin et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2402.16438" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Language-Specific Neurons / LAPE (Tang et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.05111" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Unveiling Language-Specific Features via SAEs (Deng et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2507.14894" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SASFT: SAE-guided SFT against code-switching (Deng et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2601.08331" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>CLaS-Bench (Gurgurov et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.17306" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Refusal Direction is Universal Across Safety-Aligned Languages (Wang et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2605.11887" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Qwen-Scope (Deng et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2303.08112" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Tuned Lens (Belrose et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/1905.00414" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Similarity of Neural Network Representations Revisited / CKA (Kornblith et al., 2019)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.14465" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>nnterp (Dumas, 2025)</a>
+      <a class="source-link" href="https://github.com/epfl-dlab/llm-latent-language" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>epfl-dlab/llm-latent-language</a>
+      <a class="source-link" href="https://github.com/Butanium/llm-lang-agnostic" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Butanium/llm-lang-agnostic</a>
+      <a class="source-link" href="https://github.com/RUCAIBox/Language-Specific-Neurons" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>RUCAIBox/Language-Specific-Neurons</a>
+      <a class="source-link" href="https://github.com/ndif-team/nnterp" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>nnterp (GitHub)</a>
+      <a class="source-link" href="https://github.com/ndif-team/nnsight" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>nnsight (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/openlanguagedata/flores_plus" target="_blank" rel="noopener"><i class="ti ti-database"></i>FLORES+ (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/BSC-LT/salamandra-2b" target="_blank" rel="noopener"><i class="ti ti-robot"></i>BSC-LT/salamandra-2b (HF)</a>
+      <a class="source-link" href="https://huggingface.co/collections/Qwen/qwen-scope" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen-Scope (HF collection)</a>
+      <a class="source-link" href="https://huggingface.co/facebook/fasttext-language-identification" target="_blank" rel="noopener"><i class="ti ti-robot"></i>fastText LID (HF)</a>
+      <a class="source-link" href="https://huggingface.co/sentence-transformers/LaBSE" target="_blank" rel="noopener"><i class="ti ti-robot"></i>LaBSE (HF)</a>
+      <a class="source-link" href="interpretabilidad-practica.html"><i class="ti ti-microscope"></i>Guía: Interpretabilidad práctica</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+      <a class="source-link" href="tokenizer-training.html"><i class="ti ti-language"></i>Guía: Entrenar un tokenizer</a>
+      <a class="source-link" href="sft-dataset.html"><i class="ti ti-database"></i>Guía: Dataset de SFT</a>
+      <a class="source-link" href="red-teaming-evaluacion-seguridad.html"><i class="ti ti-checklist"></i>Guía: Red teaming y evaluación de seguridad</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-world"></i>Guía: Evaluación Latam</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

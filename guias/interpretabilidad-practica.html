@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interpretabilidad práctica: logit lens, activation patching y steering — LatamGPT</title>
+<meta name="description" content="Las tres técnicas base de la interpretabilidad (leer capas con logit lens, atribuir causalmente con activation y attribution patching, e intervenir con steering vectors) sobre Qwen3 con nnsight y nnterp, con prompts y vectores de idioma y registro en español y portugués.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Interpretabilidad</div>
+    <h1 class="guide-title">Interpretabilidad práctica: logit lens, activation patching y steering</h1>
+    <div class="guide-desc">Las tres operaciones que sostienen casi toda la interpretabilidad mecanicista (leer capas intermedias, atribuir causalmente un comportamiento a componentes concretos e intervenir el residual stream) aplicadas a Qwen3 con nnsight y nnterp, con hechos latinoamericanos en español y portugués y vectores de steering de idioma (es→pt) y de registro (usted/tú). Sirve también para depurar checkpoints propios: en qué capa se resuelve un hecho y qué cambia tras un continual pretraining.</div>
+  </div>
+
+  <!-- 1. Modelo mental -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-brain" aria-hidden="true"></i>1. Modelo mental y herramientas</h2>
+
+    <p>Un transformer decoder es una pila de bloques que <strong>leen y escriben</strong> sobre un mismo vector por token, el <em>residual stream</em>: cada capa suma la salida de su atención y de su MLP. Por eso las tres técnicas de esta guía se pueden expresar como operaciones sobre ese vector: <strong>leerlo</strong> en cada capa (logit lens), <strong>reemplazarlo</strong> por el de otra entrada y medir el efecto (activation patching) y <strong>sumarle</strong> una dirección (steering).</p>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Embeddings</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Capa l: residual += attn(·)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">residual += mlp(·)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">… × N capas</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">RMSNorm final + lm_head</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Logits</div>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Herramienta</th><th>Qué hace</th><th>Cuándo usarla</th></tr>
+      <tr><td>nnsight 0.7</td><td>Envuelve el modelo HF original; dentro de <code>model.trace()</code> se leen y escriben activaciones y gradientes de cualquier módulo. Ejecuta igual en local o remoto (NDIF)</td><td>Por defecto: misma numérica que HF, cualquier arquitectura, escala a 70B+ sin GPU propia</td></tr>
+      <tr><td>nnterp 1.3</td><td>Capa sobre nnsight que estandariza nombres (<code>layers_output</code>, <code>attentions_output</code>, <code>mlps_output</code>, <code>ln_final</code>, <code>lm_head</code>) y valida la arquitectura al cargar; trae <code>logit_lens</code>, <code>patchscope_lens</code> y <code>steer</code></td><td>Escribir el código una vez y correrlo en Qwen, Llama, Gemma o un checkpoint propio</td></tr>
+      <tr><td>TransformerLens 4</td><td><code>TransformerBridge</code> sobre el modelo HF con hooks estilo <code>hook_resid_post</code> y <code>run_with_cache</code></td><td>Material educativo (ARENA) y código heredado de <code>HookedTransformer</code></td></tr>
+      <tr><td>pyvene</td><td>Intervenciones declarativas y entrenables (interchange, DAS)</td><td>Causal abstraction y búsqueda de variables alineadas</td></tr>
+    </table>
+
+    <div class="tip"><strong>Hardware:</strong> una GPU de 16 GB (T4, L4, A10) alcanza para Qwen3-1.7B-Base en bf16/fp16: los barridos de patching de esta guía (prompts de ~6 tokens) toman unos minutos y el barrido de steering con generación del orden de 10-15 minutos. <strong>Presupuesto reducido:</strong> todo corre en CPU con <code>Qwen/Qwen3-0.6B-Base</code> (bastante más lento, pero viable para prompts cortos) o gratis en un Colab T4. Para 70B no hace falta GPU local: ver la sección 8 (NDIF).</div>
+  </div>
+
+  <!-- 2. Setup -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-settings" aria-hidden="true"></i>2. Entorno reproducible y carga del modelo</h2>
+
+    <p>El tooling de interpretabilidad cambió mucho en 2026 (TransformerLens 4 eliminó <code>HookedTransformer</code>, nnsight 0.8 renombra la clase principal, SAELens 6 exige <code>transformer-lens&lt;4</code>), así que conviene un entorno aislado y con versiones fijadas por guía.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Entorno propio para esta guía (versiones fijadas a octubre 2026)
+uv venv .venv-interp --python 3.11
+source .venv-interp/bin/activate
+uv pip install "torch==2.14.*" "transformers==5.17.*" "nnsight==0.7.0" "nnterp==1.3.0" \
+    plotly pandas scipy datasets huggingface_hub "fasttext-numpy2==0.10.4"
+
+# FLORES+ (sección 6) es gated: acepta los términos en su página de HF y exporta tu token
+export HF_TOKEN="hf_tu_token"</code></pre>
+    </div>
+
+    <p>Elegimos <strong>Qwen3-1.7B-Base</strong>: es denso, no requiere aceptar licencia en HF, es multilingüe (español y portugués razonables para su tamaño) y tiene SAEs y transcoders públicos para seguir con técnicas más avanzadas. Usamos el modelo <em>base</em> y no el instruct para que los prompts sean continuaciones simples sin chat template.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+from nnterp import StandardizedTransformer
+
+MODEL_ID = "Qwen/Qwen3-1.7B-Base"        # en CPU: "Qwen/Qwen3-0.6B-Base"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+if DEVICE == "cuda":
+    DTYPE = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16  # T4 -&gt; fp16
+else:
+    DTYPE = torch.float32
+
+# StandardizedTransformer renombra la arquitectura al esquema de nnterp y la valida al cargar.
+# Los kwargs extra pasan a from_pretrained (transformers v5 usa `dtype`, no `torch_dtype`).
+model = StandardizedTransformer(MODEL_ID, dtype=DTYPE, device_map="auto")
+print(f"capas={model.num_layers}  d_model={model.hidden_size}  vocab={model.vocab_size}")
+
+# Sanity check: el logit lens de la ÚLTIMA capa (ln_final + lm_head sobre su salida)
+# tiene que coincidir con los logits reales del modelo.
+prompt = "La capital de Chile es"
+with model.trace(prompt):
+    # Orden del forward: primero la última capa y después los logits del modelo
+    lens_last = model.project_on_vocab(model.layers_output[model.num_layers - 1]).save()
+    final_logits = model.logits.save()
+
+max_diff = (final_logits.float() - lens_last.float()).abs().max().item()
+print(f"max |logits - lens(última capa)| = {max_diff:.4f}")   # ~0 salvo redondeo bf16
+
+top = final_logits[0, -1].float().softmax(-1).topk(5)
+for p, t in zip(top.values.tolist(), top.indices.tolist()):
+    print(f"{model.tokenizer.decode(t)!r:14} {p:.3f}")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Todo lo que uses fuera del <code>with</code> necesita <code>.save()</code>.</strong> Dentro del bloque nnsight ejecuta el modelo real y tu código se intercala con el forward; además hay que acceder a los módulos <em>en el orden del forward</em> (capa 3 antes que capa 10, atención antes que MLP). Leer en desorden lanza un error de acceso fuera de orden (<code>OutOfOrderError</code>, subclase de <code>MissedProviderError</code>, en 0.7).</div>
+  </div>
+
+  <!-- 3. Logit lens -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-eye" aria-hidden="true"></i>3. Logit lens en español y portugués</h2>
+
+    <p>El <strong>logit lens</strong> aplica la norma final y el unembedding al residual stream de cada capa intermedia, como si el modelo terminara ahí. Graficando P(respuesta) por capa se ve en qué profundidad "aparece" un hecho. Usamos hechos latinoamericanos con el mismo contenido en es y pt para comparar ambos idiomas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa el bloque anterior (usa `model`).
+import pandas as pd
+import plotly.express as px
+from nnterp.interventions import logit_lens
+
+FACTS = [  # (idioma, prompt, respuesta con espacio inicial)
+    ("es", "La capital de Chile es", " Santiago"),
+    ("pt", "A capital do Chile é", " Santiago"),
+    ("es", "La capital de Colombia es", " Bogotá"),
+    ("pt", "A capital da Colômbia é", " Bogotá"),
+    ("es", "La capital de Uruguay es", " Montevideo"),
+    ("pt", "A capital do Uruguai é", " Montevidéu"),
+    ("es", "La moneda oficial de México es el", " peso"),
+    ("pt", "A moeda oficial do Brasil é o", " real"),
+    ("es", "El libertador de Argentina fue José de", " San"),
+    ("pt", "O primeiro imperador do Brasil foi Dom", " Pedro"),
+]   # amplíalo a ~50 prompts por idioma para curvas estables
+
+
+def first_token(text: str) -&gt; int:
+    """Primer token de la respuesta: el logit lens mide solo el siguiente token."""
+    return model.tokenizer.encode(text, add_special_tokens=False)[0]
+
+
+probs = logit_lens(model, [p for _, p, _ in FACTS])   # (n_prompts, n_capas, vocab)
+
+rows = []
+for i, (lang, prompt, answer) in enumerate(FACTS):
+    tid = first_token(answer)
+    top1 = probs[i].argmax(-1)
+    hits = (top1 == tid).nonzero().flatten().tolist()
+    print(f"[{lang}] {prompt!r:45} top-1 desde la capa {hits[0] if hits else '—'}")
+    for layer in range(probs.shape[1]):
+        rows.append({"lang": lang, "prompt": prompt, "layer": layer,
+                     "p_target": probs[i, layer, tid].item()})
+
+df = pd.DataFrame(rows)
+df.to_csv("logit_lens_es_pt.csv", index=False)
+curve = df.groupby(["lang", "layer"], as_index=False)["p_target"].mean()
+fig = px.line(curve, x="layer", y="p_target", color="lang",
+              title=f"P(respuesta) por capa con logit lens: {MODEL_ID}")
+fig.write_html("logit_lens_es_pt.html")</code></pre>
+    </div>
+
+    <div class="sub-title">Mapa capa × posición del token top-1</div>
+    <p>La curva agregada esconde lo interesante. El mapa de top-1 por capa y posición muestra qué "piensa" el modelo en cada token: en modelos con mucho inglés en el pretraining suelen aparecer tokens en inglés en capas medias antes de la respuesta en español o portugués (el tema de la guía <a href="idioma-latente-es-pt.html">¿En qué idioma piensa el modelo?</a>).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa el bloque anterior (usa `model`).
+import plotly.graph_objects as go
+
+prompt = "A capital do Chile é"
+with model.trace(prompt):
+    per_layer = [model.project_on_vocab(model.layers_output[l]).save()
+                 for l in range(model.num_layers)]          # en orden del forward
+
+ids = model.tokenizer(prompt, add_special_tokens=False)["input_ids"]
+x_labels = [f"{i}:{model.tokenizer.decode(t)}" for i, t in enumerate(ids)]
+z, text = [], []
+for logits in per_layer:
+    p, idx = logits[0].float().softmax(-1).max(-1)          # (seq,)
+    z.append(p.tolist())
+    text.append([model.tokenizer.decode(int(t)) for t in idx])
+
+fig = go.Figure(go.Heatmap(z=z, text=text, texttemplate="%{text}", x=x_labels,
+                           y=list(range(model.num_layers)), colorscale="Blues"))
+fig.update_layout(title=f"Logit lens top-1: {prompt}", yaxis_title="capa")
+fig.write_html("logit_lens_heatmap_pt.html")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Límites del logit lens:</strong> en capas tempranas el residual todavía no está en la base del unembedding y el lens da basura o tokens de la entrada; por eso el <em>tuned lens</em> entrena una traslación afín por capa. <em>Patchscopes</em> (<code>nnterp.interventions.patchscope_lens</code>) es otra alternativa: inyecta el estado oculto en un prompt objetivo y deja que el propio modelo lo describa. Y lo más importante: que un concepto sea <strong>decodificable</strong> en una capa no prueba que el modelo lo <strong>use</strong>; para eso está el patching.</div>
+  </div>
+
+  <!-- 4. Activation patching -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-exchange" aria-hidden="true"></i>4. Activation patching: causalidad capa × posición</h2>
+
+    <p>Corremos un prompt <strong>limpio</strong> (por ejemplo "La capital de Chile es" → Santiago) y uno <strong>corrupto</strong> que solo difiere en el sujeto ("La capital de Perú es" → Lima); el código toma el primer par con igual número de tokens. Luego, en el run corrupto, reemplazamos la activación de una capa y una posición por la del run limpio y medimos cuánto se recupera la preferencia por la respuesta limpia. La métrica es el <em>logit diff</em> normalizado: 0 = sin efecto, 1 = recupera todo el comportamiento limpio.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa los bloques anteriores (usa `model` y `first_token`).
+import itertools
+import torch
+import plotly.graph_objects as go
+
+CANDIDATES = [("Chile", " Santiago"), ("Perú", " Lima"), ("Colombia", " Bogotá"),
+              ("Uruguay", " Montevideo"), ("Paraguay", " Asunción"), ("Ecuador", " Quito"),
+              ("Venezuela", " Caracas"), ("Argentina", " Buenos"), ("Honduras", " Tegucigalpa")]
+TEMPLATE = "La capital de {} es"
+
+
+def n_tokens(s: str) -&gt; int:
+    return len(model.tokenizer.encode(s, add_special_tokens=False))
+
+
+# El patching por posición exige pares con el MISMO número de tokens
+pairs = []
+for (c1, a1), (c2, a2) in itertools.permutations(CANDIDATES, 2):
+    clean, corrupt = TEMPLATE.format(c1), TEMPLATE.format(c2)
+    if n_tokens(clean) == n_tokens(corrupt) and first_token(a1) != first_token(a2):
+        pairs.append((clean, corrupt, first_token(a1), first_token(a2)))
+print(f"{len(pairs)} pares válidos; ejemplo: {pairs[0][:2]}")
+clean, corrupt, t_clean, t_corrupt = pairs[0]
+
+
+def logit_diff(last_logits: torch.Tensor) -&gt; float:
+    return (last_logits[0, t_clean] - last_logits[0, t_corrupt]).float().item()
+
+
+def patch_sweep(component: str) -&gt; torch.Tensor:
+    """component: 'layers_output' (residual), 'attentions_output' o 'mlps_output'."""
+    L = model.num_layers
+    with model.trace(clean):
+        clean_acts = [getattr(model, component)[l].save() for l in range(L)]
+        clean_last = model.logits[:, -1, :].save()
+    with model.trace(corrupt):
+        corrupt_last = model.logits[:, -1, :].save()
+    ld_clean, ld_corrupt = logit_diff(clean_last), logit_diff(corrupt_last)
+
+    seq_len = clean_acts[0].shape[1]
+    recovered = torch.zeros(L, seq_len)
+    for layer in range(L):
+        for pos in range(seq_len):
+            with model.trace(corrupt):
+                h = getattr(model, component)[layer].clone()
+                h[:, pos, :] = clean_acts[layer][:, pos, :]
+                getattr(model, component)[layer] = h        # escribir la activación parchada
+                patched_last = model.logits[:, -1, :].save()
+            recovered[layer, pos] = (logit_diff(patched_last) - ld_corrupt) / (ld_clean - ld_corrupt)
+    return recovered
+
+
+ids = model.tokenizer(clean, add_special_tokens=False)["input_ids"]
+x_labels = [f"{i}:{model.tokenizer.decode(t)}" for i, t in enumerate(ids)]
+results = {}
+for comp in ["layers_output", "attentions_output", "mlps_output"]:
+    results[comp] = patch_sweep(comp)
+    fig = go.Figure(go.Heatmap(z=results[comp].tolist(), x=x_labels,
+                               y=list(range(model.num_layers)), colorscale="RdBu", zmid=0))
+    fig.update_layout(title=f"Patching {comp}: {clean} vs {corrupt}", yaxis_title="capa")
+    fig.write_html(f"patching_{comp}.html")
+torch.save(results, "patching_results.pt")</code></pre>
+    </div>
+
+    <p>Patrón típico en recall factual (el mismo que encontró ROME en GPT): en el <strong>residual</strong> la información vive primero en la posición del sujeto ("Chile") durante las capas tempranas y medias, y luego "se mueve" a la última posición; los <strong>MLPs</strong> de capas medias sobre el sujeto concentran el efecto y la <strong>atención</strong> de capas medias-tardías en la última posición es la que copia el atributo hacia la predicción.</p>
+
+    <div class="tip"><strong>Ángulo LatamGPT:</strong> corre el mismo barrido sobre el checkpoint base y sobre el de continual pretraining en español. Si el pico en el sujeto se desplaza de capa o se vuelve más nítido en es/pt, tienes evidencia mecanicista de qué cambió, no solo una diferencia de accuracy. Repite en portugués con <code>"A capital do {} é"</code> (filtrando de nuevo por longitud en tokens).</div>
+  </div>
+
+  <!-- 5. Attribution patching -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-math-function" aria-hidden="true"></i>5. Attribution patching: todos los parches con un gradiente</h2>
+
+    <p>El patching exacto cuesta un forward por (capa, posición, componente). <strong>Attribution patching</strong> lo aproxima con una expansión de Taylor de primer orden: efecto ≈ (act<sub>limpio</sub> − act<sub>corrupto</sub>) · ∂métrica/∂act, evaluado en el run corrupto. Un forward y un backward dan la estimación para todas las capas y posiciones a la vez, lo que lo vuelve viable en modelos grandes y prompts largos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa el bloque anterior (usa model, clean, corrupt, t_clean, t_corrupt,
+# logit_diff y results).
+import torch
+from scipy.stats import spearmanr
+
+L = model.num_layers
+with model.trace(clean):
+    clean_acts = [model.layers_output[l].save() for l in range(L)]
+    clean_last = model.logits[:, -1, :].save()
+
+with model.trace(corrupt):
+    corrupt_acts = [model.layers_output[l].save() for l in range(L)]
+    last = model.logits[:, -1, :]               # una sola lectura de los logits
+    corrupt_last = last.save()
+    metric = last[0, t_clean] - last[0, t_corrupt]
+    with metric.backward():
+        # En el backward los gradientes llegan en orden INVERSO al forward
+        grads = {l: corrupt_acts[l].grad.save() for l in reversed(range(L))}
+
+ld_clean, ld_corrupt = logit_diff(clean_last), logit_diff(corrupt_last)
+attr = torch.zeros(L, clean_acts[0].shape[1])
+for l in range(L):
+    delta = (clean_acts[l] - corrupt_acts[l]).float()               # (1, seq, d)
+    attr[l] = (delta * grads[l].float()).sum(-1)[0].cpu() / (ld_clean - ld_corrupt)
+
+exact = results["layers_output"]
+rho = spearmanr(attr.flatten().numpy(), exact.flatten().numpy()).statistic
+print(f"Spearman(attribution, patching exacto) en el residual = {rho:.2f}")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Método</th><th>Costo (Qwen3-1.7B, 28 capas, ~6 tokens)</th><th>Cuándo falla</th></tr>
+      <tr><td>Activation patching exacto</td><td>~170 forwards por componente</td><td>Prácticamente nunca (es la definición del efecto), pero no escala a prompts largos</td></tr>
+      <tr><td>Attribution patching</td><td>1 forward + 1 backward</td><td>Activaciones con efecto muy no lineal: residual de capas tempranas y parches sobre el sujeto; ahí se subestima</td></tr>
+    </table>
+
+    <div class="tip"><strong>Uso recomendado:</strong> attribution patching para filtrar (encontrar las 20-50 ubicaciones candidatas en un barrido grande) y patching exacto para confirmar. El backward calcula también gradientes de los pesos: con 1.7B en bf16 suma ~3.4 GB a la memoria, holgado en 16 GB.</div>
+  </div>
+
+  <!-- 6. Steering -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-steering-wheel" aria-hidden="true"></i>6. Steering con DiffMean: idioma y registro</h2>
+
+    <p>Un <strong>steering vector</strong> es una dirección que se suma al residual stream durante la inferencia. La receta más simple y robusta es <strong>DiffMean</strong> (nombre que usa AxBench para la idea de CAA): promedio de activaciones sobre ejemplos con el concepto menos el promedio sobre ejemplos sin él. Construimos dos vectores útiles para un modelo latinoamericano:</p>
+    <table class="model-table">
+      <tr><th>Vector</th><th>Datos contrastivos</th><th>Uso</th></tr>
+      <tr><td>portugués − español</td><td>200 oraciones paralelas de FLORES+ (<code>por_Latn</code> vs <code>spa_Latn</code>, split <code>dev</code>)</td><td>Diagnosticar y corregir code-switching; medir qué tan lineal es el idioma en el modelo</td></tr>
+      <tr><td>formal − informal</td><td>Pares mínimos usted / tú (extensible a vos)</td><td>Controlar el registro sin reentrenar ni cambiar el prompt de sistema</td></tr>
+    </table>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa la sección 2 (usa `model`, `MODEL_ID`, `DEVICE` y `DTYPE`).
+import torch
+from datasets import load_dataset
+
+N = 200
+es = load_dataset("openlanguagedata/flores_plus", "spa_Latn", split="dev").sort("id")
+pt = load_dataset("openlanguagedata/flores_plus", "por_Latn", split="dev").sort("id")
+
+
+def mean_acts(texts: list[str]) -&gt; torch.Tensor:
+    """Promedio sobre tokens y ejemplos del residual de cada capa -&gt; (n_capas, d)."""
+    total = None
+    for t in texts:
+        with model.trace(t):
+            h = torch.stack([model.layers_output[l][0].mean(0)
+                             for l in range(model.num_layers)]).save()
+        h = h.detach().float().cpu()
+        total = h if total is None else total + h
+    return total / len(texts)
+
+
+v_pt = mean_acts(pt["text"][:N]) - mean_acts(es["text"][:N])
+
+FORMAL = ["¿Usted quiere un café?", "Usted tiene que firmar aquí.", "¿Cómo está usted hoy?",
+          "Le agradezco que haya venido.", "¿Usted sabe dónde queda la estación?",
+          "Por favor, siéntese y espere su turno."]
+INFORMAL = ["¿Tú quieres un café?", "Tú tienes que firmar aquí.", "¿Cómo estás tú hoy?",
+            "Te agradezco que hayas venido.", "¿Tú sabes dónde queda la estación?",
+            "Por favor, siéntate y espera tu turno."]   # usa 100+ pares en serio
+v_formal = mean_acts(FORMAL) - mean_acts(INFORMAL)
+
+torch.save({"model": MODEL_ID, "pt_minus_es": v_pt, "formal_minus_informal": v_formal},
+           "steering_vectors.pt")
+
+# Prueba rápida con nnterp: ¿cambia el siguiente token al sumar el vector en la capa 14?
+LAYER = 14
+with model.trace("Hoy en la mañana fuimos al mercado y compramos"):
+    model.steer(layers=LAYER, steering_vector=v_pt[LAYER].to(DEVICE, DTYPE), factor=4.0)
+    nxt = model.next_token_probs.save()
+print([model.tokenizer.decode(t) for t in nxt[0].topk(8).indices.tolist()])</code></pre>
+    </div>
+
+    <div class="sub-title">Generación con steering y evaluación</div>
+    <p>Para generar texto aplicamos el vector con un <code>forward_hook</code> de PyTorch sobre el modelo HF: no depende de la versión de nnsight y es el mismo mecanismo que usarías en un servicio (EasySteer lo lleva a vLLM). Barremos capa y coeficiente α y medimos tres cosas: % de salidas en portugués según fastText LID, perplejidad de la salida bajo el modelo <em>sin</em> steering (fluidez) y una inspección manual o con juez.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import statistics
+import fasttext                       # paquete fasttext-numpy2 (compatible con NumPy 2)
+import pandas as pd
+import torch
+from huggingface_hub import hf_hub_download
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+vecs = torch.load("steering_vectors.pt")
+MODEL_ID = vecs["model"]
+tok = AutoTokenizer.from_pretrained(MODEL_ID)
+lm = AutoModelForCausalLM.from_pretrained(MODEL_ID, dtype=torch.bfloat16, device_map="auto").eval()
+lid = fasttext.load_model(hf_hub_download("facebook/fasttext-language-identification", "model.bin"))
+
+PROMPTS = ["Cuando llegamos a Valparaíso, lo primero que vimos fue",
+           "La mejor forma de aprender a programar es",
+           "Mi abuela siempre decía que la cocina",
+           "El partido del domingo terminó con",
+           "Para preparar unas buenas empanadas hay que"]
+
+
+def add_steering(layer: int, vec: torch.Tensor, alpha: float):
+    v = (alpha * vec).to(lm.device, lm.dtype)
+
+    def hook(module, args, output):
+        # En transformers v5 las capas decoder devuelven un tensor; v4 devolvía una tupla
+        if isinstance(output, tuple):
+            return (output[0] + v,) + tuple(output[1:])
+        return output + v
+
+    return lm.model.layers[layer].register_forward_hook(hook)
+
+
+@torch.no_grad()
+def generate(prompt: str, max_new_tokens: int = 40) -&gt; str:
+    enc = tok(prompt, return_tensors="pt").to(lm.device)
+    out = lm.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False)
+    return tok.decode(out[0, enc["input_ids"].shape[1]:], skip_special_tokens=True)
+
+
+@torch.no_grad()
+def perplexity(prompt: str, continuation: str) -&gt; float:
+    full = tok(prompt + continuation, return_tensors="pt").to(lm.device)
+    labels = full["input_ids"].clone()
+    labels[:, : len(tok(prompt)["input_ids"])] = -100      # solo la continuación
+    return torch.exp(lm(**full, labels=labels).loss).item()
+
+
+def lang_of(text: str) -&gt; str:
+    labels, _ = lid.predict(text.replace("\n", " "), k=1)
+    return labels[0].replace("__label__", "")              # p. ej. "spa_Latn", "por_Latn"
+
+
+vec = vecs["pt_minus_es"]
+rows = []
+for layer in [6, 10, 14, 18, 22]:
+    for alpha in [0.0, 1.0, 2.0, 4.0]:
+        handle = add_steering(layer, vec[layer], alpha)
+        try:
+            outs = [generate(p) for p in PROMPTS]
+        finally:
+            handle.remove()                                 # nunca dejes un hook colgado
+        ppls = [perplexity(p, o) for p, o in zip(PROMPTS, outs) if o.strip()]
+        rows.append({"layer": layer, "alpha": alpha,
+                     "pct_pt": sum(lang_of(o) == "por_Latn" for o in outs) / len(outs),
+                     "ppl": statistics.median(ppls) if ppls else float("nan"),
+                     "ejemplo": outs[0][:80]})
+
+df = pd.DataFrame(rows)
+df.to_csv("steering_sweep.csv", index=False)
+print(df.to_string())</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Lo que vas a ver</th><th>Interpretación</th></tr>
+      <tr><td>α pequeño, cualquier capa</td><td>Sin cambio de idioma: el vector es chico respecto de la norma del residual</td></tr>
+      <tr><td>Capas medias, α intermedio</td><td>Zona útil: la salida pasa a portugués y la perplejidad sube poco</td></tr>
+      <tr><td>Capas tempranas o α grande</td><td>Texto degenerado (repeticiones, mezcla de idiomas): % pt alto pero perplejidad disparada</td></tr>
+      <tr><td>Capas finales</td><td>Afecta pocos tokens o solo el primero: el idioma ya se decidió antes</td></tr>
+    </table>
+
+    <div class="warn"><strong>Steering no es gratis ni siempre la mejor opción.</strong> Su efecto varía mucho entre inputs y conceptos, y en AxBench una instrucción en el prompt superó a todos los métodos de steering para controlar conceptos. Úsalo como herramienta de <em>diagnóstico</em> (¿el idioma o el registro son lineales? ¿en qué capa?) y como control barato cuando no puedes tocar el prompt; reporta siempre el control "solo prompt" junto al steering. CLaS-Bench (2026) ofrece una evaluación sistemática de steering de idioma.</div>
+  </div>
+
+  <!-- 7. Trampas -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i>7. Trampas frecuentes</h2>
+
+    <table class="model-table">
+      <tr><th>Trampa</th><th>Síntoma</th><th>Qué hacer</th></tr>
+      <tr><td>Token BOS y attention sinks</td><td>La posición 0 tiene una norma enorme y domina promedios y heatmaps</td><td>Excluir la posición 0 de los promedios DiffMean si el tokenizer agrega BOS; graficar en escala por fila. Qwen3 base no agrega BOS, Llama sí</td></tr>
+      <tr><td>Respuestas multi-token</td><td>" Tegucigalpa" o " Asunción" se parten en varios tokens</td><td>Medir solo el primer token y verificar que distinga entre limpio y corrupto (el filtro de la sección 4 lo hace)</td></tr>
+      <tr><td><code>.output[0]</code> heredado</td><td>Código de tutoriales viejos elige el primer elemento del <em>batch</em> en vez de la tupla</td><td>En transformers v5 las capas devuelven un tensor; con nnterp usa <code>layers_output[l]</code> y olvídate de la diferencia</td></tr>
+      <tr><td>Chat template</td><td>Patching sobre un modelo instruct sin template da resultados de "otro modelo"</td><td>Con modelos instruct, aplica <code>apply_chat_template</code> y ten en cuenta que las posiciones incluyen tokens de rol</td></tr>
+      <tr><td>Métrica y corrupción</td><td>Conclusiones que cambian al pasar de probabilidad a logit diff, o de ruido gaussiano a reemplazo de tokens</td><td>Logit diff normalizado y corrupción simétrica (reemplazar el sujeto por otro del mismo tipo), como recomiendan Zhang &amp; Nanda</td></tr>
+      <tr><td>Decodificable ≠ causal</td><td>El logit lens muestra la respuesta en la capa 15 y se concluye que "se calcula ahí"</td><td>Confirmar con patching; el lens solo dice que la información es legible linealmente</td></tr>
+      <tr><td>Pocos prompts</td><td>Un heatmap llamativo que no se repite con otro par</td><td>Promediar el barrido sobre todos los pares válidos y en ambos idiomas</td></tr>
+    </table>
+  </div>
+
+  <!-- 8. Escalar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-cloud-computing" aria-hidden="true"></i>8. Escalar a 70B y migrar de versión</h2>
+
+    <p>Con nnsight el mismo código corre en remoto sobre NDIF (National Deep Inference Fabric): el modelo vive en sus servidores y tu intervención se ejecuta ahí, sin GPU local. Requiere una API key gratuita y que el modelo esté disponible en ese momento (revisa la página de estado de NDIF).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from nnsight import CONFIG
+from nnterp import StandardizedTransformer
+from nnterp.interventions import logit_lens
+
+CONFIG.set_default_api_key("TU_API_KEY_DE_NDIF")
+
+# Elige un modelo que figure como disponible en el estado de NDIF; los gated exigen
+# haber aceptado la licencia en HF con la misma cuenta.
+big = StandardizedTransformer("meta-llama/Llama-3.1-70B", remote=True)
+probs = logit_lens(big, ["La capital de Chile es", "A capital do Chile é"], remote=True)
+santiago = big.tokenizer.encode(" Santiago", add_special_tokens=False)[0]
+print(probs[:, :, santiago])        # P(" Santiago") por capa en 70B
+
+# Dentro de un trace remoto, igual que en local:
+with big.trace("La capital de Chile es", remote=True):
+    mid = big.layers_output[big.num_layers // 2][0, -1].save()
+print(mid.shape)</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Cambio</th><th>Antes</th><th>Ahora</th></tr>
+      <tr><td>nnsight 0.8 (rc, sep-2026)</td><td><code>from nnsight import LanguageModel</code></td><td><code>TransformersModel(repo, ...)</code>; <code>LanguageModel</code> queda deprecada y <code>model.generate()</code> devuelve ids en <code>tracer.result</code>. NDIF sigue en 0.7 hasta actualizarse, por eso esta guía fija 0.7.0</td></tr>
+      <tr><td>TransformerLens 4 (sep-2026)</td><td><code>HookedTransformer.from_pretrained(name)</code></td><td><code>TransformerBridge.boot_transformers(name)</code>; <code>enable_compatibility_mode()</code> reproduce la numérica vieja (LayerNorm plegada)</td></tr>
+      <tr><td>TransformerLens 4</td><td><code>transformer_lens.utils</code></td><td><code>transformer_lens.utilities</code> (misma API)</td></tr>
+    </table>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Alternativa con TransformerLens 4 (en otro entorno: SAELens 6 aún exige transformer-lens&lt;4)
+from transformer_lens.model_bridge import TransformerBridge
+
+bridge = TransformerBridge.boot_transformers("Qwen/Qwen3-1.7B-Base")
+logits, cache = bridge.run_with_cache("La capital de Chile es")
+print(logits.shape, len(cache.keys()))
+print([k for k in cache.keys() if "resid" in k][:5])   # inspecciona los nombres de hooks</code></pre>
+    </div>
+
+    <div class="tip"><strong>Siguientes pasos:</strong> con estas tres herramientas ya puedes (1) comparar en qué capa se resuelven hechos en el checkpoint base vs. el de continual pretraining, (2) estudiar el idioma latente y el code-switching en <a href="idioma-latente-es-pt.html">¿En qué idioma piensa el modelo?</a> y (3) entrenar probes lineales sobre las mismas activaciones como clasificadores de seguridad baratos para es/pt (ver <a href="guardrails-produccion-vllm.html">Guardrails en producción</a>). El curso ARENA (capítulo 1) es la mejor práctica guiada para profundizar.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2407.14561" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>NNsight and NDIF (Fiotto-Kaufman et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.14465" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>nnterp (Dumas, 2025)</a>
+      <a class="source-link" href="https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>interpreting GPT: the logit lens (nostalgebraist, 2020)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2303.08112" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Tuned Lens (Belrose et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2401.06102" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Patchscopes (Ghandeharioun et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2202.05262" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>ROME: Locating and Editing Factual Associations (Meng et al., 2022)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.16042" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Best Practices of Activation Patching (Zhang &amp; Nanda, 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2404.15255" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>How to use and interpret activation patching (Heimersheim &amp; Nanda, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2310.10348" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Attribution Patching Outperforms ACDC (Syed et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2312.06681" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>CAA: Contrastive Activation Addition (Panickssery et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2501.17148" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>AxBench (Wu et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2601.08331" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>CLaS-Bench (Gurgurov et al., 2026)</a>
+      <a class="source-link" href="https://github.com/ndif-team/nnsight" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>nnsight (GitHub)</a>
+      <a class="source-link" href="https://ndif-team.github.io/nnterp/" target="_blank" rel="noopener"><i class="ti ti-book"></i>nnterp docs</a>
+      <a class="source-link" href="https://transformerlensorg.github.io/TransformerLens/content/migrating_to_v4.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Migrating to TransformerLens 4.0</a>
+      <a class="source-link" href="https://github.com/ZJU-REAL/EasySteer" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>EasySteer (steering en vLLM)</a>
+      <a class="source-link" href="https://learn.arena.education/chapter1_transformer_interp/" target="_blank" rel="noopener"><i class="ti ti-school"></i>ARENA, Chapter 1: Transformer Interpretability</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-1.7B-Base" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-1.7B-Base (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/openlanguagedata/flores_plus" target="_blank" rel="noopener"><i class="ti ti-database"></i>FLORES+ (HF, gated)</a>
+      <a class="source-link" href="https://huggingface.co/facebook/fasttext-language-identification" target="_blank" rel="noopener"><i class="ti ti-language"></i>fastText LID (HF)</a>
+      <a class="source-link" href="idioma-latente-es-pt.html"><i class="ti ti-language"></i>Guía: ¿En qué idioma piensa el modelo?</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+      <a class="source-link" href="debugging.html"><i class="ti ti-bug"></i>Guía: Debugging de entrenamiento</a>
+      <a class="source-link" href="llm-desde-cero.html"><i class="ti ti-stack-2"></i>Guía: Un LLM moderno desde cero</a>
+      <a class="source-link" href="guardrails-produccion-vllm.html"><i class="ti ti-shield-check"></i>Guía: Guardrails en producción</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>
