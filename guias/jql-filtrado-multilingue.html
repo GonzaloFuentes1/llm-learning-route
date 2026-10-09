@@ -92,7 +92,7 @@
 
   <!-- 1. Por qué JQL -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>1. Qué es JQL y qué resultados reporta</div>
+    <h2 class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>1. Qué es JQL y qué resultados reporta</h2>
 
     <div class="pipeline-flow">
       <div class="flow-step">Gold set humano (511 docs × 35 idiomas)</div>
@@ -120,7 +120,7 @@
 
   <!-- 2. Comparación con FineWeb-Edu -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-arrows-diff" aria-hidden="true"></i>2. JQL frente a la guía FineWeb-Edu</div>
+    <h2 class="section-title"><i class="ti ti-arrows-diff" aria-hidden="true"></i>2. JQL frente a la guía FineWeb-Edu</h2>
 
     <p>La guía <a href="fineweb-edu.html">FineWeb-Edu: etiquetar con LLM y clasificador BERT</a> enseña la receta original de 2024. Sigue siendo útil para entender el patrón LLM → clasificador, pero tiene tres debilidades que JQL resuelve.</p>
 
@@ -140,7 +140,7 @@
 
   <!-- 3. Artefactos -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-package" aria-hidden="true"></i>3. Artefactos públicos: qué cómputo te ahorras</div>
+    <h2 class="section-title"><i class="ti ti-package" aria-hidden="true"></i>3. Artefactos públicos: qué cómputo te ahorras</h2>
 
     <p>JQL publicó casi todo lo que hace falta. Si partes de esto, el único paso que de verdad cuesta GPU es puntuar el texto final, y hasta eso se puede acotar.</p>
 
@@ -153,12 +153,12 @@
       <tr><td>JQL-AI/fw2_embeddings</td><td>Embeddings Arctic de 768 dim en HDF5 (<code>train/embeddings</code>, <code>train/document_id</code>); por_Latn filtered ≈ 304 GB</td><td>Embeber ~1.4B documentos para cabezas nuevas</td></tr>
     </table>
 
-    <div class="warn"><strong>El join con el texto no es trivial.</strong> En <code>fw2_edu_scores</code> y <code>fw2_embeddings</code> la clave es <code>document_id</code> con el formato <code>"&lt;hash&gt;_&lt;n&gt;"</code>. Ese <em>no</em> es el <code>id</code> de FineWeb2 (<code>&lt;urn:uuid:...&gt;</code>), y los shards (<code>000_000_00000.jsonl</code>) no coinciden con los parquet actuales de FineWeb2 (<code>000_00000.parquet</code>), porque JQL trabajó sobre una versión anterior al re-sharding de FineWeb2 v2.1. Los cards no documentan cómo volver al texto. Úsalos sin riesgo para lo que no necesita texto: calibrar percentiles, comparar cabezas y medir la distribución de cabezas nuevas. Para materializar el subconjunto final, puntúa tú el texto (§10) o valida primero un mapeo sobre una muestra.</div>
+    <div class="warn"><strong>El join con el texto no es trivial.</strong> En <code>fw2_edu_scores</code> y <code>fw2_embeddings</code> la clave es <code>document_id</code> con el formato <code>"&lt;hash&gt;_&lt;n&gt;"</code>. Ese <em>no</em> es el <code>id</code> de FineWeb2 (<code>&lt;urn:uuid:...&gt;</code>), y los shards (<code>000_000_00000.jsonl</code>) no coinciden con los parquet actuales de FineWeb2 (<code>000_00000.parquet</code>), probablemente porque JQL trabajó sobre una versión de FineWeb2 anterior al re-sharding actual. Los cards no documentan cómo volver al texto. Úsalos sin riesgo para lo que no necesita texto: calibrar percentiles, comparar cabezas y medir la distribución de cabezas nuevas. Para materializar el subconjunto final, puntúa tú el texto (§10) o valida primero un mapeo sobre una muestra.</div>
   </div>
 
   <!-- 4. Hardware y entornos -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>4. Hardware, costos y entornos</div>
+    <h2 class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>4. Hardware, costos y entornos</h2>
 
     <table class="model-table">
       <tr><th>Paso</th><th>Ruta A: reutilizar artefactos</th><th>Ruta B: jueces propios</th></tr>
@@ -166,14 +166,14 @@
       <tr><td>Anotar 500k docs/idioma</td><td>0 GPU-h (JQL-LLM-Edu-Annotations)</td><td>~100-200 H100-h para 3 jueces con n=3 (estimación propia)</td></tr>
       <tr><td>Embeddings de la muestra (1M docs)</td><td colspan="2">~1.5 A100-h (JQL reporta ~11k docs/min por A100 con 690 tokens promedio)</td></tr>
       <tr><td>Entrenar 3 cabezas</td><td colspan="2">Minutos en cualquier GPU; también corre en CPU</td></tr>
-      <tr><td>Calibrar percentiles</td><td colspan="2">CPU + ~5-10 GB de descarga desde fw2_edu_scores</td></tr>
+      <tr><td>Calibrar percentiles</td><td colspan="2">CPU + ~10 GB de descarga desde fw2_edu_scores (2 shards por split e idioma)</td></tr>
       <tr><td>Puntuar FineWeb2 completo</td><td colspan="2">spa_Latn (872M docs) ≈ 1,300 A100-h; por_Latn (486M) ≈ 740 A100-h; escala lineal y sin comunicación entre GPUs</td></tr>
       <tr><td>Proxies downstream</td><td colspan="2">150M con 10B tokens ≈ 6 H100-h; 1B con 30B tokens ≈ 125 H100-h por variante (regla 6·N·D, ~40% MFU)</td></tr>
     </table>
 
     <div class="tip"><strong>Presupuesto reducido:</strong> con una sola GPU de 24 GB (L4, RTX 4090) puedes hacer la Ruta A completa. Arctic-Embed-m tiene ~305M parámetros, y lo único que cambia es usar lotes más chicos. En vez del corpus completo, puntúa solo los dumps recientes o solo <code>spa_Latn</code> filtered (441M docs ≈ 670 A100-h), y valida con proxies de 150M.</div>
 
-    <p>Usa dos entornos separados, porque vLLM fija su propia versión de torch y de transformers. Los dos son Python 3.12, que es lo que exigen scipy 1.18 y numpy 2.5.</p>
+    <p>Usa dos entornos separados, porque vLLM fija su propia versión de torch y de transformers. Los dos son Python 3.12, el mínimo que piden scipy 1.18 y numpy 2.5.</p>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash"># Entorno 1: LLM-jueces (solo Ruta B)
@@ -185,17 +185,17 @@ deactivate
 # Entorno 2: embeddings, cabezas, percentiles y puntuación masiva
 uv venv .venv-embed --python 3.12
 source .venv-embed/bin/activate
-uv pip install "torch&gt;=2.13" "transformers&gt;=5.17,&lt;6" "huggingface_hub&gt;=1.30,&lt;2.0" \
-  "datatrove[io,processing]==0.10.0" "numpy&lt;2.3" pandas pyarrow h5py scipy \
+uv pip install "torch&gt;=2.13" "transformers&gt;=5.19,&lt;6" "huggingface_hub&gt;=1.31" \
+  "datatrove[io,processing]&gt;=0.10,&lt;0.11" pandas pyarrow h5py scipy \
   safetensors tldextract
 # Opcional: un wheel de xformers que coincida con tu torch, para unpad + memory-efficient attention.
-# huggingface_hub 2.0 rompe transformers/datasets 5.x: mantenlo en &lt;2.0 y usa "hf download".</code></pre>
+# transformers &lt;5.19 exige huggingface_hub&lt;2.0; desde 5.19 acepta hub 2.x.</code></pre>
     </div>
   </div>
 
   <!-- 5. Gold set -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-certificate" aria-hidden="true"></i>5. Gold set en español y portugués</div>
+    <h2 class="section-title"><i class="ti ti-certificate" aria-hidden="true"></i>5. Gold set en español y portugués</h2>
 
     <p>El gold de JQL es el punto de partida obligatorio. Con él se puede comparar con el paper.</p>
     <div class="code-block">
@@ -245,7 +245,7 @@ native.to_parquet("gold_nativo_es_pt.parquet", index=False)</code></pre>
 
   <!-- 6. Elegir jueces -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-tournament" aria-hidden="true"></i>6. Elegir LLM-jueces por Spearman (Ruta B)</div>
+    <h2 class="section-title"><i class="ti ti-tournament" aria-hidden="true"></i>6. Elegir LLM-jueces por Spearman (Ruta B)</h2>
 
     <p>Solo hace falta si quieres jueces más nuevos que los del paper (por ejemplo <code>google/gemma-4-31B-it</code> o <code>Qwen/Qwen3.6-27B</code>) o validar a los originales contra tu gold nativo. Igual que JQL, se usa el prompt de FineWeb-Edu <strong>en inglés</strong> también para documentos en es/pt. Así la rúbrica es la misma en todos los idiomas y los puntajes se pueden comparar; la guía fineweb-edu, en cambio, traduce el prompt. Corre este bloque en el entorno <code>.venv-annot</code>, un juez a la vez.</p>
     <div class="code-block">
@@ -304,12 +304,12 @@ for lang, g in gold.groupby("lang"):
     print(f"{JUDGE:45s} [{lang:9s}] Spearman={rho:.3f}  inválidas={g['invalid'].sum() / (3 * len(g)):.1%}")</code></pre>
     </div>
 
-    <div class="tip"><strong>Criterio de selección:</strong> quédate con los 3 mejores por Spearman <em>de familias distintas</em>, porque el ensamble AND aprovecha que se equivocan de maneras diferentes. Mide es y pt por separado: la correlación de un mismo juez puede caer bastante en portugués. Descarta los que tengan más de ~5% de respuestas sin parsear. Si un juez se sale del formato con frecuencia, puedes restringir la salida con <code>SamplingParams(structured_outputs=StructuredOutputsParams(regex=...))</code> (vLLM ≥ 0.12 eliminó <code>guided_regex</code>), pero pierdes la justificación previa al score.</div>
+    <div class="tip"><strong>Criterio de selección:</strong> quédate con los 3 mejores por Spearman <em>de familias distintas</em>, porque el ensamble AND aprovecha que se equivocan de maneras diferentes. Mide es y pt por separado: la correlación de un mismo juez puede caer bastante en portugués. Descarta los que tengan más de ~5% de respuestas sin parsear. Si un juez se sale del formato con frecuencia, puedes restringir la salida con <code>SamplingParams(structured_outputs=StructuredOutputsParams(regex=...))</code> (las versiones actuales de vLLM ya no aceptan el antiguo <code>guided_regex</code>), pero pierdes la justificación previa al score.</div>
   </div>
 
   <!-- 7. Anotaciones -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-tags" aria-hidden="true"></i>7. Anotaciones de entrenamiento: reutilizar las de JQL</div>
+    <h2 class="section-title"><i class="ti ti-tags" aria-hidden="true"></i>7. Anotaciones de entrenamiento: reutilizar las de JQL</h2>
 
     <p>En la Ruta A no anotas nada. <code>JQL-LLM-Edu-Annotations</code> trae ~500k documentos de FineWeb2 por idioma, con el texto, los metadatos originales (<code>id</code>, <code>url</code>, <code>dump</code>, <code>filter_reason</code>) y el score agregado de cada juez. Cada archivo pesa ~1.7-1.9 GB.</p>
     <div class="code-block">
@@ -343,7 +343,7 @@ for lang in ["spa_Latn", "por_Latn"]:
 
   <!-- 8. Embeddings -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-vector" aria-hidden="true"></i>8. Embeddings congelados con Arctic-Embed-m-v2.0</div>
+    <h2 class="section-title"><i class="ti ti-vector" aria-hidden="true"></i>8. Embeddings congelados con Arctic-Embed-m-v2.0</h2>
 
     <p>Hay que reproducir exactamente el embedding de JQL: token CLS de <code>last_hidden_state</code>, normalización L2, hasta 8192 tokens y <strong>sin</strong> el prefijo <code>query: </code>, que solo se usa para consultas de búsqueda. Si cambias cualquiera de esos detalles, las cabezas oficiales y los embeddings publicados dejan de ser compatibles con los tuyos. Guarda este bloque como <code>jql_embed.py</code>: las secciones siguientes lo importan.</p>
     <div class="code-block">
@@ -415,12 +415,12 @@ for name in ["annot_spa_Latn", "annot_por_Latn", "gold_jql_es_pt", "gold_nativo_
     np.save(f"{name}.emb.npy", X)
     print(name, X.shape, "norma media:", float(np.linalg.norm(X[:1000].astype(np.float32), axis=1).mean()))</code></pre>
     </div>
-    <div class="warn"><strong>No probado con transformers 5.17:</strong> Arctic-Embed-m-v2.0 todavía depende de código remoto (<code>trust_remote_code=True</code>). Ese código solo importa módulos estándar de transformers, pero en esta guía no lo ejecutamos contra la versión 5.x. Antes de lanzar millones de documentos, compara tus embeddings con los de <code>fw2_embeddings</code> para unos cientos de textos. Otra verificación: los scores de tus cabezas sobre el gold deben reproducir los de las cabezas oficiales (§10).</div>
+    <div class="warn"><strong>No probado con transformers 5.x:</strong> Arctic-Embed-m-v2.0 todavía depende de código remoto (<code>trust_remote_code=True</code>). Ese código solo importa módulos estándar de transformers, pero en esta guía no lo ejecutamos contra la versión 5.x. Antes de lanzar millones de documentos, compara tus embeddings con los de <code>fw2_embeddings</code> para unos cientos de textos. Otra verificación: los scores de tus cabezas sobre el gold deben reproducir los de las cabezas oficiales (§10).</div>
   </div>
 
   <!-- 9. Cabezas -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-brain" aria-hidden="true"></i>9. Entrenar las cabezas MLP</div>
+    <h2 class="section-title"><i class="ti ti-brain" aria-hidden="true"></i>9. Entrenar las cabezas MLP</h2>
 
     <p>Usamos los hiperparámetros del paper: MLP 768 → 1000 → 1 con ReLU, pérdida MSE, AdamW con lr 5e-4 y schedule coseno, batch 1024, hasta 20 épocas, y early stopping si el Spearman de validación no mejora al menos 1e-3 en 5 épocas seguidas. Se entrena una cabeza por juez con es + pt juntos. La variante <em>balanced</em> sobremuestrea los scores altos (4-5), que son escasos en la web.</p>
     <div class="code-block">
@@ -451,7 +451,7 @@ def train_head(judge: str, balanced: bool = True, epochs: int = 20, patience: in
                min_delta: float = 1e-3, device: str = "cuda") -&gt; float:
     X, y = load_xy(judge)
     idx = np.random.default_rng(0).permutation(len(y))
-    n_val = int(0.05 * len(y))
+    n_val = int(0.10 * len(y))                                   # 10% de validación, como en el paper
     va, tr = idx[:n_val], idx[n_val:]
     ds = TensorDataset(torch.from_numpy(X[tr]), torch.from_numpy(y[tr]))
     if balanced:
@@ -504,7 +504,7 @@ for judge in ["gemma", "mistral", "llama"]:
 
   <!-- 10. Evaluación -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>10. Evaluar: cabezas oficiales, propias y el clasificador FineWeb-Edu</div>
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>10. Evaluar: cabezas oficiales, propias y el clasificador FineWeb-Edu</h2>
 
     <p>Todo se compara con la misma métrica, el Spearman contra los humanos, en el gold traducido y en el gold nativo. Los checkpoints oficiales vienen en formato Lightning, con capas <code>layer1</code>/<code>layer2</code>. Los mapeamos a <code>nn.Sequential</code> para no depender de Lightning.</p>
     <div class="code-block">
@@ -579,7 +579,7 @@ print(pd.DataFrame(rows).pivot(index="modelo", columns="gold", values="spearman"
 
   <!-- 11. Percentiles -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>11. Umbrales por percentil con los scores publicados</div>
+    <h2 class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>11. Umbrales por percentil con los scores publicados</h2>
 
     <p>JQL calcula el percentil de cada cabeza sobre FineWeb2 <strong>sin filtrar</strong> (filtered + removed) de cada idioma. Con <code>fw2_edu_scores</code> no hace falta GPU: basta con descargar algunos shards de cada split y ponderarlos por el tamaño real del split, porque en portugués <em>removed</em> es más grande que <em>filtered</em>.</p>
     <div class="code-block">
@@ -672,7 +672,7 @@ print("p60 de la cabeza propia:", round(weighted_quantile(s, w, 0.6), 3),
 
   <!-- 12. Puntuación masiva -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>12. Puntuar el texto con datatrove y seleccionar</div>
+    <h2 class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>12. Puntuar el texto con datatrove y seleccionar</h2>
 
     <p>Para materializar el subconjunto necesitas el score junto al texto. Este <code>PipelineStep</code> de datatrove 0.10 embebe, aplica las tres cabezas y escribe <code>score_&lt;cabeza&gt;</code> en los metadatos <strong>sin filtrar todavía</strong>. Guardar todos los scores te deja cambiar de percentil o agregar cabezas sin volver a pasar por la GPU. Ejecuta una task por GPU; en un cluster, cambia <code>LocalPipelineExecutor</code> por <code>SlurmPipelineExecutor</code>.</p>
     <div class="code-block">
@@ -779,18 +779,21 @@ print(by_region.sort_values("docs_total", ascending=False).round(3).head(25))</c
 
   <!-- 13. Validación downstream -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>13. Validación downstream con modelos proxy</div>
+    <h2 class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>13. Validación downstream con modelos proxy</h2>
 
     <p>El Spearman no reemplaza a entrenar un modelo. Entrena proxies idénticos (mismo tokenizer, misma arquitectura y mismo número de tokens) con cada variante: FW2 filtered, FineWeb2-HQ, JQL p0.6, JQL p0.7 y el clasificador de la guía fineweb-edu con umbral ≥ 3. DataDecide muestra que un ranking obtenido con proxies de 150M acierta ~80% de las comparaciones a 1B. Usa tareas de alta señal y probabilidad normalizada.</p>
     <div class="code-block">
       <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
       <pre><code class="language-bash"># Verifica los nombres de tareas en tu versión de lm-eval
-lm-eval ls tasks | grep -E "spanish_bench|portuguese_bench|belebele_(spa|por)_Latn|xstorycloze_es"
+lm-eval ls tasks | grep -E "belebele_(spa|por)_Latn|xstorycloze_es|copa_es|openbookqa_es|assin"
 
+# Solo tareas de opción múltiple (log-likelihood); spanish_bench/portuguese_bench
+# completos incluyen tareas generativas (FLORES, XLSum, MGSM) con poca señal a 1B.
+TASKS=belebele_spa_Latn,xstorycloze_es,copa_es,openbookqa_es,belebele_por_Latn,assin2_rte,assin_entailment
 for variant in fw2 fw2hq jql_p60 jql_p70 fwedu3; do
   lm_eval --model hf \
     --model_args pretrained=checkpoints/proxy-1b-${variant},dtype=bfloat16 \
-    --tasks spanish_bench,portuguese_bench,belebele_spa_Latn,belebele_por_Latn,xstorycloze_es \
+    --tasks $TASKS \
     --batch_size auto \
     --output_path results/${variant}
 done</code></pre>
@@ -800,7 +803,7 @@ done</code></pre>
 
   <!-- 14. Riesgos -->
   <div class="guide-section">
-    <div class="section-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i>14. Extensiones y riesgos para Latam</div>
+    <h2 class="section-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i>14. Extensiones y riesgos para Latam</h2>
 
     <table class="model-table">
       <tr><th>Tema</th><th>Recomendación</th></tr>
@@ -821,7 +824,7 @@ done</code></pre>
       <a class="source-link paper" href="https://arxiv.org/abs/2412.04506" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Arctic-Embed 2.0 (Yu et al., 2024)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2506.20920" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb2 (Penedo et al., 2025)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb / FineWeb-Edu (Penedo et al., 2024)</a>
-      <a class="source-link paper" href="https://arxiv.org/abs/2502.10361" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb2-HQ (Messmer et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.10361" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Enhancing Multilingual LLM Pretraining with Model-Based Data Selection / FineWeb2-HQ (Messmer et al., 2025)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2504.11393" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>DataDecide (Magnusson et al., 2025)</a>
       <a class="source-link paper" href="https://arxiv.org/abs/2510.00866" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Removing Noise, not Finding Gold (Nait Saada et al., 2025)</a>
       <a class="source-link" href="https://github.com/JQL-AI/JQL-Annotation-Pipeline" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>JQL-Annotation-Pipeline (GitHub)</a>
