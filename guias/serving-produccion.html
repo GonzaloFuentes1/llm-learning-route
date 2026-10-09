@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Serving en producción con vLLM V1 y SGLang — LatamGPT</title>
+<meta name="description" content="Cómo llevar un LLM a producción con vLLM V1 y SGLang: configuración en YAML, prefix caching, structured outputs, tool calling, multi-LoRA, EAGLE-3, benchmarks con SLOs (vllm bench serve y GuideLLM) y despliegue en Slurm, con prompts en español y portugués.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Inferencia &amp; Deployment</div>
+    <h1 class="guide-title">Serving en producción con vLLM V1 y SGLang</h1>
+    <div class="guide-desc">Del endpoint de prueba a un servicio que aguanta tráfico real en español y portugués: configuración reproducible en YAML, prefix caching medido, JSON garantizado con structured outputs, tool calling y modelos de razonamiento, varios LoRA sobre un mismo modelo base, EAGLE-3, el mismo stack en SGLang, benchmarks con SLOs (<code>vllm bench serve</code> y GuideLLM), capacity planning y despliegue en Slurm con Prometheus.</div>
+  </div>
+
+  <!-- 1. Mapa -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-map" aria-hidden="true"></i>1. Qué cambia al pasar a producción</h2>
+    <p>Esta guía asume que ya levantaste un servidor con la guía básica <a href="inferencia.html">Serving con vLLM: primeros pasos</a> (instalación, <code>vllm serve</code>, cliente OpenAI, <code>/metrics</code>). Aquí resolvemos lo que aparece cuando el servidor deja de ser tuyo y pasa a atender usuarios: latencia estable bajo carga, respuestas parseables, varias variantes del modelo, costo por token y operación en el cluster.</p>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Config YAML versionada</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Prefix caching</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">JSON y tools</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Multi-LoRA + EAGLE-3</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Benchmark con SLO</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Slurm + Prometheus</div>
+    </div>
+
+    <table class="model-table">
+      <thead><tr><th>Motor</th><th>Fuerte en</th><th>Cuándo elegirlo</th></tr></thead>
+      <tbody>
+        <tr><td>vLLM V1</td><td>Soporte de modelos día 0, NVIDIA/AMD/CPU, multi-LoRA, ecosistema llm-compressor y speculators</td><td>Opción por defecto para servir modelos propios</td></tr>
+        <tr><td>SGLang</td><td>RadixAttention, structured outputs rápidos, PD disaggregation y expert parallelism a gran escala</td><td>Mucho prefijo compartido (agentes, RAG, few-shot), MoE grandes, rollouts de RL</td></tr>
+        <tr><td>TensorRT-LLM</td><td>Máximo rendimiento en NVIDIA con <code>trtllm-serve</code></td><td>Configuración ya estable y flota 100% NVIDIA</td></tr>
+        <tr><td>llama.cpp / Ollama</td><td>GGUF en CPU, Mac y GPUs chicas</td><td>Demos y uso local; no para alta concurrencia</td></tr>
+      </tbody>
+    </table>
+
+    <p>El modelo de ejemplo es <code>Qwen/Qwen3-8B</code> (razonamiento híbrido, tool calling, buen español y portugués). Todo lo que sigue funciona igual con tu checkpoint <code>&lt;TU_ORG&gt;/&lt;modelo&gt;</code>.</p>
+
+    <table class="model-table">
+      <thead><tr><th>Escenario</th><th>GPU</th><th>Qué cabe</th></tr></thead>
+      <tbody>
+        <tr><td>Presupuesto reducido</td><td>1× L4, A10G o RTX 4090 (24 GB)</td><td>Qwen3-8B en FP8 (<code>RedHatAI/Qwen3-8B-FP8-dynamic</code>) con 16K de contexto, o en BF16 con 8K y ≤ 16 secuencias. Para practicar los flujos sin GPU grande: <code>Qwen/Qwen3-0.6B</code></td></tr>
+        <tr><td>Recomendado</td><td>1× L40S 48 GB, A100 80 GB o H100 80 GB</td><td>BF16, 16K de contexto, 64+ secuencias, dos LoRA y EAGLE-3 a la vez</td></tr>
+        <tr><td>Multi-nodo</td><td>2 nodos × 8 GPUs</td><td>Solo para la demo de la sección 11 con un modelo de 70B+</td></tr>
+      </tbody>
+    </table>
+    <p>Tiempo estimado: medio día para recorrer la guía completa en una GPU; los barridos de benchmark toman 30-60 minutos por configuración.</p>
+  </div>
+
+  <!-- 2. Entornos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-package" aria-hidden="true"></i>2. Tres entornos: vLLM, SGLang y cliente</h2>
+    <p>vLLM y SGLang fijan versiones distintas de PyTorch y de los backends de gramáticas (xgrammar, llguidance), así que cada motor vive en su propio entorno. Los clientes y benchmarks van en un tercero, que no necesita GPU y puede correr en otra máquina para no robarle CPU al servidor.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — instalación</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># vLLM: binarios CUDA 12.9 por defecto (variantes 12.8 y 13.0), compute capability &gt;= 7.5
+uv venv ~/envs/vllm --python 3.12 --seed
+VIRTUAL_ENV=~/envs/vllm uv pip install vllm --torch-backend=auto
+
+# SGLang: exige un driver compatible con CUDA 13
+uv venv ~/envs/sglang --python 3.12 --seed
+VIRTUAL_ENV=~/envs/sglang uv pip install --prerelease=allow sglang
+
+# Cliente y benchmarks (sin GPU)
+uv venv ~/envs/client --python 3.12 --seed
+VIRTUAL_ENV=~/envs/client uv pip install openai pydantic pandas transformers "guidellm[recommended]"
+
+# En el cluster, las imágenes oficiales evitan compilar nada
+apptainer pull vllm.sif docker://vllm/vllm-openai:latest
+apptainer pull sglang.sif docker://lmsysorg/sglang:latest</code></pre>
+    </div>
+    <div class="warn"><strong>No actualices los backends por separado:</strong> vLLM fija rangos de <code>xgrammar</code> y <code>llguidance</code>. Un <code>pip install -U xgrammar</code> en el entorno del servidor rompe structured outputs de forma silenciosa o al arrancar.</div>
+  </div>
+
+  <!-- 3. Config -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-settings" aria-hidden="true"></i>3. Configuración reproducible con <code>vllm serve --config</code></h2>
+    <p>En producción los flags viven en un YAML versionado junto al código, no en el historial de la terminal. Los argumentos de la línea de comandos tienen prioridad sobre el archivo, lo que permite cambiar el puerto o agregar LoRA sin duplicar la configuración.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — serve_vllm.yaml y arranque</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">cat &gt; serve_vllm.yaml &lt;&lt;'EOF'
+served-model-name: latam-chat
+host: 0.0.0.0
+port: 8000
+max-model-len: 16384
+gpu-memory-utilization: 0.90
+max-num-seqs: 64
+max-num-batched-tokens: 8192
+kv-cache-dtype: auto
+enable-prefix-caching: true
+reasoning-parser: qwen3
+enable-auto-tool-choice: true
+tool-call-parser: hermes
+EOF
+
+# La API key va por variable de entorno, nunca en el YAML
+export VLLM_API_KEY="$(openssl rand -hex 24)"
+vllm serve Qwen/Qwen3-8B --config serve_vllm.yaml</code></pre>
+    </div>
+
+    <table class="model-table">
+      <thead><tr><th>Flag</th><th>Efecto</th><th>Regla práctica</th></tr></thead>
+      <tbody>
+        <tr><td><code>max-num-seqs</code></td><td>Secuencias activas por paso</td><td>Más = más throughput y más ITL por usuario; súbelo hasta que el p99 de ITL rompa tu SLO</td></tr>
+        <tr><td><code>max-num-batched-tokens</code></td><td>Presupuesto de tokens por paso (chunked prefill está activo por defecto)</td><td>Bajo (2048-4096) protege el ITL de quienes ya están generando; alto (8192-16384) mejora TTFT y throughput con prompts largos</td></tr>
+        <tr><td><code>kv-cache-dtype</code></td><td><code>fp8</code> reduce el KV cache a la mitad</td><td>Duplica la concurrencia posible; valida calidad en tus benchmarks es/pt antes de activarlo</td></tr>
+        <tr><td><code>reasoning-parser</code></td><td>Separa el <code>&lt;think&gt;</code> en el campo <code>reasoning</code></td><td><code>qwen3</code> para Qwen3; tu frontend muestra solo <code>content</code></td></tr>
+        <tr><td><code>tool-call-parser</code></td><td>Convierte la salida del modelo en <code>tool_calls</code></td><td><code>hermes</code> para Qwen3 (recomendado por la doc de Qwen); exige <code>enable-auto-tool-choice</code></td></tr>
+      </tbody>
+    </table>
+
+    <p>Para dimensionar, calcula cuánto KV cache ocupa cada token y cuántos tokens simultáneos caben. Este script lee la configuración del modelo desde el Hub:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — kv_budget.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from transformers import AutoConfig
+
+MODEL = "Qwen/Qwen3-8B"
+GPU_GB = 80            # VRAM de la GPU
+UTIL = 0.90            # gpu-memory-utilization
+PARAMS_B = 8.2         # parámetros en miles de millones
+WEIGHT_BYTES = 2       # BF16 = 2, FP8 = 1, W4A16 ~ 0.55
+KV_BYTES = 2           # kv-cache-dtype auto (BF16) = 2, fp8 = 1
+OVERHEAD_GB = 3        # activaciones, CUDA graphs, fragmentación
+
+cfg = AutoConfig.from_pretrained(MODEL)
+head_dim = getattr(cfg, "head_dim", None) or cfg.hidden_size // cfg.num_attention_heads
+kv_per_token = 2 * cfg.num_hidden_layers * cfg.num_key_value_heads * head_dim * KV_BYTES
+
+weights_gb = PARAMS_B * WEIGHT_BYTES
+kv_gb = GPU_GB * UTIL - weights_gb - OVERHEAD_GB
+tokens = int(kv_gb * 1e9 / kv_per_token)
+
+print(f"KV/token: {kv_per_token / 1024:.0f} KiB | pesos: {weights_gb:.1f} GB | KV: {kv_gb:.1f} GB | ~{tokens:,} tokens")
+for ctx in (2048, 4096, 8192, 16384):
+    print(f"  conversaciones simultáneas de {ctx:&gt;5} tokens: ~{tokens // ctx}")</code></pre>
+    </div>
+    <div class="tip"><strong>Ángulo es/pt:</strong> calcula los contextos con tokens reales de tus conversaciones en español y portugués. Si tu tokenizer gasta 20-30% más tokens por palabra que en inglés, la misma conversación ocupa 20-30% más KV cache y la concurrencia real baja en la misma proporción.</div>
+  </div>
+
+  <!-- 4. Prefix caching -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database" aria-hidden="true"></i>4. Prefix caching en la práctica</h2>
+    <p>vLLM V1 tiene activado por defecto el <strong>Automatic Prefix Caching</strong>: el KV cache se guarda en bloques identificados por un hash de su contenido y del prefijo anterior, así que dos requests que comparten los primeros N tokens reutilizan esos bloques y se saltan su prefill. SGLang hace lo mismo con <strong>RadixAttention</strong>, un árbol radix de prefijos con desalojo LRU. En ambos casos solo se reutiliza el prefijo <em>exacto</em>: un token distinto al inicio invalida todo lo que viene después.</p>
+    <table class="model-table">
+      <thead><tr><th>Haz</th><th>Evita</th></tr></thead>
+      <tbody>
+        <tr><td>System prompt, reglamento, catálogo o few-shots fijos al comienzo</td><td>Fecha, hora, nombre del usuario o ID de sesión en la primera línea del system prompt</td></tr>
+        <tr><td>Contexto variable (documentos de RAG, pregunta) al final</td><td>Reordenar los documentos recuperados en cada turno si no cambió la consulta</td></tr>
+        <tr><td>Un system prompt por idioma (es, pt) estable en el tiempo</td><td>Traducir o reformular el system prompt en cada request</td></tr>
+      </tbody>
+    </table>
+    <p>El script manda 300 consultas que comparten un reglamento académico largo en español como system prompt y mide TTFT p50/p99 y la tasa de acierto en <code>/metrics</code>. Córrelo dos veces: con el servidor normal y con el servidor arrancado con <code>--no-enable-prefix-caching</code>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — prefix_cache_bench.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import asyncio
+import os
+import statistics
+import time
+import urllib.request
+
+from openai import AsyncOpenAI
+
+BASE = os.environ.get("BASE_URL", "http://127.0.0.1:8000")
+MODEL = os.environ.get("MODEL", "latam-chat")
+N_REQUESTS, CONCURRENCY = 300, 32
+
+client = AsyncOpenAI(base_url=f"{BASE}/v1", api_key=os.environ.get("VLLM_API_KEY", "EMPTY"))
+
+REGLAMENTO = "\n".join(
+    f"Artículo {i}. Las solicitudes de tipo {i % 7} se resuelven en un plazo de {5 + i % 10} "
+    f"días hábiles y requieren el formulario F-{100 + i}, firmado por la jefatura de carrera."
+    for i in range(1, 151)
+)  # ~4.000 tokens de prefijo compartido
+SYSTEM = ("Eres el asistente de la secretaría académica. Responde en español de Chile, en dos "
+          "frases, citando el artículo del reglamento que aplica.\n\n" + REGLAMENTO)
+
+
+def scrape() -&gt; dict[str, float]:
+    text = urllib.request.urlopen(f"{BASE}/metrics", timeout=5).read().decode()
+    out: dict[str, float] = {}
+    for line in text.splitlines():
+        if line and not line.startswith("#"):
+            name, _, value = line.rpartition(" ")
+            key = name.split("{", 1)[0]
+            out[key] = out.get(key, 0.0) + float(value)
+    return out
+
+
+async def one(i: int, sem: asyncio.Semaphore) -&gt; float | None:
+    async with sem:
+        t0 = time.perf_counter()
+        stream = await client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "system", "content": SYSTEM},
+                      {"role": "user", "content": f"Consulta {i}: ¿qué plazo tiene una solicitud de tipo {i % 7}?"}],
+            max_tokens=64,
+            stream=True,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+        )
+        ttft = None
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if ttft is None and delta and (delta.content or getattr(delta, "reasoning", None)):
+                ttft = time.perf_counter() - t0  # primer token visible
+        return ttft
+
+
+async def main() -&gt; None:
+    before = scrape()
+    sem = asyncio.Semaphore(CONCURRENCY)
+    ttfts = await asyncio.gather(*(one(i, sem) for i in range(N_REQUESTS)))
+    after = scrape()
+    ttfts = sorted(t for t in ttfts if t is not None)
+    q = after.get("vllm:prefix_cache_queries_total", 0) - before.get("vllm:prefix_cache_queries_total", 0)
+    h = after.get("vllm:prefix_cache_hits_total", 0) - before.get("vllm:prefix_cache_hits_total", 0)
+    p99 = statistics.quantiles(ttfts, n=100)[98]
+    print(f"TTFT p50={statistics.median(ttfts) * 1000:.0f} ms | p99={p99 * 1000:.0f} ms")
+    print(f"prefix cache hit rate: {h / q:.1%}" if q else "sin métricas de prefix cache")
+
+
+asyncio.run(main())</code></pre>
+    </div>
+    <div class="tip"><strong>Qué esperar:</strong> con el caché activo la tasa de acierto debería rondar el 90% o más (solo la pregunta final es nueva; los primeros requests concurrentes todavía no encuentran el prefijo en caché) y el TTFT p50 caer varias veces respecto a la corrida sin caché, porque el prefill de ~4.000 tokens se hace una sola vez. Si el acierto es bajo, busca qué cambia al inicio del prompt.</div>
+  </div>
+
+  <!-- 5. Structured outputs -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-braces" aria-hidden="true"></i>5. Structured outputs: JSON garantizado</h2>
+    <p>Pedir "responde solo JSON" en el prompt funciona casi siempre, que en producción significa que falla todos los días. Con <strong>decoding restringido</strong> el motor enmascara en cada paso los tokens que violarían el schema, así que la salida es parseable por construcción. vLLM usa xgrammar o guidance según el schema (<code>--structured-outputs-config.backend auto</code> por defecto); SGLang se configura con <code>--grammar-backend xgrammar</code>. Desde vLLM v0.12.0 los campos <code>guided_json</code>, <code>guided_regex</code>, <code>guided_choice</code> y similares ya no existen.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — client_structured.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import os
+from typing import Literal
+
+from openai import OpenAI
+from pydantic import BaseModel, Field, ValidationError
+
+client = OpenAI(base_url=os.environ.get("BASE_URL", "http://127.0.0.1:8000") + "/v1",
+                api_key=os.environ.get("VLLM_API_KEY", "EMPTY"))
+MODEL = os.environ.get("MODEL", "latam-chat")
+NO_THINK = {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+class Monto(BaseModel):
+    valor: float
+    moneda: Literal["CLP", "BRL", "ARS", "MXN", "COP", "PEN", "USD"]
+
+
+class Noticia(BaseModel):
+    personas: list[str]
+    organizaciones: list[str]
+    pais: Literal["Chile", "Brasil", "Argentina", "México", "Colombia", "Perú", "Otro"]
+    fecha: str | None = Field(None, description="AAAA-MM-DD si aparece en el texto")
+    montos: list[Monto]
+    identificadores: list[str] = Field(default_factory=list, description="RUT, CPF o CUIT tal como aparecen")
+
+
+NOTICIAS = [  # textos ficticios
+    "Santiago, 3 de marzo de 2026. La cooperativa Agua Clara, RUT 76.123.456-7, recibió un aporte "
+    "de $450 millones de pesos del Gobierno Regional, informó su presidenta, Marta Rojas.",
+    "São Paulo, 12/05/2026 - A startup Pagamentos Sul captou R$ 18 milhões em rodada liderada pelo "
+    "fundo Ipê Capital. O fundador, João Almeida (CPF 123.456.789-09), disse que vai contratar 40 pessoas.",
+]
+INSTRUCCION = "Extrae las entidades de la noticia como JSON con los campos del schema."
+schema_fmt = {"type": "json_schema",
+              "json_schema": {"name": "noticia", "schema": Noticia.model_json_schema()}}
+
+
+def extraer(texto: str, restringido: bool) -&gt; str:
+    kwargs = {"response_format": schema_fmt} if restringido else {}
+    resp = client.chat.completions.create(
+        model=MODEL, temperature=0.7, max_tokens=512, extra_body=NO_THINK,
+        messages=[{"role": "system", "content": INSTRUCCION + " Responde solo con JSON."},
+                  {"role": "user", "content": texto}],
+        **kwargs,
+    )
+    return resp.choices[0].message.content or ""
+
+
+for restringido in (False, True):
+    validos = 0
+    for _ in range(10):  # 10 muestras por noticia con temperature 0.7
+        for texto in NOTICIAS:
+            try:
+                Noticia.model_validate_json(extraer(texto, restringido))
+                validos += 1
+            except ValidationError:
+                pass
+    print(f"restringido={restringido}: {validos}/{10 * len(NOTICIAS)} JSON válidos")
+
+print(Noticia.model_validate_json(extraer(NOTICIAS[1], True)).model_dump_json(indent=2))
+
+# Otras restricciones de vLLM van en extra_body["structured_outputs"]
+idioma = client.chat.completions.create(
+    model=MODEL, max_tokens=5,
+    messages=[{"role": "user", "content": f"¿En qué idioma está este texto? {NOTICIAS[1]}"}],
+    extra_body={**NO_THINK, "structured_outputs": {"choice": ["es", "pt", "otro"]}},
+)
+rut = client.chat.completions.create(
+    model=MODEL, max_tokens=20,
+    messages=[{"role": "user", "content": f"Copia el RUT que aparece aquí: {NOTICIAS[0]}"}],
+    extra_body={**NO_THINK, "structured_outputs": {"regex": r"\d{1,2}\.\d{3}\.\d{3}-[0-9kK]"}},
+)
+print(idioma.choices[0].message.content, rut.choices[0].message.content)</code></pre>
+    </div>
+    <div class="warn"><strong>El schema restringe la forma, no la verdad:</strong> el decoding restringido garantiza un RUT con formato válido, no que el RUT exista o que el dígito verificador sea correcto. Valida el contenido después (dígito verificador del RUT, CPF y CUIT) y mide la exactitud de la extracción con un set anotado en es/pt.</div>
+    <div class="tip"><strong>Razonamiento + JSON:</strong> con <code>--reasoning-parser</code>, vLLM aplica la restricción solo a la respuesta final, después del bloque de razonamiento. Si la tarea es extracción simple, desactiva el thinking (<code>enable_thinking: False</code>) y ahorras cientos de tokens por request.</div>
+  </div>
+
+  <!-- 6. Tools -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-tool" aria-hidden="true"></i>6. Tool calling y modelos de razonamiento</h2>
+    <p>Con <code>enable-auto-tool-choice</code> y <code>tool-call-parser hermes</code> (ya en el YAML de la sección 3) el servidor devuelve <code>tool_calls</code> en formato OpenAI. Con <code>reasoning-parser qwen3</code> el razonamiento llega en <code>message.reasoning</code> (antes se llamaba <code>reasoning_content</code>, nombre que todavía puedes recibir de SGLang u otros servidores). El ciclo completo, con una pregunta en portugués:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — client_tools.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import os
+
+from openai import OpenAI
+
+client = OpenAI(base_url=os.environ.get("BASE_URL", "http://127.0.0.1:8000") + "/v1",
+                api_key=os.environ.get("VLLM_API_KEY", "EMPTY"))
+MODEL = os.environ.get("MODEL", "latam-chat")
+
+# Tasas de ejemplo; en producción vendrían de una API o base de datos
+TASAS_USD = {"CLP": 940.0, "BRL": 5.4, "ARS": 1200.0, "MXN": 18.5, "USD": 1.0}
+
+
+def tipo_de_cambio(monto: float, origen: str, destino: str) -&gt; dict:
+    resultado = monto / TASAS_USD[origen] * TASAS_USD[destino]
+    return {"monto": monto, "origen": origen, "destino": destino, "resultado": round(resultado, 2)}
+
+
+TOOLS = [{
+    "type": "function",
+    "function": {
+        "name": "tipo_de_cambio",
+        "description": "Convierte un monto entre monedas latinoamericanas y USD.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "monto": {"type": "number"},
+                "origen": {"type": "string", "enum": list(TASAS_USD)},
+                "destino": {"type": "string", "enum": list(TASAS_USD)},
+            },
+            "required": ["monto", "origen", "destino"],
+        },
+    },
+}]
+
+messages = [
+    {"role": "system", "content": "Responda em português do Brasil. Use as ferramentas quando precisar de números."},
+    {"role": "user", "content": "Quanto são 500 reais em pesos chilenos?"},
+]
+
+for _ in range(3):  # como máximo 3 rondas de herramientas
+    msg = client.chat.completions.create(model=MODEL, messages=messages, tools=TOOLS,
+                                         tool_choice="auto", max_tokens=1024).choices[0].message
+    razonamiento = getattr(msg, "reasoning", None) or getattr(msg, "reasoning_content", None)
+    if razonamiento:
+        print("[razonamiento]", razonamiento[:300], "...")
+    if not msg.tool_calls:
+        print("[respuesta]", msg.content)
+        break
+    messages.append({"role": "assistant", "content": msg.content or "",
+                     "tool_calls": [tc.model_dump() for tc in msg.tool_calls]})
+    for tc in msg.tool_calls:
+        args = json.loads(tc.function.arguments)
+        resultado = tipo_de_cambio(**args)
+        print("[tool]", tc.function.name, args, "→", resultado)
+        messages.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(resultado)})</code></pre>
+    </div>
+    <div class="tip"><strong>No reenvíes el razonamiento:</strong> el chat template de Qwen3 descarta el <code>&lt;think&gt;</code> de turnos anteriores; por eso el mensaje del asistente que se agrega al historial lleva solo <code>content</code> y <code>tool_calls</code>. Para agentes más complejos (MCP, varias herramientas, evaluación) sigue con la guía <a href="agentes-mcp.html">Agentes con tool calling y MCP sobre vLLM</a>.</div>
+  </div>
+
+  <!-- 7. Multi-LoRA -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-git-branch" aria-hidden="true"></i>7. Multi-LoRA: una variante por país sobre el mismo modelo</h2>
+    <p>Si entrenaste adaptadores con la guía de <a href="lora-finetuning.html">LoRA fine-tuning</a> (por ejemplo, uno para español de Chile y otro para portugués de Brasil), no necesitas una GPU por variante: vLLM sirve el modelo base una vez y aplica el adaptador que pida cada request, mezclando adaptadores distintos en el mismo batch (la técnica de S-LoRA/Punica). El cliente elige la variante con el campo <code>model</code>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — multi_lora.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Permite cargar y descargar adaptadores sin reiniciar (solo en redes de confianza)
+export VLLM_ALLOW_RUNTIME_LORA_UPDATING=True
+# max-lora-rank debe ser &gt;= al rango del adaptador más grande
+vllm serve Qwen/Qwen3-8B --config serve_vllm.yaml \
+  --enable-lora \
+  --max-loras 4 \
+  --max-lora-rank 64 \
+  --lora-modules '{"name": "latam-es-cl", "path": "/models/lora/qwen3-8b-es-cl", "base_model_name": "Qwen/Qwen3-8B"}'
+
+# En otra terminal: cargar en caliente el adaptador pt-BR (protegido por la API key: ruta /v1)
+curl -X POST http://127.0.0.1:8000/v1/load_lora_adapter \
+  -H "Authorization: Bearer $VLLM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"lora_name": "latam-pt-br", "lora_path": "/models/lora/qwen3-8b-pt-br"}'
+
+# Deben aparecer latam-chat (base), latam-es-cl y latam-pt-br
+curl -s -H "Authorization: Bearer $VLLM_API_KEY" http://127.0.0.1:8000/v1/models | python -m json.tool</code></pre>
+    </div>
+    <p>El cliente no cambia: <code>model="latam-es-cl"</code> o <code>model="latam-pt-br"</code> elige el adaptador y <code>model="latam-chat"</code> usa el modelo base, todo contra el mismo servidor y en el mismo batch.</p>
+    <div class="warn"><strong>Costos ocultos:</strong> <code>--max-loras</code> reserva memoria por adaptador activo y los kernels LoRA agregan latencia; mide con el benchmark de la sección 10 con y sin <code>--enable-lora</code>. Y la carga en caliente acepta rutas arbitrarias: no expongas <code>/v1/load_lora_adapter</code> fuera del cluster (filtra la ruta en el proxy, sección 12). En SGLang el equivalente es <code>--enable-lora --lora-paths latam-es-cl=/models/lora/qwen3-8b-es-cl</code> con <code>--max-loras-per-batch</code>, y el cliente pide <code>model="&lt;modelo-base&gt;:latam-es-cl"</code>.</div>
+  </div>
+
+  <!-- 8. Spec decoding -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>8. Speculative decoding con EAGLE-3</h2>
+    <p>Un drafter EAGLE-3 propone varios tokens por paso usando los estados ocultos del modelo y el modelo grande los verifica en una sola pasada: menos latencia entre tokens sin cambiar la distribución de salida. Se configura con <code>--speculative-config</code> (los flags <code>--speculative-model</code> y <code>--num-speculative-tokens</code> son de versiones antiguas). La teoría y otras variantes (n-gram, MTP, draft model) están en la guía de <a href="speculative-decoding.html">speculative decoding</a>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — spec_decode.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">vllm serve Qwen/Qwen3-8B --config serve_vllm.yaml \
+  --speculative-config '{"method": "eagle3", "model": "RedHatAI/Qwen3-8B-speculator.eagle3", "num_speculative_tokens": 3}'
+
+# Sin modelo extra: n-gram sobre el propio prompt (útil en RAG y edición de texto)
+# vllm serve Qwen/Qwen3-8B --config serve_vllm.yaml \
+#   --speculative-config '{"method": "ngram", "num_speculative_tokens": 4, "prompt_lookup_max": 4}'</code></pre>
+    </div>
+    <p>Los drafters públicos se entrenan sobre todo con conversaciones en inglés. Antes de activarlo, mide la aceptación en tus idiomas con los contadores <code>vllm:spec_decode_num_draft_tokens</code>, <code>vllm:spec_decode_num_accepted_tokens</code> y <code>vllm:spec_decode_num_drafts</code>:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — spec_acceptance.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import os
+import urllib.request
+
+from openai import OpenAI
+
+BASE = "http://127.0.0.1:8000"
+client = OpenAI(base_url=f"{BASE}/v1", api_key=os.environ.get("VLLM_API_KEY", "EMPTY"))
+PROMPTS = {
+    "en": ["Explain how vaccines train the immune system.", "Summarize the causes of inflation."],
+    "es": ["Explica cómo las vacunas entrenan al sistema inmune.", "Resume las causas de la inflación."],
+    "pt": ["Explique como as vacinas treinam o sistema imunológico.", "Resuma as causas da inflação."],
+}
+KEYS = ["vllm:spec_decode_num_draft_tokens_total", "vllm:spec_decode_num_accepted_tokens_total",
+        "vllm:spec_decode_num_drafts_total"]
+
+
+def scrape() -&gt; dict[str, float]:
+    text = urllib.request.urlopen(f"{BASE}/metrics", timeout=5).read().decode()
+    out = dict.fromkeys(KEYS, 0.0)
+    for line in text.splitlines():
+        name = line.split("{", 1)[0].split(" ", 1)[0]
+        if name in out:
+            out[name] += float(line.rpartition(" ")[2])
+    return out
+
+
+for lang, prompts in PROMPTS.items():
+    a = scrape()
+    for p in prompts * 5:  # secuencial: sin ruido de otros requests
+        client.chat.completions.create(model="latam-chat", max_tokens=256, temperature=0,
+                                       messages=[{"role": "user", "content": p}],
+                                       extra_body={"chat_template_kwargs": {"enable_thinking": False}})
+    b = scrape()
+    draft, acc, n = (b[k] - a[k] for k in KEYS)
+    if not draft:
+        raise SystemExit("sin drafts: ¿el servidor se lanzó con --speculative-config?")
+    print(f"{lang}: aceptación {acc / draft:.1%} | tokens por paso {1 + acc / n:.2f}")</code></pre>
+    </div>
+    <div class="tip"><strong>Si la aceptación cae en es/pt:</strong> una diferencia de 10+ puntos frente a inglés se nota en el speedup. Entrena tu propio drafter con <a href="https://github.com/vllm-project/speculators" target="_blank" rel="noopener">speculators</a> (vLLM) o <a href="https://github.com/sgl-project/SpecForge" target="_blank" rel="noopener">SpecForge</a> (SGLang) sobre conversaciones en español y portugués generadas por tu propio modelo. Y recuerda que el beneficio se concentra en baja concurrencia: con batches grandes el decode deja de estar limitado por memoria y el speedup se reduce.</div>
+  </div>
+
+  <!-- 9. SGLang -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-2" aria-hidden="true"></i>9. El mismo servicio en SGLang</h2>
+    <p>SGLang expone la misma API OpenAI, así que los clientes de las secciones 4 a 6 funcionan cambiando <code>BASE_URL</code> y <code>MODEL</code> (sin <code>--served-model-name</code>, el nombre es la ruta del modelo). Las equivalencias de flags más usadas:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — run_sglang.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># context-length ~ max-model-len, mem-fraction-static ~ gpu-memory-utilization
+python -m sglang.launch_server \
+  --model-path Qwen/Qwen3-8B \
+  --host 0.0.0.0 --port 30000 \
+  --context-length 16384 \
+  --mem-fraction-static 0.85 \
+  --max-running-requests 64 \
+  --reasoning-parser qwen3 \
+  --tool-call-parser qwen \
+  --grammar-backend xgrammar \
+  --enable-metrics \
+  --api-key "$VLLM_API_KEY"
+
+# Los mismos clientes, apuntando a SGLang
+BASE_URL=http://127.0.0.1:30000 MODEL=Qwen/Qwen3-8B python client_structured.py</code></pre>
+    </div>
+    <table class="model-table">
+      <thead><tr><th>Función</th><th>vLLM V1</th><th>SGLang</th></tr></thead>
+      <tbody>
+        <tr><td>Prefix caching</td><td>APC por bloques (por defecto)</td><td>RadixAttention (por defecto; <code>--disable-radix-cache</code>)</td></tr>
+        <tr><td>Caché jerárquico CPU/disco</td><td>KV connectors (<code>OffloadingConnector</code>, LMCache)</td><td>HiCache (<code>--enable-hierarchical-cache</code>)</td></tr>
+        <tr><td>Parser de tools Qwen3</td><td><code>hermes</code></td><td><code>qwen</code></td></tr>
+        <tr><td>Speculative</td><td><code>--speculative-config</code> (JSON)</td><td><code>--speculative-algorithm EAGLE3</code> + <code>--speculative-draft-model-path</code></td></tr>
+        <tr><td>Benchmark</td><td><code>vllm bench serve</code></td><td><code>python -m sglang.bench_serving</code></td></tr>
+      </tbody>
+    </table>
+    <p>No elijas motor por un benchmark de blog: corre el mismo barrido de la sección 10 contra ambos con tu modelo, tus prompts y tu GPU, y decide con esos números.</p>
+  </div>
+
+  <!-- 10. Benchmarking -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-gauge" aria-hidden="true"></i>10. Benchmark con SLOs y capacity planning</h2>
+    <p>La pregunta de producción no es "cuántos tokens/s da la GPU" sino <strong>cuántos usuarios atiende cumpliendo el SLO</strong>. Eso se mide con percentiles altos y con <em>goodput</em>: requests por segundo que cumplen todas las metas de latencia a la vez.</p>
+    <table class="model-table">
+      <thead><tr><th>Métrica</th><th>Qué mide</th><th>SLO típico de chat</th></tr></thead>
+      <tbody>
+        <tr><td>TTFT</td><td>Espera hasta el primer token (prefill + cola)</td><td>p99 ≤ 2 s</td></tr>
+        <tr><td>ITL / TPOT</td><td>Tiempo entre tokens / promedio por token de salida</td><td>p99 ≤ 60 ms (más rápido que la lectura)</td></tr>
+        <tr><td>E2EL</td><td>Latencia total del request</td><td>Depende del largo de respuesta; útil para timeouts</td></tr>
+        <tr><td>Goodput</td><td>Requests/s que cumplen todos los SLO</td><td>El número para dimensionar</td></tr>
+      </tbody>
+    </table>
+    <p>Un chequeo de cordura antes de medir: en decode a batch 1 cada token exige leer todos los pesos, así que el techo es aproximadamente <em>ancho de banda HBM / bytes de pesos</em>. Para Qwen3-8B en BF16 (~16,4 GB): ~200 tok/s en H100 (3,35 TB/s), ~120 en A100 80 GB (2 TB/s) y ~18 en L4 (300 GB/s), el doble en FP8. Si mides muy por debajo, hay overhead que investigar.</p>
+
+    <div class="sub-title">Barrido de concurrencia con <code>vllm bench serve</code></div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — bench_sweep.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+# Uso: ./bench_sweep.sh bf16   (etiqueta de la configuración del servidor)
+set -euo pipefail
+TAG="${1:-bf16}"
+export OPENAI_API_KEY="$VLLM_API_KEY"   # vllm bench envía esta variable como Bearer
+mkdir -p results
+
+for c in 1 4 16 32 64 128; do
+  n=$(( c * 8 &gt; 200 ? c * 8 : 200 ))
+  # --seed distinto por corrida cambia la muestra de prompts, pero con un archivo chico los prompts se repiten
+  # entre corridas y el prefix cache los acelera: reinicia el servidor entre configuraciones (ver nota abajo)
+  vllm bench serve \
+    --backend vllm \
+    --model Qwen/Qwen3-8B \
+    --served-model-name latam-chat \
+    --host 127.0.0.1 --port 8000 \
+    --dataset-name custom --dataset-path prompts_es_pt.jsonl \
+    --custom-output-len 256 \
+    --num-prompts "$n" \
+    --max-concurrency "$c" \
+    --seed "$c" \
+    --percentile-metrics ttft,tpot,itl,e2el \
+    --metric-percentiles 50,90,99 \
+    --goodput ttft:2000 tpot:60 \
+    --metadata config="$TAG" \
+    --save-result --result-dir results \
+    --result-filename "${TAG}_c${c}.json"
+done</code></pre>
+    </div>
+    <p><code>prompts_es_pt.jsonl</code> es el archivo de preguntas reales en español y portugués que genera <code>make_prompts_es_pt.py</code> en la guía básica (un JSON por línea con campo <code>prompt</code>). Para aislar el efecto de un cambio usa también <code>--dataset-name random --random-input-len 1024 --random-output-len 256</code>. Para simular llegadas en vez de usuarios fijos, reemplaza <code>--max-concurrency</code> por <code>--request-rate</code> con <code>--burstiness</code> (&lt; 1 = ráfagas).</p>
+
+    <div class="sub-title">GuideLLM: barrido automático y reportes</div>
+    <p>La propia documentación de vLLM recomienda GuideLLM para benchmarks de servidores en producción: busca el rango de tasas entre el modo síncrono y el throughput máximo, y deja JSON, CSV y HTML. Funciona contra cualquier endpoint OpenAI, incluido SGLang.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — bench_guidellm.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">mkdir -p results/guidellm
+# 1) Carga sintética 1024 → 256 tokens, barrido de 8 tasas, 60 s por tasa
+guidellm run \
+  --backend kind=openai_http,target=http://127.0.0.1:8000,model=latam-chat,api_key="$VLLM_API_KEY" \
+  --tokenizer kind=huggingface_auto,model=Qwen/Qwen3-8B \
+  --profile kind=sweep,sweep_size=8 \
+  --constraint kind=max_duration,seconds=60 \
+  --data kind=synthetic_text,prompt_tokens=1024,output_tokens=256 \
+  --output kind=json,path=results/guidellm/sintetico.json \
+  --output kind=html,path=results/guidellm/sintetico.html
+
+# 2) Prompts reales es/pt con 32 usuarios concurrentes y respuestas de hasta 256 tokens
+guidellm run \
+  --backend kind=openai_http,target=http://127.0.0.1:8000,model=latam-chat,api_key="$VLLM_API_KEY",max_tokens=256 \
+  --tokenizer kind=huggingface_auto,model=Qwen/Qwen3-8B \
+  --profile kind=concurrent,streams=32 \
+  --constraint kind=max_duration,seconds=120 \
+  --data kind=json_file,path=prompts_es_pt.jsonl \
+  --output kind=json,path=results/guidellm/es_pt.json</code></pre>
+    </div>
+    <p>Para comparar con SGLang usa el mismo workload: <code>python -m sglang.bench_serving --backend sglang --port 30000 --dataset-name random --random-input-len 1024 --random-output-len 256 --num-prompts 500 --max-concurrency 32</code>.</p>
+
+    <div class="sub-title">De la curva a réplicas y costo</div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — capacity.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import glob
+import json
+import math
+
+import pandas as pd
+
+SLO_TTFT_MS, SLO_ITL_MS = 2000, 60
+QPS_OBJETIVO = 12            # requests/s en hora punta
+USD_GPU_HORA = 2.5           # tu precio on-prem o nube regional
+GPUS_POR_REPLICA = 1
+
+rows = []
+for path in glob.glob("results/*_c*.json"):
+    r = json.load(open(path, encoding="utf-8"))
+    rows.append({k: r.get(k) for k in ("config", "max_concurrency", "request_throughput",
+                                       "output_throughput", "p99_ttft_ms", "p99_itl_ms", "request_goodput")})
+df = pd.DataFrame(rows).sort_values(["config", "max_concurrency"])
+print(df.to_string(index=False))
+
+ok = df[(df["p99_ttft_ms"] &lt;= SLO_TTFT_MS) &amp; (df["p99_itl_ms"] &lt;= SLO_ITL_MS)]
+for config, g in ok.groupby("config"):
+    best = g.loc[g["max_concurrency"].idxmax()]
+    replicas = math.ceil(QPS_OBJETIVO / best["request_throughput"])
+    usd_m = USD_GPU_HORA * GPUS_POR_REPLICA / (best["output_throughput"] * 3600) * 1e6
+    print(f"{config}: concurrencia máx. bajo SLO = {int(best['max_concurrency'])} | "
+          f"{best['request_throughput']:.2f} req/s por réplica → {replicas} réplicas | "
+          f"USD {usd_m:.2f} por 1M tokens de salida")</code></pre>
+    </div>
+    <div class="warn"><strong>Comparaciones justas:</strong> mismo dataset, misma semilla, warmup antes de medir, servidor reiniciado (o <code>vllm bench sweep serve</code>, que resetea los cachés) y el cliente en otra máquina o con CPUs dedicadas. Compara BF16 vs FP8 vs W4A16 (<a href="quantization.html">guía de cuantización</a>), con y sin EAGLE-3, y TP=2 contra dos réplicas con TP=1: para modelos que caben en una GPU, las réplicas suelen ganar en throughput y TP gana en latencia.</div>
+    <div class="tip"><strong>Ángulo Latam:</strong> si el servidor está fuera de la región, la red puede sumar 100-200 ms al TTFT; mide también desde donde están tus usuarios. Y compara el costo por millón de tokens contra las APIs comerciales con tus tokens reales en es/pt, no con precios por token calculados en inglés.</div>
+  </div>
+
+  <!-- 11. Escalar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-split" aria-hidden="true"></i>11. Escalar: TP, PP, DP, multi-nodo y disaggregation</h2>
+    <table class="model-table">
+      <thead><tr><th>Estrategia</th><th>Flag (vLLM)</th><th>Cuándo</th></tr></thead>
+      <tbody>
+        <tr><td>Tensor parallel</td><td><code>--tensor-parallel-size</code></td><td>El modelo no cabe en una GPU; dentro del nodo (NVLink)</td></tr>
+        <tr><td>Pipeline parallel</td><td><code>--pipeline-parallel-size</code></td><td>No cabe en un nodo: TP = GPUs por nodo, PP = número de nodos</td></tr>
+        <tr><td>Data parallel</td><td><code>--data-parallel-size</code></td><td>Cabe en una GPU y quieres más throughput (o réplicas detrás de un balanceador)</td></tr>
+        <tr><td>Expert parallel</td><td><code>--enable-expert-parallel</code></td><td>MoE grandes: reparte expertos en vez de partir cada uno</td></tr>
+      </tbody>
+    </table>
+    <p>Multi-nodo sin Ray: el mismo comando en cada nodo, con <code>--headless</code> en los workers. Dentro de un job Slurm de 2 nodos:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — node_serve.sh (lanzado con srun en cada nodo)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/usr/bin/env bash
+# sbatch: --nodes=2 --gpus-per-node=8 --ntasks-per-node=1 ; luego: srun bash node_serve.sh
+set -euo pipefail
+HEAD_NODE=$(scontrol show hostnames "$SLURM_JOB_NODELIST" | head -n 1)
+HEAD_IP=$(getent hosts "$HEAD_NODE" | awk '{print $1}')
+ARGS=(--tensor-parallel-size 8 --pipeline-parallel-size 2
+      --nnodes 2 --node-rank "$SLURM_NODEID" --master-addr "$HEAD_IP")
+# El nodo 0 sirve la API; los demás solo ejecutan su parte del modelo
+[ "$SLURM_NODEID" -eq 0 ] || ARGS+=(--headless)
+vllm serve "&lt;TU_ORG&gt;/&lt;modelo-70b&gt;" "${ARGS[@]}" --served-model-name latam-chat --port 8000</code></pre>
+    </div>
+    <p>Cuando el tráfico mezcla prompts largos (RAG, documentos) con mucha generación, prefill y decode compiten por la misma GPU y el ITL se vuelve errático aunque uses chunked prefill. El siguiente paso es <strong>disaggregated serving</strong>: GPUs de prefill y de decode separadas que se pasan el KV cache por red, con orquestadores como <a href="https://github.com/ai-dynamo/dynamo" target="_blank" rel="noopener">NVIDIA Dynamo</a>, <a href="https://github.com/llm-d/llm-d" target="_blank" rel="noopener">llm-d</a> o el router de SGLang (<code>--disaggregation-mode prefill|decode</code>). Antes de eso, prueba a <strong>extender el KV cache a CPU</strong>: muchos usuarios que vuelven a la misma conversación ganan TTFT sin agregar GPUs. Con LMCache instalado en el entorno de vLLM basta agregar <code>--kv-transfer-config '{"kv_connector": "LMCacheConnectorV1", "kv_role": "kv_both"}'</code>.</p>
+  </div>
+
+  <!-- 12. Operación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>12. Operación en el cluster: Slurm, Prometheus y proxy</h2>
+    <p>Un job que levanta el servidor, espera a que <code>/health</code> responda y publica la URL en un archivo compartido para que clientes y benchmarks la encuentren:</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — serve.sbatch</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">#!/bin/bash
+#SBATCH --job-name=latam-chat
+#SBATCH --nodes=1
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
+#SBATCH --output=logs/%x-%j.out
+set -euo pipefail
+source ~/envs/vllm/bin/activate
+export HF_HOME="/scratch/$USER/hf"
+export VLLM_API_KEY="$(cat ~/.secrets/vllm_api_key)"
+PORT=$(( 8000 + SLURM_JOB_ID % 1000 ))
+
+vllm serve Qwen/Qwen3-8B --config serve_vllm.yaml --port "$PORT" &amp;
+PID=$!
+
+for _ in $(seq 1 90); do
+  if curl -sf "http://127.0.0.1:${PORT}/health" &gt; /dev/null; then
+    mkdir -p "$HOME/endpoints"
+    echo "http://$(hostname -f):${PORT}" &gt; "$HOME/endpoints/latam-chat.url"
+    echo "servidor listo en $(hostname -f):${PORT}"
+    break
+  fi
+  kill -0 "$PID" 2&gt; /dev/null || { echo "vllm terminó durante el arranque"; exit 1; }
+  sleep 10
+done
+wait "$PID"</code></pre>
+    </div>
+    <p>Crea <code>logs/</code> antes del <code>sbatch</code> (Slurm no lo crea). Prometheus lee <code>/metrics</code> de vLLM y de SGLang (con <code>--enable-metrics</code>); agrega el <code>host:puerto</code> que publica el job a <code>scrape_configs</code>; las alertas mínimas son p99 de TTFT e ITL, <code>vllm:num_requests_waiting</code> creciendo, <code>vllm:kv_cache_usage_perc</code> cerca de 1 y <code>vllm:num_preemptions</code> subiendo.</p>
+    <div class="warn"><strong>Seguridad:</strong> <code>--api-key</code> solo protege las rutas que empiezan con <code>/v1</code>, <code>/v2</code>, <code>/inference</code> y <code>/cohere</code>; rutas como <code>/invocations</code> quedan abiertas. Expón el servicio solo detrás de un reverse proxy (nginx, Caddy, un API gateway) que termine TLS, permita únicamente <code>/v1/chat/completions</code>, <code>/v1/completions</code> y <code>/v1/models</code>, bloquee <code>/v1/load_lora_adapter</code> y aplique rate limiting por usuario. Para moderar contenido delante y detrás del modelo, sigue con <a href="guardrails-produccion-vllm.html">Guardrails en producción con vLLM</a>.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>PagedAttention (Kwon et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>SGLang (Zheng et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Sarathi-Serve: chunked prefill (Agrawal et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.15100" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>XGrammar (Dong et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2311.03285" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>S-LoRA (Sheng et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>EAGLE-3 (Li et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>DistServe: goodput y disaggregation (Zhong et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2407.07000" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Etalon: métricas de inferencia (Agrawal et al., 2024)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/usage/v1_guide/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Guía vLLM V1</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/structured_outputs/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Structured outputs (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/tool_calling/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Tool calling (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/reasoning_outputs/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Reasoning outputs (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/lora/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>LoRA adapters (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/speculative_decoding/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Speculative decoding (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/serving/parallelism_scaling/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Parallelism and Scaling (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/usage/metrics/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Métricas (vLLM)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/benchmarking/cli/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Benchmark CLI (vLLM)</a>
+      <a class="source-link" href="https://docs.sglang.io/docs/get-started/install" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Instalación de SGLang</a>
+      <a class="source-link" href="https://docs.sglang.io/docs/advanced_features/speculative_decoding" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Speculative decoding (SGLang)</a>
+      <a class="source-link" href="https://docs.sglang.io/docs/advanced_features/hicache" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>HiCache (SGLang)</a>
+      <a class="source-link" href="https://qwen.readthedocs.io/en/latest/framework/function_call.html" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Function calling con Qwen</a>
+      <a class="source-link" href="https://jax-ml.github.io/scaling-book/inference/" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>All About Transformer Inference</a>
+      <a class="source-link" href="https://github.com/vllm-project/guidellm" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>GuideLLM</a>
+      <a class="source-link" href="https://github.com/vllm-project/speculators" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>speculators</a>
+      <a class="source-link" href="https://github.com/LMCache/LMCache" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>LMCache</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-8B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-8B (HF)</a>
+      <a class="source-link" href="https://huggingface.co/RedHatAI/Qwen3-8B-speculator.eagle3" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-8B EAGLE-3 speculator (HF)</a>
+      <a class="source-link" href="https://huggingface.co/RedHatAI/Qwen3-8B-FP8-dynamic" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-8B FP8 dynamic (HF)</a>
+      <a class="source-link" href="inferencia.html"><i class="ti ti-bolt"></i>Guía: Serving con vLLM (básica)</a>
+      <a class="source-link" href="quantization.html"><i class="ti ti-scale"></i>Guía: Cuantización</a>
+      <a class="source-link" href="speculative-decoding.html"><i class="ti ti-rocket"></i>Guía: Speculative decoding</a>
+      <a class="source-link" href="lora-finetuning.html"><i class="ti ti-adjustments"></i>Guía: LoRA fine-tuning</a>
+      <a class="source-link" href="guardrails-produccion-vllm.html"><i class="ti ti-shield-check"></i>Guía: Guardrails con vLLM</a>
+      <a class="source-link" href="agentes-mcp.html"><i class="ti ti-tool"></i>Guía: Agentes y MCP</a>
+      <a class="source-link" href="cluster.html"><i class="ti ti-server"></i>Guía: Cluster</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

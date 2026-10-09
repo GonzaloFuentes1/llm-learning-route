@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM-as-a-judge calibrado: rúbricas, validación humana y corrección estadística — LatamGPT</title>
+<meta name="description" content="Cómo usar un juez LLM sin sesgar tus resultados: rúbrica en español, juez abierto con vLLM, anotación humana doble, sondas de sesgo y accuracy corregida con intervalos (Lee et al. y PPI) sobre Trueque en español y portugués.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Evaluación</div>
+    <h1 class="guide-title">LLM-as-a-judge calibrado: rúbricas, validación humana y corrección estadística</h1>
+    <div class="guide-desc">Un juez LLM no es un oráculo: tiene sensibilidad y especificidad imperfectas, y eso sesga el puntaje que reportas. Esta guía arma el pipeline completo sobre Trueque (preguntas de conocimiento latinoamericano en español y portugués): rúbrica en español, juez abierto servido con vLLM, anotación humana doble, sondas de sesgo, corrección de Lee et al. (2025) e intervalos con PPI.</div>
+  </div>
+
+  <!-- 1. Cuándo usar un juez -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-gavel" aria-hidden="true"></i>1. Cuándo usar un juez (y cuándo no)</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Respuestas del modelo</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Juez con rúbrica (vLLM)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Calibración humana (~180 ítems)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Sensibilidad / especificidad</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Accuracy corregida ± IC</div>
+    </div>
+
+    <p>Un juez LLM se justifica cuando la respuesta es abierta y no hay un verificador exacto: preguntas factuales con respuesta de referencia redactada (Trueque, CHOCLO), comparación de dos respuestas largas (m-ArenaHard v2.0 en es/pt) o rúbricas de estilo y adecuación cultural. Si la tarea tiene opción múltiple, una respuesta numérica o tests ejecutables, usa el verificador determinista: el juez solo agrega ruido y costo.</p>
+
+    <table class="model-table">
+      <tr><th>Tipo de tarea</th><th>Evaluador recomendado</th><th>Ejemplo es/pt</th></tr>
+      <tr><td>Opción múltiple / log-likelihood</td><td>Harness (lm-eval, lighteval), sin juez</td><td>IberoBench, PoETa v2</td></tr>
+      <tr><td>Matemática con respuesta final</td><td>Parser + verificador simbólico</td><td>Problemas tipo PAES/ENEM</td></tr>
+      <tr><td>Factual abierta con referencia</td><td>Juez anclado a la referencia + calibración</td><td>Trueque, CHOCLO</td></tr>
+      <tr><td>Calidad general / preferencia</td><td>Juez pareado con swap de posición</td><td>m-ArenaHard v2.0 (es, pt)</td></tr>
+      <tr><td>Seguridad / rechazo</td><td>Clasificador dedicado (HarmBench cls, Qwen3Guard)</td><td>Ver guía de red teaming</td></tr>
+    </table>
+
+    <p>El problema central lo formalizan <strong>Lee et al. (2025)</strong>: si el juez marca como correctas respuestas que no lo son (baja especificidad) o rechaza respuestas correctas (baja sensibilidad), la proporción de "correctas" según el juez es un estimador <em>sesgado</em> de la accuracy real, y además el reporte habitual no incluye la incertidumbre de haber medido al juez. La ficha de Trueque declara que su reporte se está ajustando siguiendo ese paper (con Qwen2.5-72B-Instruct como juez base): esta guía implementa ese ajuste de punta a punta.</p>
+
+    <table class="model-table">
+      <tr><th>Componente</th><th>Hardware</th><th>Tiempo / costo</th></tr>
+      <tr><td>Juez Qwen/Qwen3-32B (bf16)</td><td>2× A100/H100 80 GB (TP=2)</td><td>500 juicios: pocos minutos</td></tr>
+      <tr><td>Juez Qwen/Qwen3-32B-FP8</td><td>1× 80 GB</td><td>Similar, ~mitad de VRAM</td></tr>
+      <tr><td>Juez Qwen/Qwen2.5-72B-Instruct (el de Trueque)</td><td>4× 80 GB bf16 o 2× 80 GB con <code>--quantization fp8</code></td><td>~2× más lento que 32B</td></tr>
+      <tr><td>Modelo evaluado de ejemplo (Qwen/Qwen2.5-7B-Instruct)</td><td>1× 24 GB o más</td><td>500 respuestas: 1-2 min</td></tr>
+      <tr><td>Anotación humana</td><td>2 anotadores × ~180 ítems</td><td>~6-8 h de trabajo en total</td></tr>
+    </table>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> Qwen/Qwen3-8B como juez en una sola GPU de 24 GB (L4, RTX 4090). Será peor juez, pero la gracia del método es que la calibración <em>mide</em> cuánto peor es y la corrección lo absorbe, siempre que sensibilidad + especificidad − 1 no sea demasiado chico (ver sección 6).</div>
+  </div>
+
+  <!-- 2. Rúbrica -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-list-check" aria-hidden="true"></i>2. Diseño del juez: anclado a la referencia y con tres clases</h2>
+
+    <p>Tres decisiones bajan más el error del juez que cambiar de modelo: (1) <strong>anclarlo a la referencia</strong> (el juez compara, no "sabe"); (2) usar una <strong>rúbrica categórica</strong> con definiciones operativas en vez de una escala 1-10; y (3) separar la <strong>abstención</strong> ("no lo sé") de la <strong>alucinación</strong> (respuesta segura pero falsa). Para usos de alto riesgo, un modelo que se abstiene es mucho menos dañino que uno que inventa, y un puntaje binario los mezcla.</p>
+
+    <table class="model-table">
+      <tr><th>Clase</th><th>Definición operativa</th><th>Ejemplo (pregunta: "¿Qué es la corpachada en Argentina?")</th></tr>
+      <tr><td>CORRECTA</td><td>Contiene el dato central de la referencia y no agrega hechos falsos relevantes</td><td>"Ceremonia andina del 1 de agosto de ofrenda a la Pachamama en el noroeste argentino"</td></tr>
+      <tr><td>INCORRECTA</td><td>Contradice la referencia, omite el dato central o inventa hechos</td><td>"Es un plato típico de Mendoza a base de maíz"</td></tr>
+      <tr><td>NO_RESPONDE</td><td>Declara no saber, se niega o pide contexto sin aportar un dato verificable</td><td>"No tengo información suficiente sobre esa celebración"</td></tr>
+    </table>
+
+    <p>La rúbrica va en español aunque haya preguntas en portugués (Trueque trae las de Brasil en portugués): así puedes medir después si el juez es más severo con un idioma (sección 5). Guarda este archivo como <code>judge.py</code>; otros scripts importan la rúbrica desde aquí.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · judge.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""judge.py: juzga candidatas.jsonl con un juez servido por vLLM (API compatible con OpenAI)."""
+import asyncio
+import json
+from typing import Literal
+
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+
+CLASES = ["CORRECTA", "INCORRECTA", "NO_RESPONDE"]
+
+RUBRICA_ES = """Eres un evaluador estricto de conocimiento factual y cultural sobre América Latina.
+Compara la RESPUESTA CANDIDATA con la RESPUESTA DE REFERENCIA, que fue verificada con fuentes.
+
+Criterios:
+- CORRECTA: contiene el dato central de la referencia y no agrega afirmaciones falsas relevantes.
+  No penalices el estilo, la extensión ni detalles adicionales que sean correctos.
+- INCORRECTA: contradice la referencia, omite el dato central o agrega hechos falsos,
+  aunque suene plausible o esté bien redactada.
+- NO_RESPONDE: el modelo declara no saber, se niega o pide más contexto sin dar un dato verificable.
+
+La pregunta puede estar en español o en portugués: evalúa el contenido, no el idioma.
+Escribe una justificación de máximo dos oraciones y después el veredicto.
+
+PAÍS: {pais}
+PREGUNTA: {pregunta}
+RESPUESTA DE REFERENCIA: {referencia}
+RESPUESTA CANDIDATA: {candidata}"""
+
+
+class Veredicto(BaseModel):
+    justificacion: str  # va primero: el juez "razona" antes de decidir
+    veredicto: Literal["CORRECTA", "INCORRECTA", "NO_RESPONDE"]
+
+
+FORMATO = {
+    "type": "json_schema",
+    "json_schema": {"name": "veredicto", "schema": Veredicto.model_json_schema()},
+}
+
+
+def prompt_juez(item: dict, plantilla: str = RUBRICA_ES) -&gt; str:
+    return plantilla.format(
+        pais=item["country"], pregunta=item["question"],
+        referencia=item["reference_answer"], candidata=item["respuesta"],
+    )
+
+
+async def juzgar(client: AsyncOpenAI, sem: asyncio.Semaphore, item: dict) -&gt; dict:
+    async with sem:
+        r = await client.chat.completions.create(
+            model="juez",                       # --served-model-name del servidor
+            messages=[{"role": "user", "content": prompt_juez(item)}],
+            temperature=0.0,
+            max_tokens=400,
+            response_format=FORMATO,            # salida estructurada de vLLM
+        )
+    v = Veredicto.model_validate_json(r.choices[0].message.content)
+    return {**item, "juez": v.veredicto, "juez_justificacion": v.justificacion}
+
+
+async def main(entrada: str = "candidatas.jsonl", salida: str = "veredictos.jsonl") -&gt; None:
+    client = AsyncOpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+    sem = asyncio.Semaphore(64)                 # vLLM hace el batching continuo
+    with open(entrada, encoding="utf-8") as f:
+        items = [json.loads(linea) for linea in f]
+    resultados = await asyncio.gather(*(juzgar(client, sem, x) for x in items))
+    with open(salida, "w", encoding="utf-8") as f:
+        for r in resultados:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    conteo = {c: sum(r["juez"] == c for r in resultados) for c in CLASES}
+    print("Veredictos del juez:", conteo)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+    </div>
+
+    <div class="tip"><strong>Salida más barata:</strong> si no necesitas la justificación, cambia <code>response_format</code> por <code>extra_body={"structured_outputs": {"choice": CLASES}}</code>: el juez solo puede emitir una de las tres etiquetas. Los parámetros viejos <code>guided_json</code>/<code>guided_choice</code> fueron eliminados en vLLM v0.12; hoy todo pasa por <code>structured_outputs</code> o <code>response_format</code>.</div>
+  </div>
+
+  <!-- 3. Servir y generar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server" aria-hidden="true"></i>3. Servir el juez y generar las respuestas candidatas</h2>
+
+    <p>Qwen3 piensa por defecto. Para un juez con rúbrica categórica conviene apagar el modo thinking en el servidor (más barato y determinista) y dejar que la justificación del JSON cumpla ese rol. Si quieres activarlo para ítems difíciles, pásalo por request con <code>extra_body={"chat_template_kwargs": {"enable_thinking": True}}</code>; el razonamiento queda en <code>choices[0].message.reasoning</code>, separado del JSON.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install -U vllm openai pydantic datasets pandas scikit-learn krippendorff ppi-python scipy
+
+# Juez en GPUs 0-1 (bf16, TP=2)
+CUDA_VISIBLE_DEVICES=0,1 vllm serve Qwen/Qwen3-32B \
+  --tensor-parallel-size 2 \
+  --max-model-len 16384 \
+  --reasoning-parser qwen3 \
+  --default-chat-template-kwargs '{"enable_thinking": false}' \
+  --served-model-name juez \
+  --port 8000
+
+# Presupuesto reducido: una GPU de 80 GB con el checkpoint FP8 oficial
+# CUDA_VISIBLE_DEVICES=0 vllm serve Qwen/Qwen3-32B-FP8 --max-model-len 16384 \
+#   --reasoning-parser qwen3 --default-chat-template-kwargs '{"enable_thinking": false}' \
+#   --served-model-name juez --port 8000</code></pre>
+    </div>
+
+    <p>Las respuestas candidatas se generan offline con vLLM, en otra GPU. El ejemplo usa un modelo chico; para evaluar el SFT de LatamGPT cambia el id por <code>latam-gpt/Llama-3.1-70B-LatamGPT-SFT-1.0</code> con <code>tensor_parallel_size=4</code>. Ojo con un detalle real del dataset: la columna <code>country</code> tiene variantes de mayúsculas ("República dominicana", "paraguay"), así que se normaliza antes de estratificar.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · generate_candidates.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""generate_candidates.py: respuestas del modelo evaluado a las 500 preguntas de Trueque."""
+import json
+import os
+
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "2")   # GPU libre (el juez usa 0-1)
+
+from datasets import load_dataset
+from vllm import LLM, SamplingParams
+
+MODELO = "Qwen/Qwen2.5-7B-Instruct"
+SISTEMA = {
+    "es": "Responde en español, en dos o tres oraciones y con precisión. "
+          "Si no conoces la respuesta, di explícitamente que no lo sabes.",
+    "pt": "Responda em português, em duas ou três frases e com precisão. "
+          "Se não souber a resposta, diga explicitamente que não sabe.",
+}
+
+ds = load_dataset("latam-gpt/Trueque-Benchmark-beta-0.1", split="train")
+ds = ds.map(
+    lambda x, i: {
+        "id": i,
+        "country": (x["country"] or "Latam").strip().title(),
+        "lang": "pt" if (x["country"] or "").strip().title() == "Brasil" else "es",
+    },
+    with_indices=True,
+)
+
+llm = LLM(model=MODELO, dtype="bfloat16", max_model_len=4096)
+params = SamplingParams(temperature=0.0, max_tokens=384)
+conversaciones = [
+    [{"role": "system", "content": SISTEMA[x["lang"]]},
+     {"role": "user", "content": x["question"]}]
+    for x in ds
+]
+salidas = llm.chat(conversaciones, params)
+
+with open("candidatas.jsonl", "w", encoding="utf-8") as f:
+    for x, out in zip(ds, salidas):
+        x = dict(x, respuesta=out.outputs[0].text.strip())
+        f.write(json.dumps(x, ensure_ascii=False) + "\n")
+print("Listo:", len(ds), "respuestas en candidatas.jsonl")</code></pre>
+    </div>
+
+    <p>Con el servidor arriba y <code>candidatas.jsonl</code> listo, corre <code>python judge.py</code>. El resultado (<code>veredictos.jsonl</code>) es la proporción "ingenua" del juez: todavía no es un número reportable.</p>
+  </div>
+
+  <!-- 4. Calibración humana -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-users" aria-hidden="true"></i>4. Set de calibración humana: muestreo, anotación doble y acuerdo</h2>
+
+    <p>La calibración responde una pregunta concreta: <em>¿con qué frecuencia el juez coincide con un humano en este benchmark, con este modelo evaluado?</em> Cuatro reglas: muestra estratificada por país (la validez cultural cambia entre países y un juez puede ser bueno en México y malo en Bolivia); anotadores <strong>ciegos</strong> al veredicto del juez; dos anotadores independientes con la misma rúbrica; y adjudicación de los desacuerdos por una tercera persona. Con 500 ítems, 150-200 anotados es un buen equilibrio.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · calibration_sample.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""calibration_sample.py: muestra estratificada por país para anotación humana doble y ciega."""
+import pandas as pd
+
+N_CAL = 180
+MIN_POR_PAIS = 3
+SEMILLA = 13
+
+df = pd.read_json("veredictos.jsonl", lines=True)
+cuota = (df["country"].value_counts(normalize=True) * N_CAL).round().clip(lower=MIN_POR_PAIS).astype(int)
+
+partes = []
+for pais, grupo in df.groupby("country"):
+    partes.append(grupo.sample(n=min(len(grupo), int(cuota[pais])), random_state=SEMILLA))
+cal = pd.concat(partes)
+
+# Peso = proporción del país en los ítems NO anotados / proporción en la muestra anotada.
+# Solo lo necesita PPI (sección 7), que estima la media sobre los no anotados;
+# la corrección de Lee et al. no depende de cómo muestreaste.
+p_resto = df.loc[~df["id"].isin(cal["id"]), "country"].value_counts(normalize=True)
+p_cal = cal["country"].value_counts(normalize=True)
+cal["peso"] = cal["country"].map(p_resto / p_cal).fillna(0.0)
+
+cal.to_csv("calibracion_con_juez.csv", index=False)       # uso interno
+ciego = cal[["id", "country", "lang", "question", "reference_answer", "respuesta"]]
+ciego = ciego.sample(frac=1, random_state=SEMILLA)          # orden aleatorio
+for anotador in ["A", "B"]:
+    ciego.assign(etiqueta="").to_csv(f"anotar_{anotador}.csv", index=False)
+print(len(cal), "ítems a anotar;", cal["country"].nunique(), "países")</code></pre>
+    </div>
+
+    <p>Cada anotador llena <code>etiqueta</code> con una de las tres clases. Después se juntan en <code>anotado.csv</code> con columnas <code>id</code>, <code>etiqueta_A</code>, <code>etiqueta_B</code> y <code>etiqueta_final</code> (adjudicada). Antes de mirar al juez, mide el acuerdo entre humanos: es el techo de lo que puedes exigirle.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · agreement.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""agreement.py: acuerdo humano-humano y juez-humano."""
+import krippendorff
+import numpy as np
+import pandas as pd
+from sklearn.metrics import cohen_kappa_score, confusion_matrix
+
+CLASES = ["CORRECTA", "INCORRECTA", "NO_RESPONDE"]
+COD = {c: i for i, c in enumerate(CLASES)}
+
+an = pd.read_csv("anotado.csv")
+cal = pd.read_csv("calibracion_con_juez.csv").merge(an, on="id")
+
+# 1) Acuerdo entre humanos
+kappa_hh = cohen_kappa_score(cal["etiqueta_A"], cal["etiqueta_B"])
+datos = np.array([cal["etiqueta_A"].map(COD), cal["etiqueta_B"].map(COD)], dtype=float)  # anotadores x ítems
+alpha_hh = krippendorff.alpha(reliability_data=datos, level_of_measurement="nominal")
+print(f"Humano-humano: kappa={kappa_hh:.3f}  alpha={alpha_hh:.3f}")
+
+# 2) Juez vs etiqueta adjudicada
+kappa_jh = cohen_kappa_score(cal["etiqueta_final"], cal["juez"])
+cm = confusion_matrix(cal["etiqueta_final"], cal["juez"], labels=CLASES)
+print(f"Juez-humano:   kappa={kappa_jh:.3f}")
+print(pd.DataFrame(cm, index=[f"humano={c}" for c in CLASES], columns=[f"juez={c}" for c in CLASES]))
+
+# 3) Sensibilidad y especificidad para la clase positiva CORRECTA
+humano_ok = cal["etiqueta_final"].eq("CORRECTA").to_numpy()
+juez_ok = cal["juez"].eq("CORRECTA").to_numpy()
+sens = (juez_ok &amp; humano_ok).sum() / humano_ok.sum()
+esp = (~juez_ok &amp; ~humano_ok).sum() / (~humano_ok).sum()
+print(f"Sensibilidad={sens:.3f}  Especificidad={esp:.3f}  (m1={humano_ok.sum()}, m0={(~humano_ok).sum()})")
+
+# 4) Desglose por idioma: ¿el juez es más indulgente en portugués?
+for lang, g in cal.groupby("lang"):
+    print(lang, "kappa juez-humano =", round(cohen_kappa_score(g["etiqueta_final"], g["juez"]), 3), "n =", len(g))</code></pre>
+    </div>
+
+    <div class="warn"><strong>Lee la matriz, no solo el kappa:</strong> el error más caro en Trueque es <code>humano=INCORRECTA → juez=CORRECTA</code> (el juez se deja convencer por una alucinación fluida). Eso es baja especificidad e infla la accuracy. Thakur et al. (2024) muestran que el porcentaje de acuerdo esconde estas diferencias y que kappa discrimina mejor entre jueces.</div>
+
+    <table class="model-table">
+      <tr><th>Métrica</th><th>Qué responde</th><th>Umbral orientativo</th></tr>
+      <tr><td>κ / α humano-humano</td><td>¿La rúbrica es clara?</td><td>&lt; 0.6: reescribe la rúbrica antes de seguir</td></tr>
+      <tr><td>κ juez-humano</td><td>¿El juez se acerca al techo humano?</td><td>Cerca de κ humano-humano</td></tr>
+      <tr><td>Sensibilidad + especificidad − 1</td><td>¿La corrección será estable?</td><td>&gt; 0.5 cómodo; &lt; 0.3 IC muy anchos</td></tr>
+    </table>
+  </div>
+
+  <!-- 5. Sondas de sesgo -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-shuffle" aria-hidden="true"></i>5. Sondas de sesgo: posición, longitud e idioma</h2>
+
+    <p>La calibración mide el error <em>promedio</em>; las sondas buscan errores <em>sistemáticos</em> que pueden cambiar entre modelos evaluados. Los sesgos más documentados (Zheng et al. 2023; Ye et al. 2024) son posición en comparaciones pareadas, preferencia por respuestas largas, auto-preferencia (el juez favorece a su propia familia de modelos) y, para nosotros, idioma: MM-Eval muestra que los jueces rinden peor fuera del inglés y en idiomas de menos recursos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · bias_probes.py (requiere judge.py en el mismo directorio)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""bias_probes.py: sondas de longitud, idioma y posición contra el juez servido en :8000."""
+import pandas as pd
+from openai import OpenAI
+
+from judge import CLASES, prompt_juez
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+
+
+def preguntar(prompt: str, opciones: list[str] | None = None, max_tokens: int = 8) -&gt; str:
+    extra = {"structured_outputs": {"choice": opciones}} if opciones else {}
+    r = client.chat.completions.create(
+        model="juez", messages=[{"role": "user", "content": prompt}],
+        temperature=0.0, max_tokens=max_tokens, extra_body=extra,
+    )
+    return r.choices[0].message.content.strip()
+
+
+cal = pd.read_csv("calibracion_con_juez.csv").merge(pd.read_csv("anotado.csv"), on="id")
+incorrectas = cal[cal["etiqueta_final"] == "INCORRECTA"].to_dict("records")
+
+# 1) Longitud: agregar relleno sin información nueva a respuestas incorrectas
+RELLENO = (" Cabe destacar que este tema tiene una gran relevancia histórica y cultural para la región, "
+           "y ha sido objeto de numerosos estudios y debates a lo largo de los años.")
+flips = sum(preguntar(prompt_juez({**x, "respuesta": x["respuesta"] + RELLENO}), CLASES) == "CORRECTA"
+            for x in incorrectas)
+print(f"Sesgo de longitud: {flips}/{len(incorrectas)} incorrectas pasan a CORRECTA con relleno")
+
+# 2) Idioma: la misma respuesta traducida al portugués debería recibir el mismo veredicto
+es_items = cal[cal["lang"] == "es"].head(60).to_dict("records")
+cambios = 0
+for x in es_items:
+    trad = preguntar("Traduce al portugués de Brasil, sin agregar ni quitar información:\n\n" + x["respuesta"],
+                     max_tokens=512)
+    v_es = preguntar(prompt_juez(x), CLASES)
+    v_pt = preguntar(prompt_juez({**x, "respuesta": trad}), CLASES)
+    cambios += v_es != v_pt
+print(f"Sesgo de idioma: {cambios}/{len(es_items)} veredictos cambian al pasar la respuesta a portugués")
+
+# 3) Posición (juez pareado): consistencia al intercambiar A y B
+PAREADO = """¿Cuál respuesta responde mejor la pregunta, con precisión factual? Responde A, B o EMPATE.
+PREGUNTA: {q}
+RESPUESTA A: {a}
+RESPUESTA B: {b}"""
+
+
+def consistencia_posicion(pares: list[tuple[str, str, str]]) -&gt; float:
+    """pares = [(pregunta, respuesta_modelo_1, respuesta_modelo_2), ...]"""
+    espejo = {"A": "B", "B": "A", "EMPATE": "EMPATE"}
+    ok = 0
+    for q, r1, r2 in pares:
+        v1 = preguntar(PAREADO.format(q=q, a=r1, b=r2), ["A", "B", "EMPATE"])
+        v2 = preguntar(PAREADO.format(q=q, a=r2, b=r1), ["A", "B", "EMPATE"])
+        ok += v1 == espejo[v2]
+    return ok / len(pares)</code></pre>
+    </div>
+
+    <p>Para la sonda de posición genera respuestas de dos modelos a los prompts de <code>CohereLabs/m-ArenaHard-v2.0</code> (configs <code>es</code> y <code>pt</code>, split <code>test</code>, columna <code>prompt</code>) y pásalas a <code>consistencia_posicion</code>. Si la consistencia baja de ~90%, reporta siempre el promedio de ambos órdenes y cuenta como empate los casos inconsistentes.</p>
+
+    <div class="warn"><strong>Auto-preferencia:</strong> en este ejemplo el juez (Qwen3) y el modelo evaluado (Qwen2.5) son de la misma familia. Si comparas un Qwen contra el SFT de LatamGPT con este juez, calibra por separado para cada modelo evaluado o usa un juez de otra familia. La calibración vale para el par (juez, modelo evaluado) en el que la mediste.</div>
+  </div>
+
+  <!-- 6. Corrección de Lee et al. -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-math-function" aria-hidden="true"></i>6. Corrección de sesgo con Lee et al. (2025)</h2>
+
+    <p>Sea θ la accuracy real (según humanos), p la proporción de CORRECTA según el juez en el test, q₁ la sensibilidad y q₀ la especificidad del juez. Como p = θ·q₁ + (1 − θ)·(1 − q₀), despejando:</p>
+
+    <div class="tip"><strong>Estimador corregido:</strong> θ̂ = (p̂ + q̂₀ − 1) / (q̂₀ + q̂₁ − 1), truncado a [0, 1].<br>
+    <strong>Varianza (método delta):</strong> Var(θ̂) ≈ [ p̂(1−p̂)/n + (1−θ̂)²·q̂₀(1−q̂₀)/m₀ + θ̂²·q̂₁(1−q̂₁)/m₁ ] / (q̂₀ + q̂₁ − 1)², con n ítems de test, m₀ negativos y m₁ positivos humanos en la calibración.</div>
+
+    <p>Es el estimador clásico de Rogan-Gladen para prevalencia con un test imperfecto, más un intervalo que suma las dos fuentes de incertidumbre: el test y la calibración. Una propiedad importante: como q₀ y q₁ están condicionados a la etiqueta verdadera, la calibración puede tener otra proporción de correctas que el test sin sesgar la corrección, siempre que la sensibilidad y la especificidad del juez no cambien entre estratos (si sobre-muestreaste países chicos y el juez es peor en ellos, q̂₀ y q̂₁ quedan sesgados: revisa el desglose por país). El código implementa la versión de Wald simple y un bootstrap estratificado como chequeo; la función <code>confidence_interval</code> del repo oficial agrega un suavizado tipo Agresti-Coull y un ajuste del centro del intervalo, mejor para muestras chicas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · correct.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""correct.py: accuracy corregida por sensibilidad/especificidad del juez (Lee et al., 2025)."""
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+
+
+def corregir(p: float, q0: float, q1: float) -&gt; float:
+    return float(np.clip((p + q0 - 1) / (q0 + q1 - 1), 0.0, 1.0))
+
+
+def ic_lee(juez_test: np.ndarray, juez_cal: np.ndarray, humano_cal: np.ndarray, alpha: float = 0.05):
+    """juez_test: bool (juez dice CORRECTA) en el test; juez_cal/humano_cal: bool en la calibración."""
+    n, p = len(juez_test), juez_test.mean()
+    pos, neg = humano_cal, ~humano_cal
+    m1, m0 = pos.sum(), neg.sum()
+    q1 = juez_cal[pos].mean()              # sensibilidad
+    q0 = (~juez_cal[neg]).mean()           # especificidad
+    j = q0 + q1 - 1
+    if j &lt;= 0.3:
+        print(f"Aviso: q0 + q1 - 1 = {j:.2f}; el juez discrimina poco y el IC será muy ancho")
+    theta = corregir(p, q0, q1)
+    var = (p * (1 - p) / n + (1 - theta) ** 2 * q0 * (1 - q0) / m0 + theta ** 2 * q1 * (1 - q1) / m1) / j ** 2
+    z = norm.ppf(1 - alpha / 2)
+    half = z * np.sqrt(var)
+    return theta, max(0.0, theta - half), min(1.0, theta + half), {"p": p, "q0": q0, "q1": q1}
+
+
+def ic_bootstrap(juez_test, juez_cal, humano_cal, b: int = 5000, seed: int = 0):
+    """Bootstrap que remuestrea el test y, por separado, positivos y negativos de la calibración."""
+    rng = np.random.default_rng(seed)
+    pos_idx, neg_idx = np.flatnonzero(humano_cal), np.flatnonzero(~humano_cal)
+    estimaciones = []
+    for _ in range(b):
+        p = rng.choice(juez_test, size=len(juez_test)).mean()
+        q1 = juez_cal[rng.choice(pos_idx, size=len(pos_idx))].mean()
+        q0 = 1 - juez_cal[rng.choice(neg_idx, size=len(neg_idx))].mean()
+        if q0 + q1 - 1 &gt; 0:
+            estimaciones.append(corregir(p, q0, q1))
+    return np.percentile(estimaciones, [2.5, 97.5])
+
+
+if __name__ == "__main__":
+    test = pd.read_json("veredictos.jsonl", lines=True)
+    cal = pd.read_csv("calibracion_con_juez.csv").merge(pd.read_csv("anotado.csv"), on="id")
+
+    juez_test = test["juez"].eq("CORRECTA").to_numpy()
+    juez_cal = cal["juez"].eq("CORRECTA").to_numpy()
+    humano_cal = cal["etiqueta_final"].eq("CORRECTA").to_numpy()
+
+    theta, lo, hi, q = ic_lee(juez_test, juez_cal, humano_cal)
+    lo_b, hi_b = ic_bootstrap(juez_test, juez_cal, humano_cal)
+    print(f"Accuracy ingenua del juez: {q['p']:.3f}   (sens={q['q1']:.3f}, esp={q['q0']:.3f})")
+    print(f"Accuracy corregida:        {theta:.3f}  IC95% Wald [{lo:.3f}, {hi:.3f}]  bootstrap [{lo_b:.3f}, {hi_b:.3f}]")</code></pre>
+    </div>
+
+    <div class="tip"><strong>¿Dónde gastar las horas de anotación?</strong> La varianza tiene un término por la especificidad pesado por (1−θ)² y otro por la sensibilidad pesado por θ². Si el modelo evaluado acierta poco (θ bajo, típico en conocimiento local), el error en especificidad domina y conviene anotar más negativos. Lee et al. proponen una asignación adaptativa (muestra piloto y luego repartir el presupuesto) para achicar el intervalo; está implementada en el repo <code>LLM-judge-reporting</code>.</div>
+
+    <div class="warn"><strong>Independencia:</strong> el marco supone que test y calibración son muestras distintas. Con 500 ítems puedes usar todo el benchmark como test (incluidos los ítems anotados) y aceptar una dependencia pequeña, o usar como test solo los ítems no anotados. Elige una y repórtala.</div>
+  </div>
+
+  <!-- 7. PPI -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-dots" aria-hidden="true"></i>7. Alternativa: prediction-powered inference (PPI)</h2>
+
+    <p>PPI (Angelopoulos et al., 2023) ataca el mismo problema desde otro ángulo: estima la media humana con las etiquetas humanas y usa al juez sobre los ítems no anotados solo para <em>reducir la varianza</em>, corrigiendo con el error que el juez comete en el subconjunto anotado (el "rectificador"). PPI++ agrega un parámetro λ que decide cuánto confiar en el juez: si el juez es malo, λ → 0 y recuperas el intervalo clásico solo-humano, así que PPI++ (asintóticamente) no es peor que no usar juez. Boyeau et al. (2024) lo aplican justamente a evaluación de modelos (AutoEval).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · ppi.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""ppi.py: IC de la accuracy humana con PPI++ (ppi-python 0.2.x)."""
+import numpy as np
+import pandas as pd
+from ppi_py import ppi_mean_ci, ppi_mean_pointestimate
+
+test = pd.read_json("veredictos.jsonl", lines=True)
+cal = pd.read_csv("calibracion_con_juez.csv").merge(pd.read_csv("anotado.csv"), on="id")
+no_anotados = test[~test["id"].isin(cal["id"])]
+
+Y = cal["etiqueta_final"].eq("CORRECTA").to_numpy(dtype=float)        # humano, ítems anotados
+Yhat = cal["juez"].eq("CORRECTA").to_numpy(dtype=float)                # juez, mismos ítems
+Yhat_unlabeled = no_anotados["juez"].eq("CORRECTA").to_numpy(dtype=float)
+w = cal["peso"].to_numpy()                                             # corrige el muestreo por país
+
+punto = ppi_mean_pointestimate(Y, Yhat, Yhat_unlabeled, w=w)
+lo, hi = ppi_mean_ci(Y, Yhat, Yhat_unlabeled, alpha=0.05, w=w)          # lam=None: PPI++ elige lambda
+lo_c, hi_c = ppi_mean_ci(Y, Yhat, Yhat_unlabeled, alpha=0.05, w=w, lam=0)  # lam=0: solo humanos
+
+print(f"PPI++:        {np.ravel(punto)[0]:.3f}  IC95% [{np.ravel(lo)[0]:.3f}, {np.ravel(hi)[0]:.3f}]")
+print(f"Solo humanos: IC95% [{np.ravel(lo_c)[0]:.3f}, {np.ravel(hi_c)[0]:.3f}]  (n={len(Y)})")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th></th><th>Lee et al. (plug-in)</th><th>PPI / PPI++</th></tr>
+      <tr><td>Supuesto clave</td><td>Errores del juez dependen solo de la etiqueta verdadera</td><td>Ítems anotados son muestra aleatoria (o ponderada) del test</td></tr>
+      <tr><td>Calibración con otra distribución</td><td>Sigue válido si q₀ y q₁ no cambian entre estratos</td><td>Sesgado salvo que pases pesos <code>w</code></td></tr>
+      <tr><td>Juez muy malo</td><td>IC explota (q₀+q₁−1 → 0)</td><td>Degrada con gracia al IC solo-humano</td></tr>
+      <tr><td>Reutilizar la calibración entre modelos</td><td>Solo si el juez se comporta igual con ambos</td><td>No: anota una muestra por modelo</td></tr>
+    </table>
+
+    <p>En la práctica, reporta ambos: si los intervalos de Lee y PPI++ no se solapan, alguno de los supuestos falla (típicamente, la sensibilidad cambia por país o por idioma) y conviene estratificar la corrección.</p>
+  </div>
+
+  <!-- 8. Tres clases -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-category" aria-hidden="true"></i>8. Tres clases: correcta, abstención y alucinación</h2>
+
+    <p>El caso binario se generaliza con la matriz de confusión del juez. Sea M[j, k] = P(juez = j | humano = k), estimada en la calibración (cada columna suma 1). La distribución de veredictos del juez en el test cumple p = M·θ, así que θ̂ = M⁻¹·p̂, proyectada al simplex. Con eso reportas tres números corregidos en vez de uno: accuracy, tasa de abstención y tasa de alucinación.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · correct_3clases.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""correct_3clases.py: corrección multiclase por inversión de la matriz de confusión + bootstrap."""
+import numpy as np
+import pandas as pd
+
+CLASES = ["CORRECTA", "INCORRECTA", "NO_RESPONDE"]
+K = len(CLASES)
+
+
+def matriz_confusion(juez: np.ndarray, humano: np.ndarray) -&gt; np.ndarray:
+    m = np.zeros((K, K))
+    for j, h in zip(juez, humano):
+        m[j, h] += 1
+    m += 0.5                                   # suavizado: evita columnas vacías
+    return m / m.sum(axis=0, keepdims=True)    # M[j, k] = P(juez=j | humano=k)
+
+
+def corregir(p_juez: np.ndarray, m: np.ndarray) -&gt; np.ndarray:
+    theta = np.linalg.solve(m, p_juez)
+    theta = np.clip(theta, 0, None)
+    return theta / theta.sum()
+
+
+test = pd.read_json("veredictos.jsonl", lines=True)
+cal = pd.read_csv("calibracion_con_juez.csv").merge(pd.read_csv("anotado.csv"), on="id")
+cod = {c: i for i, c in enumerate(CLASES)}
+jt = test["juez"].map(cod).to_numpy()
+jc, hc = cal["juez"].map(cod).to_numpy(), cal["etiqueta_final"].map(cod).to_numpy()
+
+p_hat = np.bincount(jt, minlength=K) / len(jt)
+theta = corregir(p_hat, matriz_confusion(jc, hc))
+
+rng = np.random.default_rng(0)
+boot = []
+for _ in range(3000):
+    it = rng.integers(0, len(jt), len(jt))
+    ic = rng.integers(0, len(jc), len(jc))
+    pb = np.bincount(jt[it], minlength=K) / len(jt)
+    boot.append(corregir(pb, matriz_confusion(jc[ic], hc[ic])))
+lo, hi = np.percentile(np.array(boot), [2.5, 97.5], axis=0)
+
+for k, c in enumerate(CLASES):
+    print(f"{c:12s} juez={p_hat[k]:.3f}  corregida={theta[k]:.3f}  IC95% [{lo[k]:.3f}, {hi[k]:.3f}]")
+intentos = theta[0] + theta[1]
+print(f"Alucinación condicionada a responder: {theta[1] / intentos:.3f}")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Por qué importa para LatamGPT:</strong> dos modelos con la misma accuracy en Trueque pueden ser muy distintos: uno que dice "no lo sé" cuando no conoce una tradición boliviana y otro que inventa una respuesta plausible. Para despliegues en educación o servicios públicos, la tasa de alucinación condicionada a responder es el número que más importa.</div>
+  </div>
+
+  <!-- 9. Inspect -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-plug" aria-hidden="true"></i>9. Integración con Inspect AI</h2>
+
+    <p>Para correr esto de forma repetible sobre cada checkpoint, Inspect AI trae el scorer <code>model_graded_fact</code>, que usa el rol de modelo <code>grader</code>. La plantilla recibe <code>{question}</code>, <code>{criterion}</code> (la referencia), <code>{answer}</code> e <code>{instructions}</code>, y el veredicto se parsea con el patrón <code>GRADE: C/I</code>. Inspect entrega la accuracy ingenua con su error estándar; la corrección de las secciones 6-8 se aplica después sobre los logs.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python · trueque_task.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""trueque_task.py: Trueque con juez calibrable en Inspect AI."""
+from inspect_ai import Task, task
+from inspect_ai.dataset import Sample, hf_dataset
+from inspect_ai.scorer import accuracy, grouped, model_graded_fact, stderr
+from inspect_ai.solver import generate, system_message
+
+PLANTILLA_ES = """Evalúa si la respuesta enviada es correcta comparándola con la respuesta de referencia.
+
+[Pregunta]: {question}
+[Respuesta enviada]: {answer}
+[Respuesta de referencia]: {criterion}
+
+{instructions}"""
+
+INSTRUCCIONES_ES = """Es CORRECTA si contiene el dato central de la referencia sin agregar hechos falsos relevantes.
+Es INCORRECTA si lo contradice, lo omite, inventa hechos o el modelo declara no saber.
+Razona en una o dos oraciones y termina con una línea 'GRADE: C' (correcta) o 'GRADE: I' (incorrecta)."""
+
+
+def a_sample(r: dict) -&gt; Sample:
+    pais = (r["country"] or "Latam").strip().title()
+    return Sample(input=r["question"], target=r["reference_answer"],
+                  metadata={"country": pais, "topic": r["topic"]})
+
+
+@task
+def trueque() -&gt; Task:
+    return Task(
+        dataset=hf_dataset("latam-gpt/Trueque-Benchmark-beta-0.1", split="train", sample_fields=a_sample),
+        solver=[system_message("Responde con precisión y brevedad. Si no sabes, dilo."), generate()],
+        scorer=model_graded_fact(template=PLANTILLA_ES, instructions=INSTRUCCIONES_ES),
+        metrics=[accuracy(), stderr(), grouped(accuracy(), "country")],
+    )</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install -U inspect-ai
+
+# Modelo evaluado: servidor vLLM en :8001 (GPU 2); el juez sigue en :8000
+CUDA_VISIBLE_DEVICES=2 vllm serve Qwen/Qwen2.5-7B-Instruct --port 8001 &amp;
+
+export VLLM_BASE_URL=http://localhost:8001/v1
+export JUEZ_BASE_URL=http://localhost:8000/v1
+export JUEZ_API_KEY=EMPTY
+
+inspect eval trueque_task.py \
+  --model vllm/Qwen/Qwen2.5-7B-Instruct \
+  --model-role grader=openai-api/juez/juez \
+  --temperature 0</code></pre>
+    </div>
+
+    <div class="warn"><strong>Sin <code>--model-role grader</code>, el modelo evaluado se juzga a sí mismo.</strong> Es el error de configuración más común y produce exactamente la auto-preferencia que la sección 5 intenta medir.</div>
+  </div>
+
+  <!-- 10. Reporte -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-report" aria-hidden="true"></i>10. Qué reportar</h2>
+
+    <p>Un número de juez sin estos datos no se puede comparar ni auditar. La tabla mínima para cada modelo evaluado en Trueque o CHOCLO:</p>
+
+    <table class="model-table">
+      <tr><th>Campo</th><th>Ejemplo de formato</th></tr>
+      <tr><td>Juez y configuración</td><td>Qwen/Qwen3-32B, thinking apagado, temperatura 0, rúbrica v3 (es), salida JSON</td></tr>
+      <tr><td>Calibración</td><td>n = 180 (estratificada por país), 2 anotadores, κ humano = 0.xx, α = 0.xx</td></tr>
+      <tr><td>Juez vs humano</td><td>κ = 0.xx, sensibilidad = 0.xx, especificidad = 0.xx, matriz de confusión 3×3</td></tr>
+      <tr><td>Resultado</td><td>Accuracy ingenua 0.xx → corregida 0.xx [IC95%]; PPI++ 0.xx [IC95%]</td></tr>
+      <tr><td>Tres clases</td><td>Correcta / abstención / alucinación corregidas, con IC</td></tr>
+      <tr><td>Sondas</td><td>Flip por longitud x%, cambio es→pt y%, consistencia de posición z%</td></tr>
+      <tr><td>Costo</td><td>GPU-horas del juez + horas de anotación</td></tr>
+    </table>
+
+    <div class="tip"><strong>Para comparar dos checkpoints</strong> no basta con ver si los IC se solapan: usa diferencias pareadas sobre los mismos ítems (ver la guía de evaluación estadísticamente rigurosa). Y recalibra cuando cambie la rúbrica, el juez o la familia del modelo evaluado.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.21140" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>How to Correctly Report LLM-as-a-Judge Evaluations (Lee et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2301.09633" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Prediction-Powered Inference (Angelopoulos et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2311.01453" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>PPI++: Efficient Prediction-Powered Inference (Angelopoulos et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2403.07008" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>AutoEval Done Right (Boyeau et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2306.05685" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena (Zheng et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.12624" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Judging the Judges (Thakur et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.02736" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Justice or Prejudice? Quantifying Biases in LLM-as-a-Judge (Ye et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.17578" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MM-Eval: multilingual meta-evaluation (Son et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2404.13076" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>LLM Evaluators Recognize and Favor Their Own Generations (Panickssery et al., 2024)</a>
+      <a class="source-link" href="https://github.com/UW-Madison-Lee-Lab/LLM-judge-reporting" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>UW-Madison-Lee-Lab/LLM-judge-reporting</a>
+      <a class="source-link" href="https://github.com/aangelopoulos/ppi_py" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>aangelopoulos/ppi_py</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/structured_outputs/" target="_blank" rel="noopener"><i class="ti ti-book"></i>vLLM: structured outputs</a>
+      <a class="source-link" href="https://inspect.aisi.org.uk/scorers.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Inspect AI: scorers</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/Trueque-Benchmark-beta-0.1" target="_blank" rel="noopener"><i class="ti ti-database"></i>latam-gpt/Trueque-Benchmark-beta-0.1 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/CHOCLO" target="_blank" rel="noopener"><i class="ti ti-database"></i>latam-gpt/CHOCLO (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/CohereLabs/m-ArenaHard-v2.0" target="_blank" rel="noopener"><i class="ti ti-database"></i>CohereLabs/m-ArenaHard-v2.0 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-32B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen/Qwen3-32B (HF)</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación para LatamGPT</a>
+      <a class="source-link" href="evaluacion-estadistica.html"><i class="ti ti-chart-histogram"></i>Guía: Evaluación estadísticamente rigurosa</a>
+      <a class="source-link" href="red-teaming-evaluacion-seguridad.html"><i class="ti ti-shield-check"></i>Guía: Red teaming y evaluación de seguridad</a>
+      <a class="source-link" href="reward-models.html"><i class="ti ti-scale"></i>Guía: Reward models</a>
+      <a class="source-link" href="inferencia.html"><i class="ti ti-server"></i>Guía: Inferencia con vLLM</a>
+    </div>
+  </div>
+</main>
+
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

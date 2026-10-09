@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Cómo medir el ruido de tus evaluaciones con logs por muestra de lm-eval e Inspect: intervalos de confianza, errores estándar clustered, tests pareados, poder estadístico y corrección por comparaciones múltiples, con ejemplos en español y portugués.">
+<title>Evaluación estadísticamente rigurosa — LatamGPT</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Evaluación</div>
+    <h1 class="guide-title">Evaluación estadísticamente rigurosa: error bars, tests pareados y poder estadístico</h1>
+    <div class="guide-desc">Casi todas las decisiones de un proyecto de LLM (qué checkpoint, qué mezcla de datos, qué receta de SFT o DPO) se toman con diferencias de 1-3 puntos que muchas veces están dentro del ruido. Esta guía enseña a cuantificar ese ruido con los logs por muestra que ya producen lm-eval e Inspect: intervalos de confianza, errores estándar clustered, comparaciones pareadas, poder estadístico y corrección por comparaciones múltiples, con ejemplos sobre benchmarks en español y portugués (Belebele, LatamQA, Trueque).</div>
+  </div>
+
+  <!-- 1. La eval como experimento -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-flask" aria-hidden="true"></i>1. La evaluación como experimento</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Logs por muestra</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">IC por métrica</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Δ pareado entre modelos</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Corrección por múltiples tareas</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Reporte con n, IC y config</div>
+    </div>
+
+    <p>La idea central de <em>Adding Error Bars to Evals</em> (Miller, 2024) es tratar cada benchmark como una <strong>muestra</strong> de una super-población de preguntas posibles. La accuracy que reportas es un estimador, y como todo estimador tiene un error estándar. Para una métrica binaria (acierto/fallo) con n preguntas independientes:</p>
+    <p><code>SE = sqrt(p(1 - p) / n)</code> &nbsp;·&nbsp; <code>IC95% ≈ p ± 1.96 · SE</code></p>
+    <p>Lo que eso implica para los tamaños típicos de benchmark:</p>
+
+    <table class="model-table">
+      <tr><th>n preguntas</th><th>Ejemplo</th><th>IC95% con p = 0.5</th><th>IC95% con p = 0.8</th></tr>
+      <tr><td>30</td><td>AIME 2025 / 2026</td><td>± 17.9 pp</td><td>± 14.3 pp</td></tr>
+      <tr><td>100</td><td>benchmark interno chico</td><td>± 9.8 pp</td><td>± 7.8 pp</td></tr>
+      <tr><td>500</td><td>Trueque beta 0.1</td><td>± 4.4 pp</td><td>± 3.5 pp</td></tr>
+      <tr><td>900</td><td>Belebele (por idioma)</td><td>± 3.3 pp</td><td>± 2.6 pp</td></tr>
+      <tr><td>10,000</td><td>MMLU completo (~14K)</td><td>± 1.0 pp</td><td>± 0.8 pp</td></tr>
+    </table>
+
+    <p>Hay dos fuentes de varianza distintas: la del <strong>muestreo de preguntas</strong> (la de la tabla, que no desaparece aunque evalúes con temperatura 0) y la del <strong>muestreo de respuestas</strong> (temperatura &gt; 0, semillas, orden de few-shot). La primera se ataca con más preguntas o con comparaciones pareadas; la segunda, con varias muestras por pregunta (sección 6).</p>
+
+    <div class="warn"><strong>Regla práctica:</strong> si dos checkpoints difieren en menos de ~2·SE en un benchmark de 500-1,000 preguntas, sin un test pareado no puedes afirmar que uno es mejor. Esto aplica a casi todas las tablas de ablación que se ven en reportes de modelos.</div>
+  </div>
+
+  <!-- 2. Logs por muestra -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database-export" aria-hidden="true"></i>2. Obtener los datos por muestra</h2>
+
+    <p>Todo lo que sigue necesita el score de <strong>cada pregunta</strong>, no solo el promedio. lm-evaluation-harness lo guarda con <code>--log_samples</code> (que exige <code>--output_path</code>). Desde diciembre de 2025 la CLI usa subcomandos (<code>lm-eval run</code>; el comando sin subcomando sigue funcionando) y el paquete base ya no instala torch ni transformers: hay que pedir el backend como extra.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install "lm_eval[vllm]" scipy statsmodels pandas
+
+# Tareas de opción múltiple en es/pt (SpanishBench + PortugueseBench), todas con métrica acc por ítem
+TASKS="belebele_spa_Latn,belebele_por_Latn,xstorycloze_es,openbookqa_es,copa_es,paws_es_spanish_bench,xnli_es_spanish_bench,assin_entailment"
+
+for CKPT in ckpt-a ckpt-b; do
+  lm-eval run \
+    --model vllm \
+    --model_args pretrained=&lt;TU_ORG&gt;/&lt;modelo&gt;-${CKPT},dtype=bfloat16,gpu_memory_utilization=0.85 \
+    --tasks "$TASKS" \
+    --num_fewshot 5 \
+    --batch_size auto \
+    --seed 1234 \
+    --log_samples \
+    --output_path "runs/${CKPT}/"
+done
+# Resultado: runs/ckpt-a/&lt;modelo_sanitizado&gt;/results_&lt;fecha&gt;.json
+#            runs/ckpt-a/&lt;modelo_sanitizado&gt;/samples_&lt;tarea&gt;_&lt;fecha&gt;.jsonl</code></pre>
+    </div>
+
+    <p>Cada línea de <code>samples_&lt;tarea&gt;_&lt;fecha&gt;.jsonl</code> trae <code>doc_id</code>, <code>doc</code> (el ítem original del dataset), <code>target</code>, <code>resps</code>, <code>filtered_resps</code>, <code>filter</code>, hashes del documento y del prompt (<code>doc_hash</code>, <code>prompt_hash</code>) y una columna por métrica (por ejemplo <code>acc</code> y <code>acc_norm</code>). Las tareas generativas con varios filtros (como <code>strict-match</code> y <code>flexible-extract</code> en MGSM) escriben una línea por filtro y documento.</p>
+
+    <div class="tip"><strong>Hardware:</strong> generar estos logs para un modelo de 3-8B en las 8 tareas toma del orden de 10-20 minutos en 1× A100 80GB o L40S 48GB con vLLM. El análisis estadístico de las secciones 3-5, 7 y 8 corre en CPU en segundos (minutos con bootstrap de 10,000 réplicas). <strong>Presupuesto reducido:</strong> una RTX 4090 de 24 GB con <code>HuggingFaceTB/SmolLM3-3B</code> o tus checkpoints chicos alcanza; si no tienes GPU, el análisis funciona igual sobre logs que otro equipo ya generó.</div>
+  </div>
+
+  <!-- 3. IC para una métrica -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-ruler-measure" aria-hidden="true"></i>3. Intervalos de confianza para una métrica</h2>
+
+    <p>Tres opciones, de más simple a más general: aproximación normal (buena con n grande y p lejos de 0 o 1), <strong>Wilson</strong> (la recomendada para proporciones: no se sale de [0, 1] y funciona con n chico) y <strong>bootstrap</strong> (sirve para cualquier métrica: F1, chrF, BLEU, pass@k). Este módulo es la base del resto de la guía; guárdalo como <code>stats_utils.py</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — stats_utils.py (parte 1)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""stats_utils.py: utilidades estadísticas sobre logs por muestra (lm-eval / Inspect)."""
+from __future__ import annotations
+
+import glob
+import math
+
+import numpy as np
+import pandas as pd
+from scipy import stats
+from statsmodels.stats.contingency_tables import mcnemar
+from statsmodels.stats.proportion import proportion_confint
+
+
+def load_lmeval_samples(run_dir: str, task: str, metric: str = "acc",
+                        filter_key: str | None = None) -&gt; pd.DataFrame:
+    """Lee samples_&lt;task&gt;_&lt;fecha&gt;.jsonl de una corrida de lm-eval (toma el más reciente)."""
+    files = sorted(glob.glob(f"{run_dir}/**/samples_{task}_*.jsonl", recursive=True))
+    if not files:
+        raise FileNotFoundError(f"No encontré samples_{task}_*.jsonl bajo {run_dir}")
+    df = pd.read_json(files[-1], lines=True)
+    if filter_key is not None:
+        df = df[df["filter"] == filter_key]
+    elif df["filter"].nunique() &gt; 1:
+        raise ValueError(f"{task} tiene varios filtros {list(df['filter'].unique())}: pasa filter_key")
+    out = pd.DataFrame({
+        "doc_id": df["doc_id"],
+        "score": df[metric].astype(float),
+        "prompt_hash": df["prompt_hash"],
+        "doc": df["doc"],
+    })
+    return out.set_index("doc_id").sort_index()
+
+
+def _z(level: float) -&gt; float:
+    return float(stats.norm.ppf(0.5 + level / 2))
+
+
+def normal_ci(x, level: float = 0.95) -&gt; tuple[float, float, float]:
+    """Media, SE i.i.d. e IC normal (lo mismo que reporta lm-eval como acc_stderr)."""
+    x = np.asarray(x, dtype=float)
+    mean, se = x.mean(), x.std(ddof=1) / math.sqrt(len(x))
+    return mean, se, (mean - _z(level) * se, mean + _z(level) * se)
+
+
+def wilson_ci(x, level: float = 0.95) -&gt; tuple[float, float]:
+    """IC de Wilson para una proporción (scores 0/1)."""
+    x = np.asarray(x, dtype=float)
+    lo, hi = proportion_confint(int(x.sum()), len(x), alpha=1 - level, method="wilson")
+    return float(lo), float(hi)
+
+
+def bootstrap_ci(x, statistic=np.mean, level: float = 0.95,
+                 n_resamples: int = 10_000, seed: int = 0) -&gt; tuple[float, float]:
+    """IC bootstrap BCa para cualquier estadístico por ítem."""
+    res = stats.bootstrap((np.asarray(x, dtype=float),), statistic,
+                          n_resamples=n_resamples, confidence_level=level,
+                          method="BCa", rng=np.random.default_rng(seed))
+    return float(res.confidence_interval.low), float(res.confidence_interval.high)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — uso (requiere stats_utils.py en el mismo directorio)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from stats_utils import load_lmeval_samples, normal_ci, wilson_ci, bootstrap_ci
+
+df = load_lmeval_samples("runs/ckpt-a", "belebele_spa_Latn", metric="acc")
+mean, se, (lo, hi) = normal_ci(df["score"])
+print(f"Belebele es: {mean:.3f} ± {1.96 * se:.3f}  (n={len(df)})")
+print("Normal  :", (round(lo, 3), round(hi, 3)))
+print("Wilson  :", tuple(round(v, 3) for v in wilson_ci(df["score"])))
+print("BCa     :", tuple(round(v, 3) for v in bootstrap_ci(df["score"])))</code></pre>
+    </div>
+
+    <div class="warn"><strong>Bootstrap con n chico o datos degenerados:</strong> si todos los scores son iguales (0% o 100%), BCa no está definido y SciPy devuelve <code>nan</code> con una advertencia. Para proporciones usa Wilson; deja el bootstrap para métricas continuas o compuestas.</div>
+  </div>
+
+  <!-- 4. Clustered SE -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-sitemap" aria-hidden="true"></i>4. Errores estándar clustered: preguntas que comparten contexto</h2>
+
+    <p>La fórmula i.i.d. supone preguntas independientes. No lo son cuando varias preguntas comparten un pasaje o un artículo: si el modelo no entiende el pasaje, falla todas las preguntas de ese pasaje a la vez. En ese caso el SE real es mayor. Ejemplos en nuestro contexto:</p>
+    <table class="model-table">
+      <tr><th>Benchmark</th><th>Cluster natural</th><th>Estructura</th></tr>
+      <tr><td>Belebele (es/pt)</td><td><code>flores_passage</code></td><td>900 preguntas sobre 488 pasajes (1-2 por pasaje)</td></tr>
+      <tr><td>LatamQA (<code>inria-chile/latamqa_mcq_es-la</code>)</td><td><code>article_id</code></td><td>18.9K preguntas generadas desde artículos de Wikipedia</td></tr>
+      <tr><td>Trueque (<code>latam-gpt/Trueque-Benchmark-beta-0.1</code>)</td><td><code>country</code> / <code>topic</code></td><td>500 preguntas de 23 países</td></tr>
+    </table>
+
+    <p>El estimador clustered de Miller (equivalente al sandwich CR0) suma los residuos dentro de cada cluster antes de elevar al cuadrado: <code>SE_cl = sqrt( Σ_c (Σ_{i∈c} (x_i − x̄))² ) / n</code>. Si cada cluster tiene un solo ítem se reduce al SE i.i.d.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — stats_utils.py (parte 2, agregar al final del archivo)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa stats_utils.py (usa los imports de la parte 1)
+
+def clustered_se(x, clusters) -&gt; float:
+    """SE clustered (Miller 2024 / sandwich CR0) para la media de x."""
+    x = np.asarray(x, dtype=float)
+    resid = pd.Series(x - x.mean())
+    sums = resid.groupby(np.asarray(clusters)).sum()
+    return math.sqrt(float((sums ** 2).sum())) / len(x)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — clustered vs i.i.d. en Belebele es/pt</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from stats_utils import load_lmeval_samples, normal_ci, clustered_se
+
+for task in ["belebele_spa_Latn", "belebele_por_Latn"]:
+    df = load_lmeval_samples("runs/ckpt-a", task)
+    clusters = [doc["flores_passage"] for doc in df["doc"]]
+    mean, se_iid, _ = normal_ci(df["score"])
+    se_cl = clustered_se(df["score"], clusters)
+    print(f"{task}: acc={mean:.3f}  SE iid={se_iid:.4f}  SE clustered={se_cl:.4f}  "
+          f"ratio={se_cl / se_iid:.2f}  ({len(set(clusters))} pasajes)")</code></pre>
+    </div>
+
+    <p>Miller reporta que en benchmarks con pasajes compartidos el SE clustered puede ser bastante mayor que el naive. En Belebele, con 1-2 preguntas por pasaje, el efecto es moderado; en LatamQA, donde un artículo genera muchas preguntas, la corrección importa más. Si el ratio sale cercano a 1, reporta igual el clustered: es el honesto.</p>
+
+    <div class="tip"><strong>Pocos clusters:</strong> el estimador sandwich subestima el SE con menos de ~30-50 clusters. Para Trueque (23 países) no uses <code>country</code> como cluster para el IC global; úsalo para <strong>desagregar</strong> resultados por país (sección 8) y ten presente que con ~20 preguntas por país el IC por país ronda ±20 pp: no ordenes países por esos números.</div>
+  </div>
+
+  <!-- 5. Comparar dos modelos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-git-compare" aria-hidden="true"></i>5. Comparar dos modelos: diferencias pareadas</h2>
+
+    <p>Comparar dos IC separados ("se solapan, entonces no hay diferencia") es un test muy conservador y desperdicia información. Ambos modelos respondieron las <strong>mismas preguntas</strong>, así que lo correcto es analizar la diferencia pregunta a pregunta <code>d_i = b_i − a_i</code>. Como los scores de dos checkpoints están muy correlacionados (las preguntas difíciles son difíciles para ambos), la varianza de <code>d</code> es mucho menor que la suma de varianzas: <code>Var(a − b) = Var(a) + Var(b) − 2·Cov(a, b)</code>.</p>
+
+    <p>Para scores binarios, solo importan las preguntas <strong>discordantes</strong> (una acierta y la otra no). El test exacto natural es McNemar; como alternativa no paramétrica sirve el bootstrap pareado.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — stats_utils.py (parte 3, agregar al final del archivo)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa stats_utils.py (usa los imports y funciones de las partes 1 y 2)
+
+def paired_diff(a, b, clusters=None, level: float = 0.95) -&gt; dict:
+    """Δ = mean(b − a) con SE pareado (opcionalmente clustered) e IC normal."""
+    d = np.asarray(b, dtype=float) - np.asarray(a, dtype=float)
+    se = clustered_se(d, clusters) if clusters is not None else d.std(ddof=1) / math.sqrt(len(d))
+    delta = float(d.mean())
+    z = _z(level)
+    p = 2 * (1 - stats.norm.cdf(abs(delta) / se)) if se &gt; 0 else 1.0
+    return {"delta": delta, "se": se, "lo": delta - z * se, "hi": delta + z * se, "p_z": float(p)}
+
+
+def mcnemar_exact(a, b) -&gt; float:
+    """p-valor exacto de McNemar para scores binarios pareados."""
+    a = np.asarray(a).astype(bool)
+    b = np.asarray(b).astype(bool)
+    table = [[int(np.sum(a &amp; b)), int(np.sum(a &amp; ~b))],
+             [int(np.sum(~a &amp; b)), int(np.sum(~a &amp; ~b))]]
+    return float(mcnemar(table, exact=True).pvalue)
+
+
+def paired_bootstrap_ci(a, b, level: float = 0.95, n_resamples: int = 10_000,
+                        seed: int = 0) -&gt; tuple[float, float]:
+    """IC percentil para mean(b − a) remuestreando preguntas (pares)."""
+    res = stats.bootstrap(
+        (np.asarray(a, dtype=float), np.asarray(b, dtype=float)),
+        lambda x, y, axis=-1: np.mean(y - x, axis=axis),
+        paired=True, vectorized=True, n_resamples=n_resamples,
+        confidence_level=level, method="percentile", rng=np.random.default_rng(seed),
+    )
+    return float(res.confidence_interval.low), float(res.confidence_interval.high)</code></pre>
+    </div>
+
+    <p>Ahora el script que compara dos corridas de lm-eval tarea por tarea. Alinea por <code>doc_id</code>, verifica que los prompts sean idénticos (si cambiaste la plantilla o la semilla de few-shot, el pareo deja de ser válido) y aplica Holm sobre todas las tareas (sección 8).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — compare_checkpoints.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""Uso: python compare_checkpoints.py runs/ckpt-a runs/ckpt-b"""
+import sys
+
+import pandas as pd
+from statsmodels.stats.multitest import multipletests
+
+from stats_utils import load_lmeval_samples, mcnemar_exact, paired_bootstrap_ci, paired_diff
+
+# tarea -&gt; campo del doc que define el cluster (None = ítems independientes)
+TASKS = {
+    "belebele_spa_Latn": "flores_passage",
+    "belebele_por_Latn": "flores_passage",
+    "xstorycloze_es": None,
+    "openbookqa_es": None,
+    "copa_es": None,
+    "paws_es_spanish_bench": None,
+    "xnli_es_spanish_bench": None,
+    "assin_entailment": None,
+}
+
+
+def compare(run_a: str, run_b: str, metric: str = "acc") -&gt; pd.DataFrame:
+    rows = []
+    for task, cluster_key in TASKS.items():
+        a = load_lmeval_samples(run_a, task, metric)
+        b = load_lmeval_samples(run_b, task, metric)
+        common = a.index.intersection(b.index)
+        a, b = a.loc[common], b.loc[common]
+        if not (a["prompt_hash"] == b["prompt_hash"]).all():
+            print(f"[aviso] {task}: los prompts difieren entre corridas; revisa plantilla y few-shot")
+        clusters = [doc[cluster_key] for doc in a["doc"]] if cluster_key else None
+        r = paired_diff(a["score"], b["score"], clusters=clusters)
+        boot_lo, boot_hi = paired_bootstrap_ci(a["score"], b["score"])
+        rows.append({
+            "task": task, "n": len(common),
+            "A": a["score"].mean(), "B": b["score"].mean(),
+            "delta": r["delta"], "ic_lo": r["lo"], "ic_hi": r["hi"],
+            "boot_lo": boot_lo, "boot_hi": boot_hi,
+            "p_mcnemar": mcnemar_exact(a["score"], b["score"]),
+        })
+    df = pd.DataFrame(rows)
+    df["p_holm"] = multipletests(df["p_mcnemar"], alpha=0.05, method="holm")[1]
+    df["p_bh"] = multipletests(df["p_mcnemar"], alpha=0.05, method="fdr_bh")[1]
+    return df
+
+
+if __name__ == "__main__":
+    table = compare(sys.argv[1], sys.argv[2])
+    pd.set_option("display.width", 160)
+    print(table.round(4).to_string(index=False))
+    print("\nSignificativas tras Holm (α=0.05):", list(table.loc[table["p_holm"] &lt; 0.05, "task"]))</code></pre>
+    </div>
+
+    <div class="tip"><strong>Por qué esto cambia decisiones:</strong> en Belebele (900 preguntas) dos checkpoints con 71.0% y 73.0% tienen IC separados de ±3 pp que se solapan. Pero si solo discrepan en ~8% de las preguntas, el SE pareado es ≈ sqrt(0.08/900) ≈ 0.9 pp y la diferencia de 2 pp ya es significativa. El pareo no "inventa" significancia: usa la correlación que de verdad existe.</div>
+  </div>
+
+  <!-- 6. avg@k -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-dice" aria-hidden="true"></i>6. Varias muestras por pregunta: avg@k en AIME</h2>
+
+    <p>Con modelos de razonamiento se reporta avg@k (accuracy promedio sobre k muestras con temperatura &gt; 0). Más muestras reducen la varianza <strong>dentro</strong> de cada pregunta, pero no la varianza <strong>entre</strong> preguntas. Con solo 30 problemas, aunque promedies infinitas muestras, un 50% puede cargar ±18 pp si los problemas son casi todos "siempre bien" o "siempre mal". <em>A Sober Look at Progress in LM Reasoning</em> (Hochlehnert et al., 2025) muestra que muchas mejoras reportadas en AIME se diluyen al controlar semillas, parámetros de decodificación y hardware.</p>
+
+    <p>Descomposición: si <code>p̂_i</code> es la tasa de acierto del problema i con k muestras, <code>Var(p̂_i) = σ²_entre + E[p_i(1 − p_i)] / k</code>. El script genera 16 muestras por problema y proyecta cómo cambia el SE con k.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — avgk_variance.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import math
+import re
+
+import numpy as np
+from datasets import load_dataset
+from vllm import LLM, SamplingParams
+
+MODEL = "Qwen/Qwen3-8B"      # presupuesto reducido: "HuggingFaceTB/SmolLM3-3B"
+K = 16
+
+ds = load_dataset("MathArena/aime_2026", split="train")   # 30 problemas; también MathArena/aime_2025
+llm = LLM(model=MODEL, dtype="bfloat16", max_model_len=40960, seed=0)
+params = SamplingParams(n=K, temperature=0.6, top_p=0.95, max_tokens=32768)
+
+# Instrucción en español: medimos razonamiento matemático con consignas en nuestro idioma
+convs = [[{"role": "user",
+           "content": "Resuelve el siguiente problema paso a paso y escribe la respuesta final "
+                      "(un entero entre 0 y 999) dentro de \\boxed{}.\n\n" + ex["problem"]}]
+         for ex in ds]
+outputs = llm.chat(convs, params)
+
+
+def extract_boxed(text: str) -&gt; int | None:
+    hits = re.findall(r"\\boxed\{([^{}]*)\}", text)
+    if not hits:
+        return None
+    digits = re.sub(r"[^0-9]", "", hits[-1])
+    return int(digits) if digits else None
+
+
+correct = np.array([[extract_boxed(c.text) == int(ex["answer"]) for c in out.outputs]
+                    for ex, out in zip(ds, outputs)], dtype=float)   # (30, K)
+
+n, k = correct.shape
+p_i = correct.mean(axis=1)
+score = p_i.mean()
+se = p_i.std(ddof=1) / math.sqrt(n)
+within = float(np.mean(p_i * (1 - p_i)) * k / (k - 1))   # estimador insesgado de E[p_i(1-p_i)]
+between = max(float(p_i.var(ddof=1)) - within / k, 0.0)
+
+print(f"avg@{k} = {score:.3f} ± {1.96 * se:.3f}  (n={n} problemas)")
+print(f"varianza entre problemas = {between:.4f} · dentro (por muestra) = {within:.4f}")
+for kk in [1, 2, 4, 8, 16, 64, 1024]:
+    se_k = math.sqrt((between + within / kk) / n)
+    print(f"  k={kk:&gt;4}: IC95% ≈ ± {1.96 * se_k * 100:.1f} pp")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Hardware y tiempo:</strong> 30 problemas × 16 muestras con hasta 32K tokens de razonamiento para un modelo de 8B toma del orden de 1-2 h en 1× A100 80GB. Con SmolLM3-3B entra en una GPU de 24 GB (baja <code>max_model_len</code> y <code>max_tokens</code> si falta memoria). Típicamente el IC deja de achicarse pasado k≈8-16: a partir de ahí conviene gastar el cómputo en <strong>más problemas</strong> (AIME 2025 + 2026, HMMT, o MGSM en español) en vez de más muestras.</div>
+  </div>
+
+  <!-- 7. Poder estadístico -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-target" aria-hidden="true"></i>7. Poder estadístico y efecto mínimo detectable</h2>
+
+    <p>Antes de correr (o de construir) un benchmark conviene preguntarse: ¿qué diferencia puedo detectar? El <strong>efecto mínimo detectable</strong> (MDE) con nivel α y poder 1 − β es <code>MDE ≈ (z_{1−α/2} + z_{1−β}) · SE</code>. En comparaciones pareadas binarias, <code>Var(d) ≈ tasa de discordancia</code> (fracción de preguntas donde los modelos difieren), típicamente 5-20% entre checkpoints de un mismo entrenamiento.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — stats_utils.py (parte 4, agregar al final del archivo)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa stats_utils.py (usa los imports de la parte 1)
+
+def _zz(alpha: float, power: float) -&gt; float:
+    return float(stats.norm.ppf(1 - alpha / 2) + stats.norm.ppf(power))
+
+
+def mde_paired(n: int, discordance: float = 0.15, alpha: float = 0.05, power: float = 0.8) -&gt; float:
+    """Δ mínimo detectable comparando dos modelos sobre las mismas n preguntas."""
+    return _zz(alpha, power) * math.sqrt(discordance / n)
+
+
+def mde_unpaired(n: int, p: float = 0.6, alpha: float = 0.05, power: float = 0.8) -&gt; float:
+    """Δ mínimo detectable si cada modelo se evalúa con preguntas distintas (o sin parear)."""
+    return _zz(alpha, power) * math.sqrt(2 * p * (1 - p) / n)
+
+
+def n_required_paired(delta: float, discordance: float = 0.15,
+                      alpha: float = 0.05, power: float = 0.8) -&gt; int:
+    """Preguntas necesarias para detectar delta en una comparación pareada."""
+    return math.ceil(discordance * (_zz(alpha, power) / delta) ** 2)</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — dimensionar benchmarks propios</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from stats_utils import mde_paired, mde_unpaired, n_required_paired
+
+for n in [100, 500, 1_000, 2_000, 10_000]:
+    print(f"n={n:&gt;6}: MDE pareado={mde_paired(n) * 100:5.1f} pp · sin parear={mde_unpaired(n) * 100:5.1f} pp")
+
+print("Preguntas para detectar 2 pp (discordancia 15%):", n_required_paired(0.02))
+print("Preguntas para detectar 2 pp (discordancia 10%):", n_required_paired(0.02, discordance=0.10))</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>n</th><th>MDE pareado (disc. 15%)</th><th>MDE sin parear (p = 0.6)</th></tr>
+      <tr><td>100</td><td>10.9 pp</td><td>19.4 pp</td></tr>
+      <tr><td>500 (Trueque beta)</td><td>4.9 pp</td><td>8.7 pp</td></tr>
+      <tr><td>1,000</td><td>3.4 pp</td><td>6.1 pp</td></tr>
+      <tr><td>2,000</td><td>2.4 pp</td><td>4.3 pp</td></tr>
+      <tr><td>10,000</td><td>1.1 pp</td><td>1.9 pp</td></tr>
+    </table>
+
+    <div class="warn"><strong>Implicancia para benchmarks latinoamericanos:</strong> con las 500 preguntas de Trueque beta (p ≈ 0.6, IC95% ≈ ±4.3 pp) solo se detectan con confianza diferencias pareadas de ~4-5 pp, y eso <em>antes</em> de sumar el ruido del juez LLM. Para detectar 2 pp hacen falta ~2,000-3,000 preguntas: un buen objetivo para la versión completa de un benchmark propio en es/pt. Y si el juez no está validado, el ranking puede colapsar en empates (ver la guía de LLM-as-a-judge calibrado).</div>
+  </div>
+
+  <!-- 8. Comparaciones múltiples -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-list-numbers" aria-hidden="true"></i>8. Comparaciones múltiples: muchas tareas, muchos checkpoints</h2>
+
+    <p>Si comparas dos checkpoints en 20 tareas con α = 0.05, esperas ~1 "diferencia significativa" aunque los modelos sean idénticos. Las dos correcciones estándar, ambas en <code>statsmodels.stats.multitest.multipletests</code>:</p>
+    <table class="model-table">
+      <tr><th>Método</th><th>Controla</th><th>Cuándo usarlo</th></tr>
+      <tr><td>Holm-Bonferroni (<code>"holm"</code>)</td><td>FWER: probabilidad de al menos un falso positivo</td><td>Decisiones de release, afirmaciones en un paper o model card</td></tr>
+      <tr><td>Benjamini-Hochberg (<code>"fdr_bh"</code>)</td><td>FDR: proporción esperada de falsos positivos</td><td>Exploración: barrer muchas ablaciones o tareas para elegir qué mirar</td></tr>
+    </table>
+
+    <p>El mismo problema aparece al desagregar por país o por tema. Con los logs de Trueque evaluados con juez (sección 10), el análisis por país con IC de Wilson y Holm queda así:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — trueque_por_pais.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import pandas as pd
+from inspect_ai.analysis import samples_df
+from scipy.stats import binomtest
+from statsmodels.stats.multitest import multipletests
+
+from stats_utils import wilson_ci
+
+# Logs de Inspect de la tarea trueque_juez (sección 10), guardados en su propio directorio.
+# Los scores del juez son "C" (correcto) / "I" (incorrecto).
+df = samples_df("logs/trueque/")
+df["score"] = df["score_model_graded_qa"].map({"C": 1.0, "I": 0.0})
+global_acc = df["score"].mean()
+
+rows = []
+for country, g in df.groupby("metadata_country"):
+    lo, hi = wilson_ci(g["score"])
+    # ¿Este país se aparta del promedio global? (test binomial exacto)
+    p = binomtest(int(g["score"].sum()), len(g), global_acc).pvalue
+    rows.append({"pais": country, "n": len(g), "acc": g["score"].mean(), "lo": lo, "hi": hi, "p": p})
+
+table = pd.DataFrame(rows).sort_values("acc")
+table["p_holm"] = multipletests(table["p"], method="holm")[1]
+print(f"Global: {global_acc:.3f} (n={len(df)})")
+print(table.round(3).to_string(index=False))</code></pre>
+    </div>
+
+    <div class="tip"><strong>Columnas de <code>samples_df</code>:</strong> los scores aparecen como <code>score_&lt;nombre_del_scorer&gt;</code> y la metadata de cada Sample como <code>metadata_&lt;campo&gt;</code>. Verifica los nombres con <code>df.columns</code> en tu versión de Inspect antes de filtrar.</div>
+  </div>
+
+  <!-- 9. Sensibilidad a prompts -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>9. Sensibilidad a la plantilla del prompt</h2>
+
+    <p>Hay una tercera fuente de varianza que ni el IC ni el pareo capturan: la elección de plantilla. <em>State of What Art?</em> (Mizrahi et al., 2024) muestra que los rankings de modelos cambian según la paráfrasis de la instrucción, y FormatSpread (Sclar et al., 2023) encuentra diferencias de decenas de puntos solo por formato (separadores, mayúsculas, espacios). La práctica recomendada es evaluar con K plantillas y reportar el rango, no solo la mejor.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — prompt_spread.py (LatamQA, 5 plantillas en español)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import random
+import re
+
+import numpy as np
+from datasets import load_dataset
+from vllm import LLM, SamplingParams
+
+from stats_utils import mcnemar_exact, wilson_ci
+
+MODEL = "Qwen/Qwen3-8B"
+ds = load_dataset("inria-chile/latamqa_mcq_es-la", split="train").shuffle(seed=0).select(range(2000))
+
+TEMPLATES = [
+    "Pregunta: {q}\n{opts}\nRespuesta (solo la letra):",
+    "Responde la siguiente pregunta de opción múltiple sobre América Latina.\n\n{q}\n\n{opts}\n\nIndica únicamente la letra correcta.",
+    "{q}\nOpciones:\n{opts}\nLa respuesta correcta es la letra",
+    "Eres un experto en historia y cultura latinoamericana. Elige la alternativa correcta.\n### Pregunta\n{q}\n### Alternativas\n{opts}\n### Respuesta (A, B, C o D):",
+    "PREGUNTA: {q} | OPCIONES: {opts} | RESPUESTA:",
+]
+
+
+def build_items(ex: dict, idx: int):
+    options = [ex["answer"], ex["distractor1"], ex["distractor2"], ex["distractor3"]]
+    order = list(range(4))
+    random.Random(idx).shuffle(order)          # mismo orden de opciones para todas las plantillas
+    shuffled = [options[i] for i in order]
+    gold = "ABCD"[order.index(0)]
+    return shuffled, gold
+
+
+items = [build_items(ex, i) for i, ex in enumerate(ds)]
+llm = LLM(model=MODEL, dtype="bfloat16", max_model_len=4096, seed=0)
+params = SamplingParams(temperature=0.0, max_tokens=8)
+
+results = {}
+for t_id, tpl in enumerate(TEMPLATES):
+    convs = []
+    for ex, (opts, _) in zip(ds, items):
+        sep = " " if "|" in tpl else "\n"
+        opts_txt = sep.join(f"{l}) {o}" for l, o in zip("ABCD", opts))
+        convs.append([{"role": "user", "content": tpl.format(q=ex["question"], opts=opts_txt)}])
+    outs = llm.chat(convs, params, chat_template_kwargs={"enable_thinking": False})
+    preds = [(re.findall(r"\b([ABCD])\b", o.outputs[0].text) or [""])[0] for o in outs]
+    results[t_id] = np.array([p == gold for p, (_, gold) in zip(preds, items)], dtype=float)
+    lo, hi = wilson_ci(results[t_id])
+    print(f"plantilla {t_id}: acc={results[t_id].mean():.3f}  IC95%=[{lo:.3f}, {hi:.3f}]")
+
+accs = {t: r.mean() for t, r in results.items()}
+best, worst = max(accs, key=accs.get), min(accs, key=accs.get)
+print(f"min={min(accs.values()):.3f}  mediana={np.median(list(accs.values())):.3f}  max={max(accs.values()):.3f}")
+print(f"McNemar mejor vs peor plantilla: p={mcnemar_exact(results[worst], results[best]):.2e}")</code></pre>
+    </div>
+
+    <p>Si el rango entre plantillas supera el IC de una sola plantilla, la elección de prompt importa más que el ruido de muestreo y debes reportarla (o promediar sobre plantillas). Para modelos base y checkpoints de pretraining, preferir la formulación cloze sobre la de opción múltiple reduce esta sensibilidad, como estandarizan OLMES y lighteval (ver la guía de lighteval multilingüe).</p>
+  </div>
+
+  <!-- 10. Inspect -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-dots" aria-hidden="true"></i>10. Hacerlo nativo en Inspect AI</h2>
+
+    <p>Para métricas de promedio como accuracy, lm-eval reporta el stderr i.i.d. (<code>acc_stderr</code>), sin clustering. Inspect AI (UK AISI) trae las métricas estadísticas integradas: <code>stderr(cluster=...)</code>, <code>bootstrap_stderr()</code>, <code>ci(level, method="t" | "bootstrap", cluster=...)</code>, <code>ci_wilson(level, cluster=...)</code> y <code>grouped(metric, group_key)</code>, donde los clusters y grupos se toman de la <code>metadata</code> de cada <code>Sample</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — latamqa_ci.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import random
+
+from inspect_ai import Task, task
+from inspect_ai.dataset import FieldSpec, Sample, hf_dataset
+from inspect_ai.scorer import accuracy, choice, ci, grouped, model_graded_qa, stderr
+from inspect_ai.solver import generate, multiple_choice
+
+# Plantilla en español; mantiene el formato 'ANSWER: X' que parsea el scorer choice()
+TEMPLATE_ES = (
+    "Responde la siguiente pregunta de opción múltiple. Tu respuesta completa debe tener "
+    "el formato 'ANSWER: $LETTER' (sin comillas), donde LETTER es una de {letters}.\n\n"
+    "{question}\n\n{choices}"
+)
+
+
+def latamqa_record(record: dict) -&gt; Sample:
+    options = [record["answer"], record["distractor1"], record["distractor2"], record["distractor3"]]
+    order = list(range(4))
+    random.Random(f"{record['article_id']}|{record['question']}").shuffle(order)
+    return Sample(
+        input=record["question"],
+        choices=[options[i] for i in order],
+        target="ABCD"[order.index(0)],
+        metadata={"article_id": record["article_id"], "title": record["title"]},
+    )
+
+
+@task
+def latamqa_ci():
+    return Task(
+        dataset=hf_dataset("inria-chile/latamqa_mcq_es-la", split="train",
+                           sample_fields=latamqa_record),
+        solver=multiple_choice(template=TEMPLATE_ES),
+        scorer=choice(),
+        metrics=[
+            accuracy(),
+            stderr(cluster="article_id"),
+            ci(level=0.95, method="bootstrap", cluster="article_id"),
+        ],
+    )
+
+
+@task
+def trueque_juez(judge: str = "openai/&lt;modelo-juez&gt;"):
+    return Task(
+        dataset=hf_dataset("latam-gpt/Trueque-Benchmark-beta-0.1", split="train",
+                           sample_fields=FieldSpec(input="question", target="reference_answer",
+                                                   metadata=["country", "topic"])),
+        solver=generate(),
+        scorer=model_graded_qa(model=judge),
+        metrics=[accuracy(), stderr(), grouped(accuracy(), "country")],
+    )</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">pip install inspect-ai openai
+
+# Modelo local servido con vLLM (provider "vllm/"); --limit para una corrida rápida
+inspect eval latamqa_ci.py@latamqa_ci --model vllm/Qwen/Qwen3-8B --limit 2000 --log-dir logs/
+
+# Trueque con juez: pasa el modelo juez como argumento de la tarea
+inspect eval latamqa_ci.py@trueque_juez --model vllm/&lt;TU_ORG&gt;/&lt;modelo&gt; \
+  -T judge=openai/&lt;modelo-juez&gt; --log-dir logs/trueque/
+
+inspect view --log-dir logs/   # visor web con métricas, IC y cada muestra</code></pre>
+    </div>
+
+    <div class="warn"><strong>LatamQA tiene la respuesta correcta siempre en la columna <code>answer</code>:</strong> sin barajar las opciones el modelo podría aprender (o ya saber) que la primera opción es la buena. El barajado con semilla derivada del ítem es determinista, así que dos modelos ven exactamente el mismo orden y las comparaciones pareadas siguen siendo válidas.</div>
+  </div>
+
+  <!-- 11. Reporte -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-file-report" aria-hidden="true"></i>11. Plantilla de reporte</h2>
+
+    <p>Un resultado de evaluación sin n, IC y configuración no es reproducible ni comparable. La plantilla mínima que usamos para comparar checkpoints:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">markdown — report_template.md</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-markdown">## Comparación: &lt;TU_ORG&gt;/&lt;modelo&gt;-ckpt-b vs ckpt-a
+
+| Tarea | n | A | B | Δ (B−A) | IC95% Δ (pareado) | p McNemar | p Holm |
+|---|---|---|---|---|---|---|---|
+| belebele_spa_Latn (cluster: pasaje) | 900 | 71.0 | 73.0 | +2.0 | [+0.3, +3.7] | 0.021 | 0.17 |
+| assin_entailment | ... | ... | ... | ... | ... | ... | ... |
+
+**Configuración:** lm-eval &lt;versión&gt; · backend vllm &lt;versión&gt; · 5-shot · seed 1234 ·
+sin chat template · dtype bfloat16 · fecha &lt;AAAA-MM-DD&gt; · commit del harness &lt;sha&gt;
+
+**Conclusión:** ninguna diferencia sobrevive a Holm (α=0.05). MDE pareado estimado: ~3 pp por tarea.</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Checklist</th><th>Por qué</th></tr>
+      <tr><td>Reportar n y IC95% de cada métrica</td><td>Sin n no se puede juzgar el ruido</td></tr>
+      <tr><td>Usar SE clustered si hay pasajes/artículos compartidos</td><td>El SE i.i.d. subestima la incertidumbre</td></tr>
+      <tr><td>Comparar modelos con Δ pareado, no con IC separados</td><td>Mucho más poder con las mismas preguntas</td></tr>
+      <tr><td>Corregir por múltiples tareas (Holm o BH)</td><td>Con 20 tareas, 1 falso positivo es lo esperable</td></tr>
+      <tr><td>Fijar y publicar seed, few-shot, plantilla, versión del harness</td><td>Cambian la métrica más que muchas ablaciones</td></tr>
+      <tr><td>Calcular el MDE antes de diseñar un benchmark propio</td><td>Evita construir un benchmark que no distingue nada</td></tr>
+      <tr><td>En reasoning: avg@k con k≥8 y varias semillas</td><td>Con 30 problemas, pass@1 de una sola muestra está dominado por el ruido de muestreo</td></tr>
+    </table>
+
+    <div class="tip"><strong>Durante el pretraining:</strong> además del rigor estadístico, elige tareas con buena relación señal/ruido. <em>Signal and Noise</em> (Heineman et al., 2025) muestra que medir bits-per-byte o log-likelihood en vez de accuracy, filtrar subtareas ruidosas y promediar checkpoints vecinos hace que las decisiones a escala chica predigan mejor las de escala grande. Para es/pt, Belebele, XStoryCloze y COPA en formulación cloze son buenas candidatas desde etapas tempranas.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.00640" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Adding Error Bars to Evals (Miller, 2024)</a>
+      <a class="source-link" href="https://www.anthropic.com/research/statistical-approach-to-model-evals" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>A statistical approach to model evaluations (Anthropic)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.10229" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Quantifying Variance in Evaluation Benchmarks (Madaan et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.07086" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>A Sober Look at Progress in LM Reasoning (Hochlehnert et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2401.00595" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>State of What Art? Multi-prompt evaluation (Mizrahi et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2310.11324" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FormatSpread: sensitivity to prompt formatting (Sclar et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2508.13144" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Signal and Noise (Heineman et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2405.14782" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Lessons from the Trenches on Reproducible Evaluation (Biderman et al., 2024)</a>
+      <a class="source-link" href="https://inspect.aisi.org.uk/metrics.html" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Inspect AI: Scoring Metrics</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness/blob/main/docs/interface.md" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>lm-eval CLI (interface.md)</a>
+      <a class="source-link" href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>scipy.stats.bootstrap</a>
+      <a class="source-link" href="https://www.statsmodels.org/stable/generated/statsmodels.stats.contingency_tables.mcnemar.html" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>statsmodels: mcnemar</a>
+      <a class="source-link" href="https://huggingface.co/datasets/inria-chile/latamqa_mcq_es-la" target="_blank" rel="noopener"><i class="ti ti-database"></i>LatamQA MCQ (Inria Chile)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/Trueque-Benchmark-beta-0.1" target="_blank" rel="noopener"><i class="ti ti-database"></i>Trueque beta 0.1 (LatamGPT)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/MathArena/aime_2026" target="_blank" rel="noopener"><i class="ti ti-database"></i>AIME 2026 (MathArena)</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-language"></i>Guía: Evaluación para español/portugués</a>
+      <a class="source-link" href="lighteval-multilingue.html"><i class="ti ti-language"></i>Guía: Evaluación multilingüe con lighteval</a>
+      <a class="source-link" href="llm-judge-calibrado.html"><i class="ti ti-scale"></i>Guía: LLM-as-a-judge calibrado</a>
+      <a class="source-link" href="grpo-rl.html"><i class="ti ti-brain"></i>Guía: GRPO y RL para razonamiento</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluación multilingüe con lighteval — LatamGPT</title>
+<meta name="description" content="Evalúa modelos base e instruct en español y portugués con lighteval: tareas nativas, formulaciones CF/MCF, tareas propias como LatamQA y CHOCLO, intervalos de confianza y PoETa v2 para portugués.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Evaluación</div>
+    <h1 class="guide-title">Evaluación multilingüe con lighteval: tareas es/pt, formulaciones CF/MCF y PoETa v2</h1>
+    <div class="guide-desc">Cómo medir modelos base e instruct en español y portugués con lighteval: tareas nativas (ENEM, OAB, OpenBookQA-es, Global-MMLU, Belebele), formulaciones cloze vs opción múltiple, tareas propias como LatamQA y CHOCLO, intervalos de confianza desde los details y PoETa v2 como suite de referencia para portugués.</div>
+  </div>
+
+  <!-- 1. Cuándo usar lighteval -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>1. lighteval, lm-eval y PoETa v2: cuándo usar cada uno</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Checkpoint (HF o local)</div> <div class="flow-arrow">→</div>
+      <div class="flow-step">lighteval + vLLM</div> <div class="flow-arrow">→</div>
+      <div class="flow-step">Tareas es/pt nativas + custom</div> <div class="flow-arrow">→</div>
+      <div class="flow-step">results JSON + details parquet</div> <div class="flow-arrow">→</div>
+      <div class="flow-step">IC y comparación pareada</div>
+    </div>
+
+    <p>La guía de <a href="evaluacion-latam.html">evaluación con lm-eval-harness</a> cubre el harness más usado para modelos base. lighteval (Hugging Face) aporta algo distinto: un sistema de <strong>plantillas multilingües</strong> que evalúa la misma tarea en tres formulaciones (cloze, opción múltiple con letras e híbrida) y con varias normalizaciones de log-probabilidad. Es el harness que HF usó para seleccionar tareas multilingües en FineWeb2 (FineTasks) y el que conviene para medir checkpoints tempranos de pretraining, donde la formulación importa mucho.</p>
+
+    <table class="model-table">
+      <tr><th>Harness</th><th>Fortaleza</th><th>Tareas es/pt</th><th>Cuándo usarlo</th></tr>
+      <tr><td>lighteval 0.13</td><td>Plantillas CF/MCF/Hybrid, tareas custom en Python, backend vLLM</td><td>ENEM, OAB, OpenBookQA-es, Global-MMLU es/pt, Belebele, MGSM-es, FLORES-200, SQuAD-es, FaQuAD</td><td>Curvas de pretraining, ablaciones de datos, tareas propias</td></tr>
+      <tr><td>lm-eval 0.4.x</td><td>Ecosistema enorme, configs YAML, estándar de leaderboards</td><td>spanish_bench, portuguese_bench, IberoBench, Global PIQA, INCLUDE</td><td>Reportes comparables con la literatura</td></tr>
+      <tr><td>PoETa v2</td><td>44 tareas en portugués con métrica agregada normalizada (NPM)</td><td>Solo pt (12 nativas, 32 traducidas)</td><td>Número único de referencia para pt-BR</td></tr>
+    </table>
+
+    <div class="warn"><strong>No mezcles números entre harnesses.</strong> ENEM en lighteval (log-likelihood, exámenes 2022-2024) y ENEM en PoETa v2 (generación greedy, exámenes 2009-2017) no son el mismo experimento: cambian el prompt, la formulación, la normalización y hasta los años. Compara modelos siempre dentro del mismo harness, versión y configuración.</div>
+  </div>
+
+  <!-- 2. Instalación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-download" aria-hidden="true"></i>2. Instalación en un entorno aislado</h2>
+
+    <p>La última release en PyPI es lighteval 0.13.0 (nov-2025), cuyo extra <code>[vllm]</code> fija <code>vllm&gt;=0.10.0,&lt;0.10.2</code>. La rama <code>main</code> (0.13.1.dev0, activa en octubre de 2026) pide <code>vllm&gt;=0.11</code> y es la opción para arquitecturas recientes. En ambos casos usa un entorno dedicado: lighteval fija su propio rango de vLLM, que choca con el vLLM o el lm-eval que tengas en otros entornos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">python3.11 -m venv .venv-lighteval
+source .venv-lighteval/bin/activate
+
+# Opción A: release estable (trae vLLM 0.10.1.x)
+pip install "lighteval[vllm,multilingual]==0.13.0"
+
+# Opción B: rama main (vLLM &gt;= 0.11), para modelos con arquitecturas nuevas
+# pip install "lighteval[vllm,multilingual] @ git+https://github.com/huggingface/lighteval.git"
+
+# huggingface_hub 2.x eliminó huggingface-cli: el login es con "hf"
+hf auth login
+
+# Si con la opción A aparece un error HTTP del Hub, fija la versión 1.x en este entorno
+# pip install "huggingface_hub&lt;2"
+
+lighteval --help
+lighteval vllm --help | head -40</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Escenario</th><th>Hardware</th><th>Tiempo aproximado</th></tr>
+      <tr><td>Modelo 1-3B, tareas log-likelihood (ENEM, OAB, OpenBookQA-es)</td><td>1 GPU de 24 GB (L4, A10, RTX 4090)</td><td>10-30 min</td></tr>
+      <tr><td>Modelo 8B de razonamiento, tareas generativas</td><td>1 GPU de 48-80 GB</td><td>30-90 min por cada 500 ítems</td></tr>
+      <tr><td>LatamGPT 70B (bf16)</td><td>4×80 GB con <code>tensor_parallel_size=4</code></td><td>1-3 h</td></tr>
+      <tr><td>PoETa v2 completo (44 tareas) sobre un 7-8B</td><td>1×A100 80 GB</td><td>varias horas</td></tr>
+    </table>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> los tiempos son estimaciones. Para iterar usa <code>--max-samples 200</code>, un modelo de 1-3B y una sola formulación. En una T4 de 16 GB (Colab) cambia a <code>dtype=float16</code> y <code>max_model_length=2048</code>: alcanza para modelos de hasta ~3B.</div>
+  </div>
+
+  <!-- 3. Explorar tareas -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-list-search" aria-hidden="true"></i>3. Explorar las tareas en español y portugués</h2>
+
+    <p>Las tareas multilingües no se cargan por defecto: hay que pedirlas con <code>--load-tasks-multilingual</code> en <code>tasks list</code> y en las corridas, y con <code>--load-multilingual</code> en <code>tasks inspect</code>. La especificación de tarea es <code>nombre|fewshot</code>; el formato viejo <code>suite|tarea|fewshot</code> todavía se acepta pero la suite se ignora.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Todas las tareas con código de idioma español (spa) o portugués (por)
+lighteval tasks list --load-tasks-multilingual | grep -E "_(spa|por)(_|$)|spa_Latn|por_Latn"
+
+# Ver el prompt real que verá el modelo (3 ejemplos)
+lighteval tasks inspect "enem_por_cf:2024" --load-multilingual --num-samples 3
+lighteval tasks inspect "openbookqa_spa_mcf" --load-multilingual --num-samples 3</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Tarea (nombre en lighteval)</th><th>Idioma</th><th>Tipo</th><th>Dataset</th></tr>
+      <tr><td><code>enem_por_{mcf|cf|hybrid}:{2022|2023|2024}</code></td><td>pt-BR</td><td>MCQ, 5 opciones</td><td>maritaca-ai/enem</td></tr>
+      <tr><td><code>oab_exams_por_{mcf|cf|hybrid}</code></td><td>pt-BR</td><td>MCQ jurídico, 4 opciones</td><td>eduagarcia/oab_exams</td></tr>
+      <tr><td><code>openbookqa_spa_{mcf|cf|hybrid}</code></td><td>es</td><td>MCQ de ciencias</td><td>BSC-LT/openbookqa-es</td></tr>
+      <tr><td><code>global_mmlu_all_{spa|por}_{mcf|cf|hybrid}:&lt;materia&gt;</code></td><td>es / pt</td><td>MCQ, 57 materias</td><td>CohereLabs/Global-MMLU</td></tr>
+      <tr><td><code>belebele_{spa_Latn|por_Latn}_{mcf|cf|hybrid}</code></td><td>es / pt</td><td>Comprensión lectora</td><td>facebook/belebele</td></tr>
+      <tr><td><code>mgsm_spa</code></td><td>es</td><td>Matemática generativa</td><td>juletxara/mgsm</td></tr>
+      <tr><td><code>squad_spa</code>, <code>faquad_por</code></td><td>es / pt</td><td>QA extractiva</td><td>SQuAD-es, FaQuAD</td></tr>
+      <tr><td><code>flores200:spa_Latn-por_Latn</code> (y otros pares)</td><td>es ↔ pt</td><td>Traducción (chrF++, BLEU)</td><td>facebook/flores</td></tr>
+    </table>
+
+    <div class="warn"><strong>Few-shot en ENEM y OAB:</strong> esos datasets solo tienen split <code>train</code>, que es también el de evaluación. Si pides few-shot, los ejemplos salen del mismo split. Para números limpios usa 0-shot en esas dos tareas.</div>
+  </div>
+
+  <!-- 4. Primera corrida -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-player-play" aria-hidden="true"></i>4. Primera corrida: tareas nativas es/pt con vLLM</h2>
+
+    <p>Para un <strong>modelo base</strong> evaluado por log-likelihood, desactiva el chat template con <code>override_chat_template=false</code>: lighteval lo aplica automáticamente si el tokenizer trae uno, y muchos repos base lo incluyen.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">MODEL=HuggingFaceTB/SmolLM3-3B-Base
+
+lighteval vllm \
+  "model_name=$MODEL,dtype=bfloat16,max_model_length=4096,gpu_memory_utilization=0.85,override_chat_template=false" \
+  "enem_por_cf:2024|0,enem_por_mcf:2024|0,oab_exams_por_cf|0,openbookqa_spa_cf|0,openbookqa_spa_mcf|5,global_mmlu_all_spa_mcf:high_school_biology|5,global_mmlu_all_por_mcf:high_school_biology|5,belebele_spa_Latn_cf|0,belebele_por_Latn_cf|0" \
+  --load-tasks-multilingual \
+  --save-details \
+  --output-dir results
+
+# Resultados: results/results/&lt;modelo&gt;/results_&lt;timestamp&gt;.json
+# Details:    results/details/&lt;modelo&gt;/&lt;timestamp&gt;/details_&lt;tarea&gt;_&lt;timestamp&gt;.parquet</code></pre>
+    </div>
+
+    <p>El JSON trae, por tarea (<code>"enem_por_cf:2024|0"</code>), cada métrica y su <code>_stderr</code>. Las métricas se llaman según la normalización: <code>acc</code> (sin normalizar, la que usa MCF con letras), <code>acc_norm_token</code> (log-prob dividida por número de tokens), <code>acc_norm</code> (por número de caracteres) y <code>acc_norm_pmi</code> (PMI contra la respuesta sin pregunta).</p>
+  </div>
+
+  <!-- 5. Formulaciones -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>5. Formulaciones CF, MCF e Hybrid y normalizaciones</h2>
+
+    <p>La misma pregunta se puede presentar de tres formas. En español la plantilla usa los literales <em>Pregunta</em> / <em>Respuesta</em>, y en portugués sus equivalentes; con <code>lighteval tasks inspect</code> ves el texto exacto.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">text</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-plaintext">CF (cloze): se puntúa el texto completo de cada opción
+  Pregunta: ¿Qué sitio arqueológico peruano es el ícono de la arquitectura incaica?
+  Respuesta: | Machu Picchu | Sacsayhuamán | Caral | Coricancha
+
+MCF (opción múltiple): opciones en el prompt, se puntúa la letra
+  Pregunta: ...  A. Machu Picchu  B. Sacsayhuamán  C. Caral  D. Coricancha
+  Respuesta: | A | B | C | D
+
+Hybrid: opciones en el prompt, pero se puntúa el texto completo
+  Respuesta: | Machu Picchu | Sacsayhuamán | Caral | Coricancha</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Normalización</th><th>Métrica</th><th>Qué corrige</th><th>Cuándo</th></tr>
+      <tr><td>Ninguna</td><td><code>acc</code></td><td>-</td><td>MCF (todas las opciones son una letra)</td></tr>
+      <tr><td><code>LogProbTokenNorm</code></td><td><code>acc_norm_token</code></td><td>Opciones largas penalizadas</td><td>CF en idiomas no ingleses (la que usa FineWeb2; FineTasks sugiere quedarse con la mejor entre token y caracteres según el idioma)</td></tr>
+      <tr><td><code>LogProbCharNorm</code></td><td><code>acc_norm</code></td><td>Igual, pero independiente del tokenizer</td><td>Comparar modelos con tokenizers distintos</td></tr>
+      <tr><td><code>LogProbPMINorm</code></td><td><code>acc_norm_pmi</code></td><td>Opciones a priori improbables</td><td>Tareas difíciles o con términos raros (FineWeb2 la usa en AGIEval y MMLU traducido)</td></tr>
+    </table>
+
+    <p>La regla práctica, documentada por OLMES y por FineTasks: los modelos chicos o los checkpoints tempranos rinden al azar en MCF porque todavía no aprendieron el formato "elige la letra", mientras CF ya muestra una señal monótona. Por eso OLMES evalúa ambas formulaciones y reporta la mejor. Compruébalo con tres checkpoints públicos de OLMo-2 1B:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">cat &gt; tasks_es_pt.txt &lt;&lt;'EOF'
+# una tarea por línea (las líneas con # se ignoran)
+openbookqa_spa_mcf|0
+openbookqa_spa_cf|0
+openbookqa_spa_hybrid|0
+belebele_spa_Latn_mcf|0
+belebele_spa_Latn_cf|0
+belebele_por_Latn_cf|0
+oab_exams_por_cf|0
+EOF
+
+for REV in stage1-step10000-tokens21B stage1-step100000-tokens210B stage1-step1000000-tokens2098B; do
+  lighteval vllm \
+    "model_name=allenai/OLMo-2-0425-1B,revision=$REV,dtype=bfloat16,max_model_length=4096,override_chat_template=false" \
+    tasks_es_pt.txt \
+    --load-tasks-multilingual \
+    --output-dir "results/olmo-$REV"
+done</code></pre>
+    </div>
+
+    <div class="tip"><strong>En el cluster:</strong> convierte el loop en un array de SLURM (<code>#SBATCH --array=0-2</code>, <code>REV=${CKPTS[$SLURM_ARRAY_TASK_ID]}</code>), un checkpoint por job y con su propio <code>--output-dir</code>, para que un fallo no tumbe al resto. Agrega <code>--wandb</code> (con <code>WANDB_PROJECT</code> exportado) para ver las curvas en vivo. Para checkpoints propios usa <code>model_name=/ruta/checkpoints/step-N</code> sin <code>revision</code>. La plantilla de job está en la guía de <a href="cluster.html">cluster</a>.</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import glob
+import json
+import os
+
+import pandas as pd
+
+REVS = ["stage1-step10000-tokens21B", "stage1-step100000-tokens210B", "stage1-step1000000-tokens2098B"]
+
+rows = []
+for rev in REVS:
+    files = glob.glob(f"results/olmo-{rev}/results/**/results_*.json", recursive=True)
+    with open(max(files, key=os.path.getmtime), encoding="utf-8") as f:
+        results = json.load(f)["results"]
+    for task, metrics in results.items():
+        if task == "all":
+            continue
+        base, _, form = task.split("|")[0].rpartition("_")   # p.ej. openbookqa_spa / cf
+        for metric, value in metrics.items():
+            if not metric.endswith("_stderr"):
+                rows.append({"tarea": base, "formulación": form, "métrica": metric,
+                             "tokens": rev.split("-")[-1], "score": value})
+
+df = pd.DataFrame(rows)
+table = df.pivot_table(index=["tarea", "formulación", "métrica"], columns="tokens", values="score")
+print(table[[r.split("-")[-1] for r in REVS]].round(3).to_string())</code></pre>
+    </div>
+
+    <div class="tip"><strong>Cómo leerlo:</strong> una tarea útil para decidir ablaciones de pretraining debe subir de forma monótona con los tokens, quedar claramente sobre el azar (25% con 4 opciones) y tener poco ruido entre checkpoints vecinos. Si MCF se queda plano en ~25% mientras CF sube, usa CF para tus modelos pequeños. Para la parte estadística (IC y tests pareados) sigue en la guía de <a href="evaluacion-estadistica.html">evaluación estadísticamente rigurosa</a>.</div>
+  </div>
+
+  <!-- 6. Tarea custom LatamQA -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-puzzle" aria-hidden="true"></i>6. Tarea custom: LatamQA en tres formulaciones (y su versión en inglés)</h2>
+
+    <p>LatamQA (Inria Chile) tiene 18,907 preguntas de opción múltiple sobre cultura latinoamericana en <code>inria-chile/latamqa_mcq_es-la</code> (público). Cada fila trae <code>question</code>, <code>answer</code>, <code>distractor1-3</code>, el <code>article_id</code> de Wikipedia de origen y la traducción al inglés de todo (<code>question_en</code>, <code>answer_en</code>...). Con eso puedes medir, con las mismas preguntas, la brecha español-inglés de tu modelo. Las variantes <code>latamqa_mcq_es-es</code> y <code>latamqa_mcq_pt-br</code> existen pero son gated (acceso manual).</p>
+
+    <p>El archivo define un <code>TASKS_TABLE</code> que lighteval carga con <code>--custom-tasks</code>. Dos detalles importan: las opciones se barajan con una semilla derivada de la pregunta (la respuesta correcta no puede quedar siempre en la A), y cada <code>Doc</code> guarda <code>article_id</code> en <code>specific</code> para calcular después errores estándar por cluster.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — latamqa_task.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""LatamQA (es-LA) como tarea custom de lighteval: CF, MCF e Hybrid, en español e inglés."""
+import random
+import zlib
+
+from lighteval.metrics.dynamic_metrics import LogLikelihoodAccMetric
+from lighteval.metrics.normalizations import LogProbCharNorm, LogProbPMINorm, LogProbTokenNorm
+from lighteval.tasks.lighteval_task import LightevalTaskConfig
+from lighteval.tasks.multilingual.utils.task_utils import get_metrics_for_formulation
+from lighteval.tasks.templates.multichoice import get_mcq_prompt_function
+from lighteval.tasks.templates.utils.formulation import (
+    CFFormulation,
+    HybridFormulation,
+    MCFFormulation,
+)
+from lighteval.utils.language import Language
+
+def question_key(line: dict) -&gt; int:
+    # Semilla estable entre procesos (hash() de Python cambia en cada ejecución)
+    return zlib.crc32(line["question"].encode("utf-8"))
+
+def make_adapter(suffix: str):
+    """suffix='' usa los campos en español; suffix='_en' la traducción al inglés."""
+    def adapter(line: dict) -&gt; dict:
+        options = [line[f"answer{suffix}"]] + [line[f"distractor{i}{suffix}"] for i in (1, 2, 3)]
+        order = list(range(4))
+        random.Random(question_key(line)).shuffle(order)   # mismo orden en es y en
+        return {
+            "question": line[f"question{suffix}"],
+            "choices": [options[i] for i in order],
+            "gold_idx": order.index(0),
+        }
+    return adapter
+
+def with_metadata(prompt_fn):
+    """Guarda article_id y un id de pregunta en Doc.specific (queda en los details)."""
+    def fn(line: dict, task_name: str):
+        doc = prompt_fn(line, task_name)
+        if doc is not None:
+            doc.specific = {"article_id": int(line["article_id"]), "qid": question_key(line)}
+        return doc
+    return fn
+
+TASKS_TABLE = [
+    LightevalTaskConfig(
+        name=f"latamqa_{language.value}_{formulation.name.lower()}",
+        prompt_function=with_metadata(
+            get_mcq_prompt_function(language, make_adapter(suffix), formulation=formulation)
+        ),
+        hf_repo="inria-chile/latamqa_mcq_es-la",
+        hf_subset="default",
+        hf_avail_splits=["train"],
+        evaluation_splits=("train",),
+        hf_filter=lambda line: all(line[k] for k in line if k not in ("article_id", "title")),
+        metrics=get_metrics_for_formulation(
+            formulation,
+            [
+                LogLikelihoodAccMetric(normalization=LogProbTokenNorm()),
+                LogLikelihoodAccMetric(normalization=LogProbCharNorm()),
+                LogLikelihoodAccMetric(normalization=LogProbPMINorm()),
+            ],
+        ),
+    )
+    for language, suffix in [(Language.SPANISH, ""), (Language.ENGLISH, "_en")]
+    for formulation in [MCFFormulation(), CFFormulation(), HybridFormulation()]
+]</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Antes: lighteval tasks inspect "latamqa_spa_cf" --custom-tasks latamqa_task.py --num-samples 2
+lighteval vllm \
+  "model_name=HuggingFaceTB/SmolLM3-3B-Base,dtype=bfloat16,max_model_length=4096,override_chat_template=false" \
+  "latamqa_spa_cf|0,latamqa_eng_cf|0,latamqa_spa_mcf|0,latamqa_eng_mcf|0" \
+  --custom-tasks latamqa_task.py \
+  --max-samples 3000 \
+  --save-details \
+  --output-dir results</code></pre>
+    </div>
+
+    <div class="warn"><strong>Variedad y contaminación:</strong> LatamQA se generó a partir de artículos de Wikipedia, que casi seguro están en tu corpus de pretraining. Mide conocimiento cultural, no generalización. Reporta el número junto a una tarea con test privado y nunca la uses para elegir mezclas de datos que incluyan Wikipedia en español sin decirlo.</div>
+  </div>
+
+  <!-- 7. Tarea generativa -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-message-question" aria-hidden="true"></i>7. Tarea generativa de respuesta corta: CHOCLO</h2>
+
+    <p>CHOCLO (<code>latam-gpt/CHOCLO</code>) tiene 104,847 pares pregunta-respuesta sobre entidades de 18 países latinoamericanos, con país, categoría y dificultad. Muchas respuestas de referencia son frases descriptivas y no solo la entidad, así que el exact match casi nunca acierta. Usa F1 de tokens multilingüe como señal barata y guarda los details para puntuar después con un juez. La columna <code>Country</code> mezcla mayúsculas (<code>"chile"</code>, <code>"México"</code>, <code>"méxico"</code>): normalízala en el filtro.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — choclo_task.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""CHOCLO como tarea generativa de lighteval, una subtarea por país."""
+from functools import partial
+
+from lighteval.metrics.dynamic_metrics import (
+    MultilingualQuasiExactMatchMetric,
+    MultilingualQuasiF1ScoreMetric,
+)
+from lighteval.tasks.lighteval_task import LightevalTaskConfig
+from lighteval.tasks.templates.qa import get_qa_prompt_function
+from lighteval.utils.language import Language
+
+COUNTRIES = {"chile": "chile", "mexico": "méxico", "peru": "perú",
+             "argentina": "argentina", "colombia": "colombia"}
+
+def same_country(target: str, line: dict) -&gt; bool:
+    return (line["Country"] or "").strip().lower() == target and bool(line["Answer"])
+
+TASKS_TABLE = [
+    LightevalTaskConfig(
+        name=f"choclo_{slug}",
+        prompt_function=get_qa_prompt_function(
+            Language.SPANISH,
+            lambda line: {"question": line["Question"], "choices": [line["Answer"]]},
+        ),
+        hf_repo="latam-gpt/CHOCLO",
+        hf_subset="default",
+        hf_avail_splits=["train"],
+        evaluation_splits=("train",),
+        hf_filter=partial(same_country, country),
+        generation_size=64,
+        stop_sequence=("\n",),
+        metrics=[
+            MultilingualQuasiF1ScoreMetric(Language.SPANISH),
+            MultilingualQuasiExactMatchMetric(Language.SPANISH, "prefix"),
+        ],
+    )
+    for slug, country in COUNTRIES.items()
+]</code></pre>
+    </div>
+
+    <p>Se corre igual que LatamQA: <code>--custom-tasks choclo_task.py "choclo_chile|3,choclo_mexico|3,choclo_peru|3" --max-samples 500 --save-details</code>. Los few-shot salen del mismo split filtrado.</p>
+
+    <div class="warn"><strong>F1 no es el score final.</strong> Con respuestas abiertas, F1 de tokens castiga paráfrasis correctas y premia respuestas que copian palabras de la pregunta. La auditoría independiente LatamBench reporta que, con corrección de Holm sobre todos los pares, el ranking completo de CHOCLO queda en un único grupo de empate estadístico, y que su juez todavía no está validado para CHOCLO (solo para Trueque). Usa los details (columna <code>model_response</code>) como entrada de la guía <a href="llm-judge-calibrado.html">LLM-as-a-judge calibrado</a>.</div>
+  </div>
+
+  <!-- 8. Instruct y razonamiento -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-brain" aria-hidden="true"></i>8. Modelos instruct y de razonamiento</h2>
+
+    <p>Con un modelo instruct, lighteval detecta el chat template y lo aplica. En ese modo descarta las <code>stop_sequence</code> de la tarea (el modelo termina con su token de fin de turno). Además, si defines <code>max_new_tokens</code> en <code>generation_parameters</code>, reemplaza al <code>generation_size</code> de la tarea (con o sin chat template): clave para tareas como <code>mgsm_spa</code>, que trae <code>generation_size=25</code>. <code>--remove-reasoning-tags</code> está activo por defecto y elimina el bloque <code>&lt;think&gt;...&lt;/think&gt;</code> antes de calcular la métrica. Para LatamGPT 70B (<code>latam-gpt/Llama-3.1-70B-LatamGPT-SFT-1.0</code>) agrega <code>tensor_parallel_size=4</code> en 4 GPUs de 80 GB. Para modelos cerrados vía API existe <code>lighteval eval</code> (backend Inspect AI), que sirve para tareas generativas pero no da log-likelihoods.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">lighteval vllm \
+  "model_name=Qwen/Qwen3-8B,dtype=bfloat16,max_model_length=16384,gpu_memory_utilization=0.9,generation_parameters={temperature:0.6,top_p:0.95,max_new_tokens:8192}" \
+  "mgsm_spa|0,belebele_spa_Latn_mcf|0,flores200:eng_Latn-spa_Latn|0" \
+  --load-tasks-multilingual \
+  --reasoning-tags "[('&lt;think&gt;', '&lt;/think&gt;')]" \
+  --max-samples 250 \
+  --save-details \
+  --output-dir results
+</code></pre>
+    </div>
+
+    <div class="warn"><strong>Exact match y razonamiento:</strong> <code>mgsm_spa</code> compara la respuesta completa con el número de referencia. Un modelo instruct que contesta "La respuesta es 18." pierde el punto aunque acierte. Revisa los details antes de concluir que el modelo no sabe matemática en español. Para razonamiento matemático serio usa métricas extractivas o un juez, y fija temperatura y semilla (o promedia varias semillas), como recomienda la literatura de reproducibilidad en reasoning.</div>
+  </div>
+
+  <!-- 9. Details a IC -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-dots" aria-hidden="true"></i>9. De los details a intervalos de confianza y comparaciones pareadas</h2>
+
+    <p>El <code>_stderr</code> del JSON supone preguntas independientes. En LatamQA varias preguntas salen del mismo artículo, así que el error real es mayor: hay que agrupar por <code>article_id</code> (errores estándar clustered, como propone Miller, 2024). Cada parquet de details tiene una fila por ítem con las columnas <code>doc</code>, <code>metric</code> y <code>model_response</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import glob
+
+import numpy as np
+from datasets import load_dataset
+
+MODEL = "HuggingFaceTB/SmolLM3-3B-Base"
+METRIC = "acc_norm"   # normalización por caracteres
+
+def load_details(task: str):
+    # Los nombres de archivo llevan "|": corre esto en Linux/macOS (Windows no los admite)
+    paths = sorted(glob.glob(f"results/details/{MODEL}/*/details_{task}_*.parquet"))
+    det = load_dataset("parquet", data_files=paths[-1], split="train")
+    y = np.array([m[METRIC] for m in det["metric"]], dtype=float)
+    meta = [d["specific"] for d in det["doc"]]
+    return y, np.array([m["article_id"] for m in meta]), np.array([m["qid"] for m in meta])
+
+def clustered_ci(y: np.ndarray, clusters: np.ndarray, z: float = 1.96):
+    n, mean = len(y), y.mean()
+    naive_se = y.std(ddof=1) / np.sqrt(n)
+    _, inv = np.unique(clusters, return_inverse=True)
+    resid_by_cluster = np.bincount(inv, weights=y - mean)
+    clustered_se = np.sqrt((resid_by_cluster ** 2).sum()) / n
+    return mean, naive_se, clustered_se, (mean - z * clustered_se, mean + z * clustered_se)
+
+y_es, art_es, qid_es = load_details("latamqa_spa_cf|0")
+y_en, art_en, qid_en = load_details("latamqa_eng_cf|0")
+
+for name, y, art in [("es", y_es, art_es), ("en", y_en, art_en)]:
+    mean, se, cse, (lo, hi) = clustered_ci(y, art)
+    print(f"LatamQA-{name}: {mean:.3f}  SE ingenuo={se:.4f}  SE clustered={cse:.4f}  IC95=[{lo:.3f}, {hi:.3f}]")
+
+# Brecha es - en pareada por pregunta (mismas preguntas, mismo orden de opciones)
+en_by_qid = dict(zip(qid_en, y_en))
+pairs = [(a, y, en_by_qid[q]) for a, y, q in zip(art_es, y_es, qid_es) if q in en_by_qid]
+art_p = np.array([p[0] for p in pairs])
+diff = np.array([p[1] - p[2] for p in pairs])
+gap, _, cse, (lo, hi) = clustered_ci(diff, art_p)
+print(f"Brecha es-en: {gap:+.3f}  IC95=[{lo:+.3f}, {hi:+.3f}]  (n={len(diff)})")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Por qué pareado:</strong> la varianza de la diferencia pareada es mucho menor que la de comparar dos promedios independientes, porque la dificultad de cada pregunta se cancela. Con el mismo razonamiento comparas dos checkpoints sobre los mismos ítems. El cruce por <code>qid</code> descarta los ítems que no aparecen en ambas corridas. Tests pareados, bootstrap y análisis de potencia, en <a href="evaluacion-estadistica.html">evaluación estadísticamente rigurosa</a>.</div>
+  </div>
+
+  <!-- 10. PoETa v2 -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-flag" aria-hidden="true"></i>10. PoETa v2: la suite de referencia para portugués</h2>
+
+    <p>PoETa v2 (Almeida et al., 2025) es la evaluación más extensa de LLMs en portugués: más de 40 tareas (44 en <code>configs/poeta_v2_full.json</code>: 12 nativas y 32 traducidas, unos 12K ejemplos) y más de 20 modelos evaluados. El paper estudia cómo la inversión de cómputo y la adaptación al idioma afectan el rendimiento, y la brecha con tareas equivalentes en inglés. Las tareas nativas incluyen ASSIN 2 (RTE y STS), BLUEX, ENEM, FaQuAD, TweetSentBR, BRoverbs (refranes brasileños) y otras como <code>inferbr</code>, <code>repro</code> y <code>mina_br</code>. Las traducidas cubren ARC, BoolQ, GSM8K y MATH en formato de opción múltiple, BIG-bench, discurso de odio, entre otras.</p>
+
+    <p>El leaderboard del repositorio muestra el argumento que más le importa a LatamGPT: <strong>Sabiá</strong> (7B, 1T tokens de pretraining + 10B extra en portugués) obtiene 32.4 de NPM frente a 19.9 de Llama 1 7B (1T), y <strong>Curió 7B</strong> (2T + 100B en portugués) obtiene 34.8 frente a 29.5 de Llama 2 7B (2T). Es el mismo patrón que se busca con el <a href="continual-pretraining.html">continual pretraining</a> en español.</p>
+
+    <p>El harness es un fork de una versión antigua de lm-evaluation-harness que fija <code>transformers==4.41.1</code> y <code>huggingface-hub&lt;1.0</code>. Instálalo en su propio entorno con Python 3.10. El README todavía apunta a <code>maritaca-ai/poeta-v2-evaluation</code>, que no existe; el repo vigente es <code>PoETaV2/PoETaV2</code>.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">git clone https://github.com/PoETaV2/PoETaV2.git
+cd PoETaV2
+python3.10 -m venv .venv-poeta
+source .venv-poeta/bin/activate
+python -m pip install -e .
+
+# Una tarea suelta (ENEM 2009-2017, generación greedy, 1-shot)
+python main.py --model gpt \
+  --model_args pretrained=Qwen/Qwen2.5-7B \
+  --tasks enem_greedy --num_fewshot 1 \
+  --prompt_modes dynamic-random \
+  --output_path out/enem_greedy.json \
+  --description_dict_path description.json --no_cache
+
+# Las 44 tareas + NPM: copia la plantilla de config de modelo y ajústala
+# (edita "model_for_inference", "tokenizer_for_lm_eval" = &lt;TU_ORG&gt;/&lt;modelo&gt; y "results_save_dir")
+cp configs/hf_model_template.json configs/model_mi_checkpoint.json
+python scripts/bulk_evaluation.py \
+  --model_config configs/model_mi_checkpoint.json \
+  --task_configs configs/poeta_v2_full.json \
+  --experiment_name poeta_v2_mi_checkpoint
+# Escribe un JSON por tarea y npm.json en results_save_dir</code></pre>
+    </div>
+
+    <p><strong>NPM</strong> (Normalized Preferred Metric) normaliza cada tarea entre su baseline aleatorio y el máximo: <code>NPM = 100 · (score − random) / (max − random)</code>, y promedia. Así una tarea binaria con 50% de azar no pesa igual que una de cinco opciones. Puedes aplicar la misma idea a tus resultados de lighteval para tener un agregado es/pt comparable entre checkpoints (no con el número oficial de PoETa):</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import glob
+import json
+import os
+
+MODEL = "HuggingFaceTB/SmolLM3-3B-Base"
+METRIC = "acc_norm"
+
+# Baseline aleatorio = 1 / número de opciones (igual que random_score en poeta_v2_full.json)
+TASKS = {"enem_por_cf:2024|0": (1 / 5, "pt"), "oab_exams_por_cf|0": (1 / 4, "pt"),
+         "belebele_por_Latn_cf|0": (1 / 4, "pt"), "openbookqa_spa_cf|0": (1 / 4, "es"),
+         "belebele_spa_Latn_cf|0": (1 / 4, "es")}
+
+files = glob.glob(f"results/results/{MODEL}/results_*.json")
+with open(max(files, key=os.path.getmtime), encoding="utf-8") as f:
+    results = json.load(f)["results"]
+
+npm_by_lang = {"es": [], "pt": []}
+for task, (rnd, lang) in TASKS.items():
+    if task in results and METRIC in results[task]:
+        npm_by_lang[lang].append(100 * (results[task][METRIC] - rnd) / (1.0 - rnd))
+
+for lang, vals in npm_by_lang.items():
+    if vals:
+        print(f"NPM-{lang}: {sum(vals) / len(vals):.1f}  ({len(vals)} tareas)")</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Tarea PoETa v2</th><th>¿Existe en lighteval?</th><th>Nota</th></tr>
+      <tr><td><code>enem_greedy</code>, <code>enem_2022_greedy</code></td><td><code>enem_por_*:2022-2024</code></td><td>Distinto protocolo y años: no comparables</td></tr>
+      <tr><td><code>faquad</code></td><td><code>faquad_por</code></td><td>QA extractiva; misma fuente</td></tr>
+      <tr><td><code>bluex_launch_version_greedy</code></td><td>No</td><td>Candidata a tarea custom (algunas preguntas tienen imágenes)</td></tr>
+      <tr><td><code>assin_rte_greedy</code>, <code>broverbs_*</code>, <code>inferbr_greedy</code></td><td>No</td><td>Nativas brasileñas: valen como custom tasks MCQ con el patrón de la sección 6</td></tr>
+    </table>
+
+    <div class="tip"><strong>Modelos nuevos en PoETa:</strong> con <code>transformers==4.41.1</code> el backend <code>gpt</code> no carga arquitecturas posteriores a mediados de 2024. Para esos modelos, PoETa trae un backend <code>vllm</code> que llama a un endpoint compatible con OpenAI (<code>http://localhost:8000/v1</code> por defecto). Levántalo con <code>vllm serve</code> en otro entorno y en la config pon <code>"model": "vllm"</code> y el nombre del modelo servido en <code>"model_for_inference"</code>. Es un backend de chat y solo de generación, así que tiene sentido para modelos instruct.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2511.17808" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>PoETa v2 (Almeida et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.08446" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>OLMES: A Standard for Language Model Evaluations (Gu et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2506.20920" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb2 (Penedo et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2508.13144" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Signal and Noise (Heineman et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2412.03304" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Global MMLU (Singh et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2307.05410" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>BLUEX (Almeida et al., 2023)</a>
+      <a class="source-link" href="https://github.com/huggingface/lighteval" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>lighteval (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/docs/lighteval/adding-a-custom-task" target="_blank" rel="noopener"><i class="ti ti-book"></i>lighteval: adding a custom task</a>
+      <a class="source-link" href="https://pypi.org/project/lighteval/" target="_blank" rel="noopener"><i class="ti ti-package"></i>lighteval en PyPI</a>
+      <a class="source-link" href="https://huggingface.co/spaces/HuggingFaceFW/blogpost-fine-tasks" target="_blank" rel="noopener"><i class="ti ti-book"></i>FineTasks (HF)</a>
+      <a class="source-link" href="https://github.com/PoETaV2/PoETaV2" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>PoETa v2 (GitHub)</a>
+      <a class="source-link" href="https://github.com/Inria-Chile/LatamQA" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>LatamQA (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/inria-chile/latamqa_mcq_es-la" target="_blank" rel="noopener"><i class="ti ti-database"></i>LatamQA MCQ es-LA (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/CHOCLO" target="_blank" rel="noopener"><i class="ti ti-database"></i>CHOCLO (HF)</a>
+      <a class="source-link" href="https://github.com/crafter-research/latambench" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>LatamBench: auditoría de Trueque y CHOCLO (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/maritaca-ai/enem" target="_blank" rel="noopener"><i class="ti ti-database"></i>ENEM (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/eduagarcia/oab_exams" target="_blank" rel="noopener"><i class="ti ti-database"></i>OAB Exams (HF)</a>
+      <a class="source-link" href="https://huggingface.co/docs/huggingface_hub/main/en/concepts/migration_v2" target="_blank" rel="noopener"><i class="ti ti-book"></i>Migración a huggingface_hub v2</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-language"></i>Guía: Evaluación es/pt con lm-eval</a>
+      <a class="source-link" href="evaluacion-estadistica.html"><i class="ti ti-math-function"></i>Guía: Evaluación estadísticamente rigurosa</a>
+      <a class="source-link" href="llm-judge-calibrado.html"><i class="ti ti-scale"></i>Guía: LLM-as-a-judge calibrado</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-stack-2"></i>Guía: Continual Pretraining</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

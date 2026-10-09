@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG en español y portugués — LatamGPT</title>
+<meta name="description" content="Pipeline RAG completo para español y portugués: BM25 con stemming, embeddings multilingües, fusión RRF, reranker, generación con citas en vLLM y evaluación por país con MessIRve y Quati.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Aplicaciones: RAG, agentes y encoders</div>
+    <h1 class="guide-title">RAG en español y portugués</h1>
+    <div class="guide-desc">Un pipeline de retrieval-augmented generation completo y medible para es/pt: BM25 con stemming español/portugués, embeddings multilingües, fusión RRF, reranker, generación con citas y abstención servida con vLLM, y evaluación por país con MessIRve (Chile, México, Argentina) y Quati (Brasil) en vez de benchmarks traducidos.</div>
+  </div>
+
+  <!-- 1. Arquitectura -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-sitemap" aria-hidden="true"></i>1. Arquitectura de un RAG moderno</h2>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Documentos es/pt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Chunking + contexto</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">BM25 + denso (top-100)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Fusión RRF</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Reranker (top-50 → 5)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">LLM con citas [n] o abstención</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Evaluación por etapa</div>
+    </div>
+
+    <p>Un RAG no es "un vector store más un prompt". Es una cadena de etapas que fallan por separado: si el pasaje correcto nunca entra al top-100, ningún reranker ni LLM lo arregla. Por eso la guía mide cada etapa contra juicios de relevancia (qrels) antes de mirar la respuesta final. La receta que se sostiene a 2026 es <strong>híbrida</strong>: BM25 encuentra nombres propios, siglas, números de ley y RUT/CUIT/CPF que los embeddings difuminan, el bi-encoder denso encuentra paráfrasis y sinónimos, Reciprocal Rank Fusion combina ambos rankings sin calibrar scores y un cross-encoder reordena los candidatos. En los experimentos de Contextual Retrieval de Anthropic, sumar BM25 y contexto a los embeddings bajó 49% las fallas de recuperación en el top-20, y 67% al agregar reranking.</p>
+
+    <table class="model-table">
+      <tr><th>Etapa</th><th>Por defecto en esta guía</th><th>Alternativa</th><th>Por qué</th></tr>
+      <tr><td>Léxico</td><td>bm25s + PyStemmer (spanish/portuguese)</td><td>BM25 de Qdrant/fastembed</td><td>Rápido en CPU, stopwords y stemming es/pt</td></tr>
+      <tr><td>Denso</td><td>Qwen3-Embedding-0.6B</td><td>harrier-oss-v1-0.6b, granite-embedding-311m-multilingual-r2</td><td>Multilingüe, 32k de contexto, Apache-2.0</td></tr>
+      <tr><td>Fusión</td><td>RRF, k=60</td><td>RRF ponderado, DBSF</td><td>No requiere normalizar scores</td></tr>
+      <tr><td>Rerank</td><td>Qwen3-Reranker-0.6B</td><td>bge-reranker-v2-m3, mLateOn (late interaction)</td><td>Mayor ganancia por costo del pipeline</td></tr>
+      <tr><td>Generación</td><td>Qwen3.5-9B con <code>vllm serve</code></td><td>Qwen3.5-4B (24 GB) o tu modelo LatamGPT</td><td>Citas, abstención, 201 idiomas</td></tr>
+      <tr><td>Evaluación</td><td>ranx (retrieval) + RAGAS 0.4 (generación)</td><td>Juez propio calibrado</td><td>Separar fallas de retrieval y de generación</td></tr>
+    </table>
+
+    <div class="tip"><strong>¿RAG, contexto largo o búsqueda agéntica?</strong> Si el corpus son unas decenas de documentos que caben en la ventana (Qwen3.5 soporta 262k tokens nativos) y se consulta poco, meter todo en el contexto es más simple; trabajos como QwenLong-L1.5 entrenan explícitamente el razonamiento sobre contextos largos. Pero cada consulta paga todos esos tokens y la precisión cae con distractores (Lost in the Middle). Con miles o millones de pasajes, RAG híbrido sigue siendo lo más barato y auditable; la búsqueda agéntica (el modelo decide qué buscar en varias vueltas) conviene para preguntas multi-hop y se trata en la guía de <a href="agentes-mcp.html">agentes con tool calling y MCP</a>.</div>
+
+    <div class="sub-title">Hardware</div>
+    <table class="model-table">
+      <tr><th>Componente</th><th>Hardware</th><th>Tiempo estimado (500k pasajes, ~19k consultas de test cl+mx+ar)</th></tr>
+      <tr><td>BM25 (bm25s)</td><td>CPU, 16 GB de RAM</td><td>~10-20 min de tokenizado e indexado</td></tr>
+      <tr><td>Embeddings Qwen3-Embedding-0.6B</td><td>1 GPU de 24 GB (L4, A10, RTX 4090)</td><td>~30-60 min con bf16 y pasajes de ~120 tokens</td></tr>
+      <tr><td>Rerank 0.6B del top-50</td><td>La misma GPU</td><td>~1-2 h (~950k pares; baja <code>TOP_RERANK</code> o muestrea consultas para iterar)</td></tr>
+      <tr><td>Generación Qwen3.5-9B</td><td>1 GPU de 40-48 GB (A100 40GB, L40S)</td><td>Minutos para 300 preguntas con batching continuo</td></tr>
+      <tr><td>Juez para RAGAS</td><td>Segunda GPU o un endpoint aparte</td><td>Depende del juez; ~10 llamadas por respuesta</td></tr>
+    </table>
+    <div class="warn"><strong>Son estimaciones, no mediciones:</strong> calibra en tu cluster con 10k pasajes antes de lanzar el corpus completo. Indexar los ~14M pasajes de eswiki toma horas: conviene partirlo en shards con un job array de SLURM (ver <a href="mlops.html">MLOps</a> y <a href="cluster.html">cluster</a>).</div>
+    <div class="tip"><strong>Presupuesto reducido (1 GPU de 16-24 GB o solo CPU):</strong> BM25 + <code>granite-embedding-97m-multilingual-r2</code> corren en CPU sobre un sub-corpus de 100k pasajes; usa <code>bge-reranker-v2-m3</code> solo sobre el top-20 y Qwen3.5-4B como generador. Pierdes algo de calidad, pero todo el método de evaluación es idéntico.</div>
+  </div>
+
+  <!-- 2. Datos -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-database" aria-hidden="true"></i>2. Datos de evaluación nativos: MessIRve y Quati</h2>
+
+    <p><strong>MessIRve</strong> trae consultas reales en español extraídas del autocompletado de Google en más de 20 países, cada una con el párrafo de Wikipedia que la respondía en el featured snippet, sobre un corpus de ~14M párrafos (<code>spanish-ir/eswiki_20240401_corpus</code>). Hay un subset por país (<code>cl</code>, <code>mx</code>, <code>ar</code>, <code>co</code>, <code>pe</code>...), más <code>full</code> y <code>no_country</code>. Eso permite algo que un benchmark traducido no puede: ver si tu retriever rinde distinto con consultas chilenas que con argentinas. Licencia CC BY-NC 4.0: sirve para investigación, no para un producto comercial.</p>
+    <p><strong>Quati</strong> es el equivalente para portugués de Brasil: consultas escritas por hablantes nativos sobre 1M (o 10M) pasajes de la web brasileña, con qrels graduados. Licencia CC BY 4.0.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Entorno de retrieval y evaluación (Python 3.10+)
+uv pip install "sentence-transformers&gt;=6.1" "datasets&gt;=5" "bm25s&gt;=0.3" PyStemmer \
+    faiss-cpu ranx "ragas&gt;=0.4,&lt;1" openai pandas pyarrow
+# Opcionales: faiss-gpu-cu12 (índice en GPU), pylate (late interaction), qdrant-client fastembed (producción)
+
+# Entorno aparte para el servidor de generación (vLLM V1)
+uv pip install vllm --torch-backend=auto</code></pre>
+    </div>
+
+    <p>El script arma un sub-corpus manejable: todos los párrafos relevantes de los países elegidos más 500k distractores aleatorios, y guarda consultas y qrels por país. Indexar una sola vez y evaluar por país hace comparables los resultados.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 00_data_es.py — sub-corpus eswiki + consultas/qrels de MessIRve por país
+import json
+from collections import defaultdict
+
+import numpy as np
+from datasets import load_dataset
+
+COUNTRIES = ["cl", "mx", "ar"]
+N_DISTRACTORS = 500_000
+SEED = 42
+
+relevant = set()
+for country in COUNTRIES:
+    # datasets 5.x: un config por país, sin loading script
+    ds = load_dataset("spanish-ir/messirve", country, split="test")
+    queries, qrels = {}, defaultdict(dict)
+    for row in ds:
+        qid = str(row["id"])
+        queries[qid] = row["query"]
+        qrels[qid][row["docid"]] = 1          # párrafo del featured snippet
+        relevant.add(row["docid"])
+    with open(f"eval_{country}.json", "w", encoding="utf-8") as f:
+        json.dump({"queries": queries, "qrels": qrels}, f, ensure_ascii=False)
+    print(f"{country}: {len(queries):,} consultas")
+
+# ~14M párrafos (3.1 GB en parquet); se descarga una vez y queda en caché
+corpus = load_dataset("spanish-ir/eswiki_20240401_corpus", split="corpus")
+docids = corpus.select_columns(["docid"]).to_pandas()["docid"]
+mask = docids.isin(relevant).to_numpy()
+rel_idx = np.flatnonzero(mask)
+print(f"relevantes encontrados: {len(rel_idx):,} de {len(relevant):,}")
+
+rng = np.random.default_rng(SEED)
+dist_idx = rng.choice(np.flatnonzero(~mask), size=N_DISTRACTORS, replace=False)
+sub = corpus.select(np.sort(np.concatenate([rel_idx, dist_idx])).tolist())
+sub.select_columns(["docid", "title", "text"]).to_parquet("corpus_es.parquet")
+print(f"sub-corpus: {len(sub):,} pasajes")</code></pre>
+    </div>
+
+    <p>Quati se publicó con un loading script (<code>quati.py</code>) que datasets 5.x ya no ejecuta, así que se leen los archivos crudos del repo y se dejan en el mismo formato:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 00_data_pt.py — Quati 1M en el mismo formato (corpus parquet + eval json)
+import csv
+import json
+from collections import defaultdict
+
+import pandas as pd
+from huggingface_hub import hf_hub_download
+
+REPO = "unicamp-dl/quati"
+passages_path = hf_hub_download(REPO, "quati_1M.tsv", repo_type="dataset")   # ~1.2 GB
+qrels_path = hf_hub_download(REPO, "qrels/quati_1M_qrels.txt", repo_type="dataset")
+topics_path = hf_hub_download(REPO, "topics/quati_all_topics.tsv", repo_type="dataset")
+
+passages = pd.read_csv(passages_path, sep="\t", header=None, names=["docid", "text"],
+                       quoting=csv.QUOTE_NONE, dtype=str, keep_default_na=False)
+passages["title"] = ""                      # Quati no trae título
+passages[["docid", "title", "text"]].to_parquet("corpus_pt.parquet")
+
+topics = pd.read_csv(topics_path, sep="\t", dtype=str)   # primera fila = encabezado
+topics.columns = ["query_id", "query"]
+
+qrels = defaultdict(dict)
+with open(qrels_path, encoding="utf-8") as f:
+    for line in f:                          # formato TREC: qid 0 docid score
+        qid, _, docid, score = line.split()
+        if int(score) &gt; 0:                  # 0 = juzgado no relevante
+            qrels[qid][docid] = int(score)  # relevancia graduada para nDCG
+
+queries = {q: t for q, t in zip(topics["query_id"], topics["query"]) if q in qrels}
+with open("eval_pt.json", "w", encoding="utf-8") as f:
+    json.dump({"queries": queries, "qrels": qrels}, f, ensure_ascii=False)
+print(f"{len(passages):,} pasajes, {len(queries)} consultas con qrels")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Un solo relevante por consulta:</strong> en MessIRve cada consulta trae un párrafo marcado, pero en Wikipedia suele haber otros que también responden. Esos falsos negativos bajan las métricas absolutas de todos los sistemas por igual: usa los números para comparar sistemas y países, no como "precisión real". Quati tiene pocas consultas (50 topics), así que sus diferencias pequeñas no son significativas.</div>
+  </div>
+
+  <!-- 3. Chunking -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-scissors" aria-hidden="true"></i>3. Chunking y contexto</h2>
+
+    <p>Los corpus de evaluación ya vienen en párrafos. Tus documentos reales (leyes, fallos, licitaciones, guías clínicas) no: hay que cortarlos respetando su estructura. Reglas que funcionan: chunks de 300-500 tokens medidos con el tokenizer del embedder, cortes en límites naturales (párrafo, artículo, inciso) y un párrafo de solapamiento. En textos legales chilenos, argentinos o brasileños conviene cortar primero por <code>Artículo N</code> / <code>Art. N</code> y recién después por longitud.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+from transformers import AutoTokenizer
+
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-Embedding-0.6B")
+ARTICLE_RE = re.compile(r"\n(?=(?:Artículo|Art\.)\s+\d+)")    # es; en pt también "Art. 5º"
+
+
+def n_tokens(text):
+    return len(tok(text, add_special_tokens=False)["input_ids"])
+
+
+def chunk_document(text, max_tokens=400, overlap=1):
+    """Agrupa párrafos hasta max_tokens; repite los últimos `overlap` párrafos en el siguiente chunk.
+    Un párrafo más largo que max_tokens queda como chunk propio (revísalos aparte)."""
+    units = []
+    for block in ARTICLE_RE.split(text):
+        units += [p.strip() for p in re.split(r"\n\s*\n", block) if p.strip()]
+    chunks, cur = [], []
+    for unit in units:
+        if cur and sum(n_tokens(u) for u in cur) + n_tokens(unit) &gt; max_tokens:
+            chunks.append("\n\n".join(cur))
+            cur = cur[-overlap:] if overlap else []
+        cur.append(unit)
+    if cur:
+        chunks.append("\n\n".join(cur))
+    return chunks</code></pre>
+    </div>
+
+    <p>Un chunk aislado pierde su contexto: "El plazo será de 30 días hábiles" no dice de qué ley ni de qué trámite. <strong>Contextual retrieval</strong> le pide a un LLM una o dos oraciones que ubiquen el chunk dentro del documento y las antepone antes de indexar (tanto en BM25 como en el denso). En Wikipedia la versión gratuita es anteponer el título del artículo, que es lo que hacen los scripts de esta guía. La versión con LLM, contra el servidor de la sección 9:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import asyncio
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+MODEL = "Qwen/Qwen3.5-9B"
+
+# El documento va PRIMERO: así todos los chunks del mismo documento comparten prefijo
+# y el prefix caching de vLLM evita recalcularlo en cada llamada.
+PROMPT = """&lt;documento&gt;
+{doc}
+&lt;/documento&gt;
+
+Este es un fragmento del documento anterior:
+&lt;fragmento&gt;
+{chunk}
+&lt;/fragmento&gt;
+
+Escribe una o dos oraciones en el mismo idioma del documento que sitúen el fragmento
+(qué norma, sección o tema trata) para mejorar su recuperación en un buscador.
+Responde solo con ese contexto."""
+
+
+async def contextualize(doc, chunks, max_concurrency=32):
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def one(chunk):
+        async with sem:
+            r = await client.chat.completions.create(
+                model=MODEL,
+                messages=[{"role": "user", "content": PROMPT.format(doc=doc, chunk=chunk)}],
+                temperature=0.0,
+                max_tokens=120,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            )
+            return r.choices[0].message.content.strip() + "\n\n" + chunk
+
+    return await asyncio.gather(*(one(c) for c in chunks))
+
+# uso: textos_a_indexar = asyncio.run(contextualize(texto_ley, chunk_document(texto_ley)))
+# El documento debe caber en --max-model-len (32k en la sección 9); si no, pasa solo la sección que contiene el chunk.</code></pre>
+    </div>
+
+    <div class="tip"><strong>Late chunking</strong> es la alternativa sin LLM: se pasa el documento completo por un embedder de contexto largo y se hace pooling de los token embeddings de cada chunk, de modo que cada vector "vio" el documento. Requiere acceso a los token embeddings (no solo al vector final) y documentos que quepan en la ventana del embedder.</div>
+  </div>
+
+  <!-- 4. BM25 -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-search" aria-hidden="true"></i>4. BM25 con stemming español y portugués</h2>
+
+    <p><code>bm25s</code> implementa BM25 con matrices dispersas en numpy y trae listas de stopwords para <code>"es"</code> y <code>"pt"</code>; el stemming lo pone PyStemmer (Snowball). Sin stemming, "licitación" y "licitaciones" no calzan; sin stopwords, "de", "la" y "que" dominan los scores de consultas cortas.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 01_bm25.py — índice BM25 y runs top-100 por país
+import json
+
+import bm25s
+import pandas as pd
+import Stemmer
+
+LANG = "es"                                     # "pt" para Quati
+CORPUS = f"corpus_{LANG}.parquet"
+EVALS = ["cl", "mx", "ar"] if LANG == "es" else ["pt"]
+K = 100
+
+stemmer = Stemmer.Stemmer("spanish" if LANG == "es" else "portuguese")
+df = pd.read_parquet(CORPUS)
+docids = df["docid"].tolist()
+texts = (df["title"] + ". " + df["text"]).str.lstrip(". ").tolist()   # título como contexto
+
+corpus_tokens = bm25s.tokenize(texts, stopwords=LANG, stemmer=stemmer)
+retriever = bm25s.BM25()                        # método "lucene", k1=1.5, b=0.75
+retriever.index(corpus_tokens)
+retriever.save(f"bm25_{LANG}")
+
+for name in EVALS:
+    with open(f"eval_{name}.json", encoding="utf-8") as f:
+        ev = json.load(f)
+    qids = list(ev["queries"])
+    q_tokens = bm25s.tokenize([ev["queries"][q] for q in qids], stopwords=LANG,
+                              stemmer=stemmer, return_ids=False)
+    idx, scores = retriever.retrieve(q_tokens, k=K)
+    run = {qid: {docids[i]: float(s) for i, s in zip(idx[r], scores[r])}
+           for r, qid in enumerate(qids)}
+    with open(f"run_bm25_{name}.json", "w") as f:
+        json.dump(run, f)
+    print(name, "listo")</code></pre>
+    </div>
+
+    <div class="warn"><strong>Identificadores latinoamericanos:</strong> el tokenizer por defecto de bm25s (<code>\b\w\w+\b</code>) parte "12.345.678-5" en "12", "345", "678" y descarta el dígito verificador, así que un RUT, CUIT o CPF deja de ser buscable como unidad. Normaliza antes de indexar y en la consulta, con la misma función, por ejemplo <code>re.sub(r"(\d{1,3})\.(\d{3})\.(\d{3})-([\dkK])", r"\1\2\3\4", texto)</code> para RUT, y algo equivalente para CPF (<code>000.000.000-00</code>) y CUIT (<code>20-12345678-3</code>).</div>
+  </div>
+
+  <!-- 5. Denso -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-vector" aria-hidden="true"></i>5. Retrieval denso con embeddings multilingües</h2>
+
+    <p>Elegir embedder es elegir licencia, contexto, costo de indexar y desempeño <em>en tu idioma</em>. El promedio de MMTEB predice solo moderadamente el ranking en un idioma concreto (MTEB-BR reporta una correlación de Spearman de 0.75 para portugués), así que la tabla es un punto de partida y la decisión sale de la evaluación de la sección 7.</p>
+
+    <table class="model-table">
+      <tr><th>Modelo</th><th>Tamaño / dim.</th><th>Contexto</th><th>Licencia</th><th>Notas</th></tr>
+      <tr><td>Qwen/Qwen3-Embedding-0.6B</td><td>0.6B / 1024 (MRL 32-1024)</td><td>32k</td><td>Apache-2.0</td><td>Instrucción solo en la consulta; recomiendan escribirla en inglés</td></tr>
+      <tr><td>microsoft/harrier-oss-v1-0.6b</td><td>0.6B / 1024</td><td>32k</td><td>MIT</td><td>69.0 en MTEB multilingüe v2; prompt <code>web_search_query</code></td></tr>
+      <tr><td>ibm-granite/granite-embedding-311m-multilingual-r2</td><td>311M / 768 (MRL hasta 128)</td><td>32k</td><td>Apache-2.0</td><td>Base ModernBERT, sin prompts; versión 97M para CPU</td></tr>
+      <tr><td>lightonai/mLateOn</td><td>307M / 128 por token</td><td>8k</td><td>Apache-2.0</td><td>Late interaction, entrenado con es y pt (sección 8)</td></tr>
+      <tr><td>jina-embeddings-v5-text (nano / small)</td><td>239M / 677M</td><td>32k</td><td>CC BY-NC</td><td>Bueno, pero no sirve para producto comercial</td></tr>
+    </table>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 02_dense.py — embeddings del corpus, índice FAISS y runs top-100
+import json
+
+import faiss
+import numpy as np
+import pandas as pd
+import torch
+from sentence_transformers import SentenceTransformer
+
+LANG = "es"
+EVALS = ["cl", "mx", "ar"] if LANG == "es" else ["pt"]
+MODEL = "Qwen/Qwen3-Embedding-0.6B"
+K = 100
+
+model = SentenceTransformer(
+    MODEL,
+    model_kwargs={"dtype": torch.bfloat16, "attn_implementation": "flash_attention_2"},  # sin flash-attn: borra attn_implementation
+    tokenizer_kwargs={"padding_side": "left"},
+)
+model.max_seq_length = 512                      # pasajes de Wikipedia: sobra
+
+df = pd.read_parquet(f"corpus_{LANG}.parquet")
+docids = df["docid"].tolist()
+texts = (df["title"] + ". " + df["text"]).str.lstrip(". ").tolist()
+
+# encode_document / encode_query aplican los prompts definidos por el modelo
+doc_emb = model.encode_document(texts, batch_size=128, normalize_embeddings=True,
+                                convert_to_numpy=True, show_progress_bar=True).astype(np.float32)
+np.save(f"emb_{LANG}.npy", doc_emb)
+
+index = faiss.IndexFlatIP(doc_emb.shape[1])    # exacto; para millones: faiss.IndexHNSWFlat(d, 32, faiss.METRIC_INNER_PRODUCT)
+index.add(doc_emb)
+faiss.write_index(index, f"faiss_{LANG}.index")
+
+for name in EVALS:
+    with open(f"eval_{name}.json", encoding="utf-8") as f:
+        ev = json.load(f)
+    qids = list(ev["queries"])
+    q_emb = model.encode_query([ev["queries"][q] for q in qids], batch_size=64,
+                               normalize_embeddings=True, convert_to_numpy=True).astype(np.float32)
+    scores, idx = index.search(q_emb, K)
+    run = {qid: {docids[i]: float(s) for i, s in zip(idx[r], scores[r]) if i != -1}
+           for r, qid in enumerate(qids)}
+    with open(f"run_dense_{name}.json", "w") as f:
+        json.dump(run, f)</code></pre>
+    </div>
+
+    <div class="warn"><strong>Prompts de consulta:</strong> <code>encode_query</code> usa el prompt llamado <code>"query"</code> si el modelo lo define (Qwen3-Embedding sí). harrier-oss-v1 los nombra por tarea, así que con él usa <code>model.encode(consultas, prompt_name="web_search_query")</code>; si no, las consultas se codifican sin instrucción y el recall cae sin ningún error visible. Lo mismo al servir el embedder con <code>vllm serve Qwen/Qwen3-Embedding-0.6B --runner pooling</code>: el endpoint <code>/v1/embeddings</code> no agrega la instrucción, debes anteponerla tú.</div>
+
+    <div class="tip"><strong>Memoria del índice:</strong> 500k vectores de 1024 dimensiones en float32 son ~2 GB; los 14M de eswiki completos, ~57 GB. Con <code>sentence_transformers.quantization.quantize_embeddings</code> puedes pasar a int8 (4x menos) o binario (32x menos, con <code>faiss.IndexBinaryFlat</code>) y reordenar el top-k con los vectores float. No mezcles embeddings int8 generados con versiones de sentence-transformers anteriores a 5.7: cambió la cuantización.</div>
+  </div>
+
+  <!-- 6. Fusión y rerank -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-arrows-shuffle" aria-hidden="true"></i>6. Fusión RRF y reranking</h2>
+
+    <p>Reciprocal Rank Fusion suma <code>1 / (k + rank)</code> de cada documento en cada ranking, con <code>k = 60</code>. Solo usa posiciones, así que no importa que BM25 devuelva scores de 0 a 30 y el coseno de 0 a 1. Después, un cross-encoder lee consulta y pasaje juntos y reordena el top-50: es la etapa más cara por par pero la que más mueve nDCG@10.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 03_fusion_rerank.py — RRF de BM25 + denso y rerank del top-50
+import json
+from collections import defaultdict
+
+import pandas as pd
+import torch
+from sentence_transformers import CrossEncoder
+
+LANG = "es"
+EVALS = ["cl", "mx", "ar"] if LANG == "es" else ["pt"]
+TOP_RERANK = 50
+
+
+def rrf(runs, k=60, top=100):
+    fused = defaultdict(lambda: defaultdict(float))
+    for run in runs:
+        for qid, docs in run.items():
+            ranked = sorted(docs.items(), key=lambda x: x[1], reverse=True)
+            for rank, (doc, _) in enumerate(ranked, start=1):
+                fused[qid][doc] += 1.0 / (k + rank)
+    return {qid: dict(sorted(d.items(), key=lambda x: x[1], reverse=True)[:top])
+            for qid, d in fused.items()}
+
+
+df = pd.read_parquet(f"corpus_{LANG}.parquet")
+text_of = dict(zip(df["docid"], (df["title"] + ". " + df["text"]).str.lstrip(". ")))
+
+# El prompt por defecto del reranker es de búsqueda web: calza con consultas tipo Google
+reranker = CrossEncoder("Qwen/Qwen3-Reranker-0.6B", model_kwargs={"dtype": torch.bfloat16})
+
+for name in EVALS:
+    with open(f"eval_{name}.json", encoding="utf-8") as f:
+        queries = json.load(f)["queries"]
+    runs = []
+    for system in ("bm25", "dense"):
+        with open(f"run_{system}_{name}.json") as f:
+            runs.append(json.load(f))
+    hybrid = rrf(runs)
+    with open(f"run_hybrid_{name}.json", "w") as f:
+        json.dump(hybrid, f)
+
+    pairs, owners = [], []
+    for qid, docs in hybrid.items():
+        for d in list(docs)[:TOP_RERANK]:
+            pairs.append((queries[qid], text_of[d]))
+            owners.append((qid, d))
+    scores = reranker.predict(pairs, batch_size=32, show_progress_bar=True)
+
+    reranked = defaultdict(dict)
+    for (qid, d), s in zip(owners, scores):
+        reranked[qid][d] = float(s)
+    for qid, docs in hybrid.items():       # posiciones 51-100: debajo de todo lo reordenado
+        floor = min(reranked[qid].values()) - 1.0
+        for pos, d in enumerate(list(docs)[TOP_RERANK:]):
+            reranked[qid][d] = floor - pos
+    with open(f"run_rerank_{name}.json", "w") as f:
+        json.dump(reranked, f)</code></pre>
+    </div>
+
+    <div class="tip"><strong>Instrucción del reranker:</strong> Qwen3-Reranker acepta instrucciones propias (<code>CrossEncoder(..., prompts={"legal": "Given a legal question, retrieve the article that answers it"}, default_prompt_name="legal")</code>). Igual que en el embedder, el modelo card recomienda escribirlas en inglés aunque consultas y documentos estén en español o portugués.</div>
+  </div>
+
+  <!-- 7. Evaluación de retrieval -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>7. Evaluar el retrieval por país</h2>
+
+    <p>Con qrels y runs en disco, <code>ranx</code> calcula las métricas y compara sistemas con tests de significancia pareados. Tres métricas alcanzan: <strong>Recall@100</strong> (¿el pasaje correcto llegó al reranker?), <strong>nDCG@10</strong> (¿quedó arriba?) y <strong>MRR@10</strong> (¿en qué posición quedó el primero?).</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 04_eval_retrieval.py — tabla BM25 vs denso vs híbrido vs híbrido+rerank por país
+import json
+
+from ranx import Qrels, Run, compare
+
+SYSTEMS = ["bm25", "dense", "hybrid", "rerank"]
+
+for name in ["cl", "mx", "ar", "pt"]:      # quita "pt" si no corriste Quati
+    with open(f"eval_{name}.json", encoding="utf-8") as f:
+        qrels = Qrels(json.load(f)["qrels"])
+    runs = []
+    for system in SYSTEMS:
+        with open(f"run_{system}_{name}.json") as f:
+            runs.append(Run(json.load(f), name=system))
+    report = compare(
+        qrels=qrels,
+        runs=runs,
+        metrics=["ndcg@10", "recall@100", "mrr@10"],
+        max_p=0.01,              # t-test pareado; marca diferencias con p &lt; 0.01
+        make_comparable=True,    # consultas sin resultados cuentan como 0
+    )
+    print(f"\n=== {name} ===")
+    print(report)</code></pre>
+    </div>
+
+    <p>Cómo leer la tabla:</p>
+    <table class="model-table">
+      <tr><th>Síntoma</th><th>Diagnóstico</th><th>Qué probar</th></tr>
+      <tr><td>Recall@100 del híbrido bajo</td><td>El problema está antes del reranker</td><td>Otro embedder, contexto en chunks, revisar stemming y normalización</td></tr>
+      <tr><td>Recall@100 alto, nDCG@10 bajo</td><td>Los candidatos están, mal ordenados</td><td>Reranker más grande (4B) o instrucción de dominio</td></tr>
+      <tr><td>BM25 gana al denso en un país</td><td>Consultas con entidades locales o jerga</td><td>Subir el peso de BM25 (RRF ponderado) o fine-tunear el embedder</td></tr>
+      <tr><td>Un país rinde mucho peor</td><td>Variación dialectal o temas locales mal cubiertos</td><td>Revisar 30 fallas a mano antes de cambiar modelos</td></tr>
+    </table>
+
+    <div class="warn"><strong>Significancia por país:</strong> los subsets por país de MessIRve tienen entre ~4k y ~8k consultas de test, pero Quati solo 50 topics: ahí una diferencia de varios puntos de nDCG puede ser ruido. Reporta siempre la marca de significancia de <code>compare</code> y, si comparas muchos sistemas, corrige por comparaciones múltiples.</div>
+  </div>
+
+  <!-- 8. Late interaction -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-layers-intersect" aria-hidden="true"></i>8. Opcional: late interaction con mLateOn</h2>
+
+    <p>Un embedding de un solo vector tiene límites teóricos: LIMIT mostró que su dimensión acota cuántas combinaciones de documentos top-k puede representar. Los modelos late interaction (ColBERT) guardan un vector por token y puntúan con MaxSim; generalizan mejor fuera de dominio y en idiomas poco vistos. <code>lightonai/mLateOn</code> (307M, base mmBERT, Apache-2.0) tiene español y portugués entre sus idiomas de entrenamiento y sentence-transformers v6 lo carga con <code>MultiVectorEncoder</code>. La forma más barata de probarlo es como reranker de los candidatos del híbrido:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from sentence_transformers import MultiVectorEncoder
+
+mv = MultiVectorEncoder("lightonai/mLateOn")
+
+query = "¿quién escribió Cien años de soledad?"
+candidates = [                                   # en el pipeline: el top-50 del híbrido
+    "Cien años de soledad es una novela de Gabriel García Márquez publicada en 1967.",
+    "Gabriel García Márquez nació en Aracataca, Colombia, en 1927.",
+    "Cem anos de solidão é um romance do escritor colombiano Gabriel García Márquez.",
+]
+q_emb = mv.encode_query(query)                  # un vector de 128 dims por token
+d_emb = mv.encode_document(candidates)
+scores = mv.similarity(q_emb, d_emb)[0]          # MaxSim: mayor = más relevante
+for score, doc in sorted(zip(scores.tolist(), candidates), reverse=True):
+    print(f"{score:.3f}  {doc}")</code></pre>
+    </div>
+
+    <p>Para usarlo como retriever de primera etapa sobre todo el corpus, PyLate (<code>models.ColBERT</code> + índice <code>indexes.PLAID</code> + <code>retrieve.ColBERT</code>) indexa los vectores por token; el índice ocupa bastante más que el denso, así que mídelo primero en el sub-corpus y compáralo con la misma tabla ranx.</p>
+  </div>
+
+  <!-- 9. Generación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-message-chatbot" aria-hidden="true"></i>9. Generación con citas y abstención</h2>
+
+    <p>El generador recibe los 5 mejores pasajes numerados y tiene tres obligaciones: responder en el idioma de la pregunta, citar <code>[n]</code> cada afirmación y abstenerse con una frase fija cuando el contexto no alcanza. Sufficient Context mostró que los modelos grandes tienden a responder mal en lugar de abstenerse cuando el contexto es insuficiente, así que la abstención se pide explícitamente y se mide.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Qwen3.5 es image-text-to-text: --language-model-only carga solo la parte de texto
+vllm serve Qwen/Qwen3.5-9B \
+    --port 8000 \
+    --max-model-len 32768 \
+    --reasoning-parser qwen3 \
+    --language-model-only
+# 24 GB: cambia a Qwen/Qwen3.5-4B. Con tu modelo LatamGPT: vllm serve &lt;TU_ORG&gt;/&lt;modelo&gt;</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 06_generate.py — respuestas con citas para una muestra de consultas
+import asyncio
+import json
+import random
+import re
+
+import pandas as pd
+from openai import AsyncOpenAI
+
+NAME, LANG = "cl", "es"                       # ("pt", "pt") para Quati
+MODEL = "Qwen/Qwen3.5-9B"
+TOP_K, N_SAMPLE = 5, 300
+
+ABSTAIN = {"es": "No encontré información suficiente en los documentos.",
+           "pt": "Não encontrei informações suficientes nos documentos."}
+SYSTEM = {
+    "es": ("Eres un asistente que responde en español usando SOLO los documentos entregados.\n"
+           "- Cita cada afirmación con el número del documento entre corchetes, por ejemplo [2].\n"
+           "- Si los documentos no bastan para responder, responde exactamente: \"{abstain}\"\n"
+           "- No uses conocimiento propio ni cites documentos que no usaste."),
+    "pt": ("Você é um assistente que responde em português usando APENAS os documentos fornecidos.\n"
+           "- Cite cada afirmação com o número do documento entre colchetes, por exemplo [2].\n"
+           "- Se os documentos não forem suficientes, responda exatamente: \"{abstain}\"\n"
+           "- Não use conhecimento próprio nem cite documentos que não usou."),
+}
+
+client = AsyncOpenAI(base_url="http://localhost:8000/v1", api_key="EMPTY")
+df = pd.read_parquet(f"corpus_{LANG}.parquet")
+text_of = dict(zip(df["docid"], (df["title"] + ". " + df["text"]).str.lstrip(". ")))
+with open(f"eval_{NAME}.json", encoding="utf-8") as f:
+    ev = json.load(f)
+with open(f"run_rerank_{NAME}.json") as f:
+    run = json.load(f)
+
+
+async def answer(qid, sem):
+    top = sorted(run[qid], key=run[qid].get, reverse=True)[:TOP_K]
+    contexts = [text_of[d] for d in top]
+    docs = "\n\n".join(f"[{i}] {c}" for i, c in enumerate(contexts, start=1))
+    messages = [
+        {"role": "system", "content": SYSTEM[LANG].format(abstain=ABSTAIN[LANG])},
+        {"role": "user", "content": f"Documentos:\n{docs}\n\nPregunta: {ev['queries'][qid]}"},
+    ]
+    async with sem:
+        r = await client.chat.completions.create(
+            model=MODEL, messages=messages, max_tokens=512,
+            temperature=0.7, top_p=0.8, presence_penalty=1.5,   # recomendados sin thinking
+            extra_body={"top_k": 20, "chat_template_kwargs": {"enable_thinking": False}},
+        )
+    gold = list(ev["qrels"][qid])
+    return {"qid": qid, "question": ev["queries"][qid], "contexts": contexts,
+            "context_ids": top, "response": r.choices[0].message.content.strip(),
+            "gold_in_context": any(g in top for g in gold),
+            "reference": text_of.get(gold[0], "")}
+
+
+async def main():
+    sem = asyncio.Semaphore(32)
+    qids = random.Random(0).sample(list(ev["queries"]), min(N_SAMPLE, len(ev["queries"])))
+    rows = await asyncio.gather(*(answer(q, sem) for q in qids))
+    for row in rows:
+        cited = {int(n) for n in re.findall(r"\[(\d+)\]", row["response"])}
+        row["abstained"] = ABSTAIN[LANG].rstrip(".") in row["response"]
+        row["invalid_citation"] = any(n &lt; 1 or n &gt; TOP_K for n in cited)
+        row["uncited"] = not cited and not row["abstained"]
+    with open(f"gen_{NAME}.jsonl", "w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+asyncio.run(main())</code></pre>
+    </div>
+
+    <p>Antes de cualquier juez, cruza abstención con <code>gold_in_context</code> en una tabla 2x2 (pandas <code>crosstab</code>): si el pasaje correcto no llegó al top-5 y el modelo igual respondió sin abstenerse, esas respuestas son candidatas a alucinación; si llegó y se abstuvo, el modelo es demasiado conservador o el prompt de abstención está mal calibrado. Las columnas <code>invalid_citation</code> y <code>uncited</code> se cuentan sin LLM y detectan regresiones de formato al cambiar de modelo.</p>
+
+    <div class="tip"><strong>Orden de los pasajes:</strong> los LLM atienden peor el medio de contextos largos (Lost in the Middle). Con 5 pasajes cortos no es crítico, pero si subes a 20 pon los mejor rankeados al principio. Y trata el contenido recuperado como no confiable: un documento puede traer instrucciones inyectadas (ver <a href="guardrails-produccion-vllm.html">guardrails en producción</a>).</div>
+  </div>
+
+  <!-- 10. Evaluación de generación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-checklist" aria-hidden="true"></i>10. Evaluar la generación con RAGAS 0.4</h2>
+
+    <p>RAGAS 0.4 trae las métricas en <code>ragas.metrics.collections</code> y acepta cualquier endpoint compatible con OpenAI como juez. Usamos tres: <strong>Faithfulness</strong> (¿cada afirmación de la respuesta está respaldada por los contextos?), <strong>ContextRecall</strong> (¿los contextos cubren la referencia? aquí la referencia es el pasaje gold de MessIRve) y <strong>ContextUtilization</strong> (¿los contextos útiles quedaron arriba?, sin referencia). El juez debe ser un modelo <em>distinto</em> del generador, idealmente de otra familia, para no premiar sus propios sesgos.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Juez en otro puerto (otra GPU o máquina). Elige un modelo de otra familia que el generador.
+vllm serve &lt;TU_ORG&gt;/&lt;modelo-juez&gt; --port 8001 --max-model-len 32768</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 07_eval_generation.py — métricas RAGAS por respuesta (lee gen_cl.jsonl de la sección 9)
+import asyncio
+import json
+
+import instructor
+import pandas as pd
+from openai import AsyncOpenAI
+from ragas.llms import llm_factory
+from ragas.metrics.collections import ContextRecall, ContextUtilization, Faithfulness
+
+JUDGE_MODEL = "&lt;TU_ORG&gt;/&lt;modelo-juez&gt;"    # el mismo nombre que sirve vLLM en :8001
+NAME = "cl"
+
+judge_client = AsyncOpenAI(base_url="http://localhost:8001/v1", api_key="EMPTY")
+# Mode.JSON (el default) usa response_format JSON: no exige tool calling en el servidor;
+# si tu backend no soporta response_format, usa instructor.Mode.MD_JSON
+llm = llm_factory(JUDGE_MODEL, client=judge_client, mode=instructor.Mode.JSON)
+
+faithfulness = Faithfulness(llm=llm)
+context_recall = ContextRecall(llm=llm)
+context_util = ContextUtilization(llm=llm)
+
+with open(f"gen_{NAME}.jsonl", encoding="utf-8") as f:
+    rows = [json.loads(line) for line in f]
+
+
+async def score(row, sem):
+    async with sem:
+        out = {"qid": row["qid"], "abstained": row["abstained"],
+               "gold_in_context": row["gold_in_context"]}
+        if not row["abstained"]:            # una abstención no tiene afirmaciones que verificar
+            r = await faithfulness.ascore(user_input=row["question"], response=row["response"],
+                                          retrieved_contexts=row["contexts"])
+            out["faithfulness"] = r.value
+        r = await context_recall.ascore(user_input=row["question"], retrieved_contexts=row["contexts"],
+                                        reference=row["reference"])
+        out["context_recall"] = r.value
+        r = await context_util.ascore(user_input=row["question"], response=row["response"],
+                                      retrieved_contexts=row["contexts"])
+        out["context_utilization"] = r.value
+        return out
+
+
+async def main():
+    sem = asyncio.Semaphore(16)
+    results = await asyncio.gather(*(score(r, sem) for r in rows))
+    df = pd.DataFrame(results)
+    df.to_csv(f"ragas_{NAME}.csv", index=False)
+    print(df[["faithfulness", "context_recall", "context_utilization"]].describe())
+    print(df.groupby("gold_in_context")["abstained"].mean())
+
+
+asyncio.run(main())</code></pre>
+    </div>
+
+    <div class="warn"><strong>Valida el juez en español antes de creerle:</strong> los prompts internos de RAGAS están en inglés y el juez extrae y verifica afirmaciones en español o portugués; un juez débil en el idioma infla o castiga faithfulness sin que se note. MEMERAG publica juicios expertos nativos de faithfulness y relevancia en español (entre otros idiomas) justamente para medir esto: calcula el acuerdo de tu juez con esas etiquetas, o con 100 respuestas tuyas anotadas a mano, antes de usarlo para elegir modelos. Más detalle en <a href="llm-judge-calibrado.html">LLM-as-a-judge calibrado</a> y <a href="evaluacion-latam.html">evaluación Latam</a>.</div>
+
+    <p>AnswerRelevancy también existe en la colección, pero genera preguntas a partir de la respuesta y las compara con embeddings (<code>AnswerRelevancy(llm=llm, embeddings=...)</code>); si el juez genera esas preguntas en inglés, la similitud con la pregunta original en español baja artificialmente. Si la usas, revisa en qué idioma salen las preguntas generadas.</p>
+  </div>
+
+  <!-- 11. Producción -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server" aria-hidden="true"></i>11. Llevarlo a producción con Qdrant</h2>
+
+    <p>En producción no quieres dos índices y un RRF en Python: Qdrant guarda vector denso y vector disperso BM25 en el mismo punto y hace la fusión en el servidor con <code>prefetch</code> + <code>RrfQuery</code>. El BM25 disperso lo calcula <code>fastembed</code> con stemmer y stopwords en español; el IDF lo aplica Qdrant (<code>Modifier.IDF</code>), así que el índice se actualiza incrementalmente sin recalcular nada.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># 08_qdrant_hybrid.py — requiere: docker run -p 6333:6333 qdrant/qdrant
+import pandas as pd
+from fastembed import SparseTextEmbedding
+from qdrant_client import QdrantClient, models
+from sentence_transformers import SentenceTransformer
+
+COLLECTION = "docs_es"
+client = QdrantClient(url="http://localhost:6333")
+dense = SentenceTransformer("Qwen/Qwen3-Embedding-0.6B", model_kwargs={"dtype": "auto"})
+bm25 = SparseTextEmbedding("Qdrant/bm25", language="spanish")   # "portuguese" para pt
+
+if not client.collection_exists(COLLECTION):
+    client.create_collection(
+        COLLECTION,
+        vectors_config={"dense": models.VectorParams(size=1024, distance=models.Distance.COSINE)},
+        sparse_vectors_config={"bm25": models.SparseVectorParams(modifier=models.Modifier.IDF)},
+    )
+
+
+def upsert(df, batch=256):
+    """df con columnas docid, title, text. Reindexar un documento = upsert con el mismo id."""
+    for start in range(0, len(df), batch):
+        part = df.iloc[start:start + batch]
+        texts = (part["title"] + ". " + part["text"]).str.lstrip(". ").tolist()
+        d_vecs = dense.encode_document(texts, normalize_embeddings=True)
+        s_vecs = list(bm25.embed(texts))
+        points = [
+            models.PointStruct(
+                id=int(i),
+                vector={"dense": d.tolist(),
+                        "bm25": models.SparseVector(indices=s.indices.tolist(), values=s.values.tolist())},
+                payload={"docid": docid, "text": t},
+            )
+            for i, docid, t, d, s in zip(part.index, part["docid"], texts, d_vecs, s_vecs)
+        ]
+        client.upsert(COLLECTION, points=points)
+
+
+def search(query, limit=50):
+    q_dense = dense.encode_query(query, normalize_embeddings=True).tolist()
+    q_sparse = next(iter(bm25.query_embed(query)))
+    res = client.query_points(
+        COLLECTION,
+        prefetch=[
+            models.Prefetch(query=q_dense, using="dense", limit=100),
+            models.Prefetch(query=models.SparseVector(indices=q_sparse.indices.tolist(),
+                                                      values=q_sparse.values.tolist()),
+                            using="bm25", limit=100),
+        ],
+        query=models.RrfQuery(rrf=models.Rrf(k=60)),   # weights=[...] para RRF ponderado
+        limit=limit,
+        with_payload=True,
+    )
+    return [(p.payload["docid"], p.score, p.payload["text"]) for p in res.points]
+
+
+upsert(pd.read_parquet("corpus_es.parquet").head(10_000))
+for docid, s, text in search("¿cuánto dura el permiso postnatal en Chile?")[:5]:
+    print(f"{s:.4f} {docid} {text[:100]}")</code></pre>
+    </div>
+
+    <p>Los candidatos de <code>search</code> pasan por el mismo reranker de la sección 6 y luego al generador. Checklist para operar el sistema:</p>
+    <table class="model-table">
+      <tr><th>Tema</th><th>Práctica</th></tr>
+      <tr><td>Alternativa sin Qdrant</td><td>Postgres con pgvector (índice HNSW) + búsqueda de texto completo con configuración <code>spanish</code>/<code>portuguese</code>, y RRF en SQL</td></tr>
+      <tr><td>Actualizaciones</td><td>Id estable por chunk (hash de documento + posición); al cambiar un documento, borra sus chunks por filtro de payload y vuelve a insertar</td></tr>
+      <tr><td>Servir modelos</td><td>Embedder con <code>vllm serve ... --runner pooling</code> (<code>/v1/embeddings</code>) y reranker en <code>/v1/rerank</code>; detalles en <a href="serving-produccion.html">serving en producción</a></td></tr>
+      <tr><td>Caching</td><td>Cachea embeddings de consultas frecuentes y respuestas por (consulta normalizada, versión del índice)</td></tr>
+      <tr><td>Monitoreo</td><td>Tasa de abstención, citas inválidas, latencia por etapa y una muestra semanal evaluada con el juez</td></tr>
+      <tr><td>Regresión</td><td>Re-correr la tabla ranx de la sección 7 al cambiar embedder, chunking o reranker</td></tr>
+    </table>
+
+    <div class="tip"><strong>Siguiente paso:</strong> el mismo índice se expone como tool <code>search_docs</code> a un agente, que decide cuándo y qué buscar en varias vueltas; eso se construye en <a href="agentes-mcp.html">agentes con tool calling y MCP</a>. Si tu dominio es muy específico, ajustar el embedder con pares consulta-pasaje propios suele rendir más que cambiar de modelo (ver <a href="bert.html">encoders es/pt</a>).</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2409.05994" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MessIRve (Valentini et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2404.06976" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Quati (Bueno et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2506.05176" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Qwen3 Embedding (Zhang et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2607.04581" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MTEB-BR (Stekel et al., 2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.13595" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MMTEB (Enevoldsen et al., 2025)</a>
+      <a class="source-link paper" href="https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Reciprocal Rank Fusion (Cormack et al., 2009)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2407.03618" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>BM25S (Lù, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2409.04701" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Late Chunking (Günther et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2508.21038" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>LIMIT: Theoretical Limitations of Embedding-Based Retrieval (Weller et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2411.06037" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Sufficient Context (Joren et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2307.03172" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Lost in the Middle (Liu et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2309.15217" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Ragas (Es et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.17163" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>MEMERAG (Cruz Blandón et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2512.12967" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>QwenLong-L1.5 (2025)</a>
+      <a class="source-link" href="https://www.anthropic.com/engineering/contextual-retrieval" target="_blank" rel="noopener"><i class="ti ti-book"></i>Contextual Retrieval (Anthropic)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/spanish-ir/messirve" target="_blank" rel="noopener"><i class="ti ti-database"></i>spanish-ir/messirve (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/spanish-ir/eswiki_20240401_corpus" target="_blank" rel="noopener"><i class="ti ti-database"></i>spanish-ir/eswiki_20240401_corpus (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/unicamp-dl/quati" target="_blank" rel="noopener"><i class="ti ti-database"></i>unicamp-dl/quati (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-Embedding-0.6B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-Embedding-0.6B (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3-Reranker-0.6B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3-Reranker-0.6B (HF)</a>
+      <a class="source-link" href="https://huggingface.co/microsoft/harrier-oss-v1-0.6b" target="_blank" rel="noopener"><i class="ti ti-robot"></i>harrier-oss-v1-0.6b (HF)</a>
+      <a class="source-link" href="https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Granite Embedding Multilingual R2 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/lightonai/mLateOn" target="_blank" rel="noopener"><i class="ti ti-robot"></i>mLateOn (HF)</a>
+      <a class="source-link" href="https://huggingface.co/BAAI/bge-reranker-v2-m3" target="_blank" rel="noopener"><i class="ti ti-robot"></i>bge-reranker-v2-m3 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/Qwen/Qwen3.5-9B" target="_blank" rel="noopener"><i class="ti ti-robot"></i>Qwen3.5-9B (HF)</a>
+      <a class="source-link" href="https://github.com/xhluca/bm25s" target="_blank" rel="noopener"><i class="ti ti-code"></i>bm25s</a>
+      <a class="source-link" href="https://sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html" target="_blank" rel="noopener"><i class="ti ti-book"></i>Retrieve &amp; Re-Rank (Sentence Transformers)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/models/pooling_models/" target="_blank" rel="noopener"><i class="ti ti-book"></i>vLLM pooling models</a>
+      <a class="source-link" href="https://docs.ragas.io/en/stable/" target="_blank" rel="noopener"><i class="ti ti-book"></i>Ragas docs</a>
+      <a class="source-link" href="https://qdrant.tech/documentation/concepts/hybrid-queries/" target="_blank" rel="noopener"><i class="ti ti-book"></i>Qdrant hybrid queries</a>
+      <a class="source-link" href="agentes-mcp.html"><i class="ti ti-plug-connected"></i>Guía: Agentes con tool calling y MCP</a>
+      <a class="source-link" href="bert.html"><i class="ti ti-topology-star-3"></i>Guía: Encoders es/pt</a>
+      <a class="source-link" href="serving-produccion.html"><i class="ti ti-server"></i>Guía: Serving en producción</a>
+      <a class="source-link" href="guardrails-produccion-vllm.html"><i class="ti ti-shield-half"></i>Guía: Guardrails en producción</a>
+      <a class="source-link" href="llm-judge-calibrado.html"><i class="ti ti-scale"></i>Guía: LLM-as-a-judge calibrado</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación Latam</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>
