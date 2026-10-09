@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Filtrado de toxicidad en pretraining es/pt — LatamGPT</title>
+<meta name="description" content="Cómo filtrar contenido tóxico de corpus de pretraining en español y portugués sin borrar el contenido Topical: taxonomía de HarmFormer, prompt TTP con vLLM, clasificador multi-cabeza propio y filtrado a escala con Datatrove.">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Seguridad &amp; Guardrails</div>
+    <h1 class="guide-title">Filtrado de toxicidad en corpus de pretraining es/pt</h1>
+    <div class="guide-desc">Cómo sacar el contenido dañino de un corpus web en español y portugués sin borrar de paso las noticias, la educación sexual ni el debate político: la taxonomía Topical vs Toxic de HarmFormer, baselines con Detoxify y los clasificadores de Apertus, etiquetado es/pt con el prompt TTP sobre vLLM, un clasificador multi-cabeza propio y el filtrado a escala con Datatrove.</div>
+  </div>
+
+  <!-- 1. Por qué -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>1. Por qué filtrar (y por qué no filtrar de más)</h2>
+    <div class="pipeline-flow">
+      <div class="flow-step">FineWeb-2 es/pt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">LLM juez + prompt TTP (50k docs)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Clasificador multi-cabeza es/pt</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Scoring con Datatrove</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Quitar solo Toxic, conservar Topical</div>
+    </div>
+    <p>Un corpus web trae discurso de odio, contenido sexual explícito, estafas y promoción de autolesiones. Lo que el modelo ve en pretraining es lo que después reproduce, y lo que se aprende en pretraining es caro de desaprender en post-training. Filtrar temprano es una capa de defensa barata, pero hacerlo a ciegas sale caro: los clasificadores binarios de "toxicidad" tienden a marcar cualquier texto que <em>menciona</em> violencia, sexo o grupos minoritarios, y terminas borrando periodismo, salud sexual, historia y debate político, justo lo que un modelo para Latinoamérica tiene que saber manejar.</p>
+    <table class="model-table">
+      <tr><th>Hallazgo</th><th>Fuente</th><th>Implicancia práctica</th></tr>
+      <tr><td>Filtrar toxicidad reduce las generaciones tóxicas, pero empeora la capacidad del modelo para <em>detectar</em> toxicidad y su generalización</td><td>A Pretrainer's Guide (Longpre et al., 2023)</td><td>Filtrar con un umbral conservador, no agresivo</td></tr>
+      <tr><td>Un poco de dato tóxico en pretraining hace la toxicidad más separable en las representaciones y facilita detoxificar en post-training</td><td>When Bad Data Leads to Good Models (Li et al., 2025)</td><td>No buscar 0% de toxicidad; preferir controlabilidad</td></tr>
+      <tr><td>Separar <strong>Topical</strong> (habla del tema) de <strong>Toxic</strong> (promueve el daño) permite entrenar un clasificador (HarmFormer) que supera a Perspective API y Llama Guard en la dimensión Toxic</td><td>Towards Safer Pretraining / HarmFormer (Mendu et al., 2025)</td><td>Filtrar por intención, no por tema</td></tr>
+      <tr><td>Clasificadores XLM-R + MLP por idioma (incluye es y pt); se elimina el 5% más tóxico de cada idioma</td><td>Apertus (2025)</td><td>Umbral por percentil y por idioma</td></tr>
+      <tr><td>Etiquetar, reformular o recontextualizar el contenido dañino en vez de solo borrarlo</td><td>Safety Pretraining (Maini et al., 2025)</td><td>Alternativa a eliminar: etiquetar y decidir después</td></tr>
+    </table>
+    <div class="tip"><strong>Hardware de toda la guía:</strong> etiquetado con un LLM de 30B MoE en 1× H100 80GB (unas horas para 50k docs); entrenamiento del clasificador en 1× A100 40GB o una GPU de 24GB (1-2 h); scoring del corpus en N GPUs en paralelo con Datatrove. <strong>Presupuesto reducido:</strong> etiquetar con un modelo de 4B en una GPU de 24GB y usar los clasificadores de Apertus (embeddings XLM-R congelados + MLP), que corren incluso en CPU para muestras chicas.</div>
+  </div>
+
+  <!-- 2. Taxonomía -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-category" aria-hidden="true"></i>2. Taxonomía Topical vs Toxic (HarmFormer)</h2>
+    <p><strong>Towards Safer Pretraining</strong> (Mendu et al., IJCAI 2025) propone clasificar cada página en tres niveles según su <em>intención</em>, en cinco categorías de daño. <strong>Safe</strong>: no toca el tema. <strong>Topical</strong>: informa, explica, denuncia o educa sobre el tema (una noticia sobre un femicidio, un artículo que desmiente una teoría conspirativa, una guía de salud sexual). <strong>Toxic</strong> (en sus datos la etiqueta interna es <code>Intent</code>): promueve, justifica, celebra o explota el daño. La regla operativa es simple: se filtra lo Toxic y se conserva lo Topical.</p>
+    <table class="model-table">
+      <tr><th>Categoría</th><th>Topical (se conserva)</th><th>Toxic (se filtra)</th></tr>
+      <tr><td>H: Hate &amp; Violence</td><td>Crónica policial, estadísticas de violencia, análisis de un conflicto</td><td>Insultos racistas, llamados a la violencia, detalles gore sensacionalistas</td></tr>
+      <tr><td>IH: Ideological Harm</td><td>Explicar o desmentir una conspiración o desinformación sanitaria</td><td>Promover conspiraciones, desinformación o sesgo contra un grupo</td></tr>
+      <tr><td>SE: Sexual Harm</td><td>Educación sexual, reportes de abuso sin detalles sexualizantes</td><td>Pornografía, servicios sexuales, sexualización de personas</td></tr>
+      <tr><td>IL: Illegal Activities</td><td>Explicar cómo funciona una estafa, hacking ético, tráfico como noticia</td><td>Promover estafas, instrucciones para delinquir, doxing</td></tr>
+      <tr><td>SI: Self-Inflicted Harm</td><td>Prevención del suicidio, salud mental, trastornos alimentarios explicados</td><td>Promoción de autolesiones, pro-ana, "pastillas para adelgazar"</td></tr>
+    </table>
+    <p>Los tres aportes del paper, todos públicos bajo Apache-2.0:</p>
+    <table class="model-table">
+      <tr><th>Recurso</th><th>Qué es</th><th>Dónde</th></tr>
+      <tr><td>TTP (Topical and Toxic Prompt)</td><td>Prompt few-shot para GPT-4o con definiciones y ejemplos por categoría; con él etiquetaron 3M páginas. TTP-Eval: 491 páginas anotadas por dos expertos (α de Krippendorff 0.77); el TSV público trae 393</td><td>GitHub: <code>prompts/TTP/TTP.txt</code>, <code>data/TTP-Eval/TTPEval.tsv</code></td></tr>
+      <tr><td>HarmFormer</td><td>Longformer-base (1024 tokens) con 5 cabezas, una por categoría, cada una con 3 clases. F1 0.85 en la dimensión Toxic sobre su test (P 0.88, R 0.81); en el test de OpenAI Moderation, F1 0.73 frente a 0.66 de Perspective API y de Llama Guard</td><td>HF: <code>themendu/HarmFormer</code></td></tr>
+      <tr><td>HAVOC</td><td>~10k prefijos web para medir si un modelo "filtra" toxicidad al completar texto; leakage global de 26.7% en los seis modelos evaluados</td><td>GitHub: <code>data/HAVOC/havoc.tsv</code></td></tr>
+      <tr><td>SafeC4</td><td>Predicciones de HarmFormer sobre C4</td><td>HF: <code>themendu/SafeC4</code></td></tr>
+    </table>
+    <p>Prevalencia medida con TTP: Common Crawl tiene 4.1% de páginas Toxic y 3.4% Topical; C4, 2.1% y 6.8%; FineWeb, 3.9% y 10.6%. Fíjate en lo que dice ese 10.6%: un filtro binario ingenuo sobre FineWeb borraría casi el triple de páginas legítimas que de tóxicas.</p>
+    <div class="warn"><strong>HarmFormer es solo inglés:</strong> el model card declara <code>language: en</code> y el paper dice explícitamente que deja el análisis multilingüe para trabajo futuro (TTP-Eval tiene apenas un puñado de páginas mixtas con español o portugués). Para es/pt reutilizamos la <em>taxonomía</em> y el <em>prompt</em>, no los pesos: etiquetamos con un LLM multilingüe y destilamos un clasificador propio (secciones 5 y 6).</div>
+  </div>
+
+  <!-- 3. Baselines -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-gauge" aria-hidden="true"></i>3. Baselines listos para usar en es/pt</h2>
+    <table class="model-table">
+      <tr><th>Clasificador</th><th>Base</th><th>Idiomas</th><th>Salida</th><th>Nota</th></tr>
+      <tr><td>Detoxify <code>multilingual</code></td><td>XLM-R base</td><td>en, fr, es, it, pt, tr, ru</td><td>toxicity + 6 subtipos</td><td>Entrenado en comentarios (Jigsaw); sesgado a groserías</td></tr>
+      <tr><td>Apertus toxicity</td><td>XLM-R base congelado + MLP por idioma</td><td>9, incl. <code>spanish</code> y <code>portuguese</code></td><td>P(tóxico) binaria</td><td>Acc. validación: pt 94.6%, es 81.6%</td></tr>
+      <tr><td>Celadon (PleIAs)</td><td>DeBERTa-v3-small, 5 cabezas</td><td>en, es, pt, fr, it, de, nl, pl, la</td><td>0-3 en raza, género, religión, capacidad, violencia</td><td>Requiere el <code>model.py</code> del repo</td></tr>
+      <tr><td>HarmFormer</td><td>Longformer base, 5×3</td><td>en</td><td>Safe/Topical/Toxic por categoría</td><td>Única con la distinción Topical</td></tr>
+    </table>
+    <p>El primer experimento siempre es el mismo: tomar frases es/pt que son Topical a propósito y ver qué hacen los baselines. Los pesos de Apertus vienen en dos versiones; usamos <code>spanish_cls.pth</code>/<code>portuguese_cls.pth</code> (solo el MLP, ~2.4 MB) y calculamos los embeddings con XLM-R nosotros. Dependencias de toda la guía: <code>pip install "transformers&gt;=5" torch detoxify safetensors pandas scikit-learn datatrove vllm</code>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import torch
+import torch.nn as nn
+from detoxify import Detoxify
+from huggingface_hub import hf_hub_download
+from transformers import AutoModel, AutoTokenizer
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Textos de prueba: los "Topical" NO deberían marcarse como tóxicos
+textos = {"es": [("topical", "La fiscalía informó que el femicidio ocurrido en Valparaíso es el tercero del mes."),
+                 ("topical", "La educación sexual integral reduce el embarazo adolescente, según el Ministerio de Salud."),
+                 ("toxic", "Esos inmigrantes son una plaga y hay que sacarlos a palos del país.")],
+          "pt": [("topical", "O relatório mostra que a violência contra pessoas LGBTQIA+ cresceu 20% no último ano."),
+                 ("toxic", "Bando de vagabundos, tem que acabar com essa raça de uma vez.")]}
+detox = Detoxify("multilingual", device=device)            # baseline 1
+xlmr_tok = AutoTokenizer.from_pretrained("FacebookAI/xlm-roberta-base")
+xlmr = AutoModel.from_pretrained("FacebookAI/xlm-roberta-base").to(device).eval()
+def apertus_head(lang_name: str) -&gt; nn.Module:                # baseline 2: claves 0.* y 3.*
+    head = nn.Sequential(nn.Linear(768, 768), nn.ReLU(), nn.Dropout(0.2), nn.Linear(768, 2))
+    path = hf_hub_download("swiss-ai/apertus-pretrain-toxicity", f"{lang_name}_cls.pth")
+    head.load_state_dict(torch.load(path, map_location="cpu"))  # se guardó en cuda
+    return head.to(device).eval()
+heads = {"es": apertus_head("spanish"), "pt": apertus_head("portuguese")}
+
+@torch.no_grad()
+def apertus_score(texts: list[str], lang: str) -&gt; list[float]:
+    enc = xlmr_tok(texts, padding=True, truncation=True, max_length=512, return_tensors="pt").to(device)
+    hidden = xlmr(**enc).last_hidden_state
+    mask = enc["attention_mask"].unsqueeze(-1).float()
+    emb = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1e-9)   # mean pooling, igual que Apertus
+    return torch.softmax(heads[lang](emb), dim=-1)[:, 1].tolist()
+
+for lang, items in textos.items():
+    frases = [t for _, t in items]
+    d = detox.predict(frases)["toxicity"]
+    a = apertus_score(frases, lang)
+    for (gold, t), sd, sa in zip(items, d, a):
+        print(f"[{lang}] {gold:8s} detoxify={sd:.2f} apertus={sa:.2f} | {t[:60]}")</code></pre>
+    </div>
+    <div class="tip"><strong>Qué esperar:</strong> los dos baselines suelen separar bien el insulto explícito, pero dan puntajes intermedios o altos a frases Topical con palabras como "femicidio", "violencia" o "sexual". Ese es el problema que resuelve la taxonomía de HarmFormer. Detoxify además fue entrenado en comentarios cortos, no en páginas web largas: trunca y promedia por párrafos si lo usas sobre documentos. Detoxify 0.5.x se escribió para transformers 4.x; si choca con v5 en tu entorno, instálalo en un venv aparte (solo se usa para baseline y muestreo).</div>
+  </div>
+
+  <!-- 4. HarmFormer -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-shield-check" aria-hidden="true"></i>4. HarmFormer en la práctica (inglés) y evaluación en TTP-Eval</h2>
+    <p>HarmFormer sirve tal cual para la porción en inglés del corpus (código, documentación técnica y web en inglés que suele entrar en la mezcla) y como referencia para medir tu clasificador es/pt con la misma taxonomía. El model card sugiere importar un <code>modeling.py</code> del repo; en vez de ejecutar código descargado, reconstruimos la arquitectura (Longformer + 5 cabezas <code>Linear(768,128) → ReLU → Linear(128,3)</code> sobre el <code>pooler_output</code>) y cargamos el <code>model.safetensors</code> con <code>strict=True</code>, que falla si alguna clave no calza.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import pandas as pd
+import torch
+import torch.nn as nn
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
+from sklearn.metrics import classification_report
+from transformers import AutoConfig, AutoTokenizer, LongformerModel
+
+CATS = ["H", "IH", "SE", "IL", "SI"]          # orden de class_map_dict en config.json
+LEVELS = ["Safe", "Topical", "Toxic"]         # orden de riesgo del model card
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+class HarmFormer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        cfg = AutoConfig.from_pretrained("allenai/longformer-base-4096")
+        self.base_model = LongformerModel(cfg)  # mismo nombre que en el checkpoint
+        self.classifiers = nn.ModuleList(
+            nn.Sequential(nn.Linear(768, 128), nn.ReLU(), nn.Linear(128, 3)) for _ in CATS
+        )
+
+    def forward(self, input_ids, attention_mask):
+        pooled = self.base_model(input_ids=input_ids, attention_mask=attention_mask).pooler_output
+        return torch.stack([clf(pooled) for clf in self.classifiers], dim=1)  # (B, 5, 3)
+
+model = HarmFormer()
+model.load_state_dict(load_file(hf_hub_download("themendu/HarmFormer", "model.safetensors")), strict=True)
+model = model.to(device).eval()
+tok = AutoTokenizer.from_pretrained("themendu/HarmFormer")
+@torch.no_grad()
+def harmformer_probs(texts: list[str], batch_size: int = 16) -&gt; torch.Tensor:
+    out = []
+    for i in range(0, len(texts), batch_size):
+        enc = tok(texts[i:i + batch_size], max_length=1024, truncation=True,
+                  padding=True, return_tensors="pt").to(device)
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
+            logits = model(enc["input_ids"], enc["attention_mask"])
+        out.append(torch.softmax(logits.float(), dim=-1).cpu())
+    return torch.cat(out)  # (N, 5, 3)
+
+# TTP-Eval: páginas anotadas por expertos (TSV en el repo del paper)
+ev = pd.read_csv("https://raw.githubusercontent.com/themendu/TowardsSaferPretraining/"
+                 "main/data/TTP-Eval/TTPEval.tsv", sep="\t",
+                 keep_default_na=False)  # si no, pandas lee "None" como NaN y se pierden las Safe
+cols = {"H": "Hate&amp;V Lab", "IH": "Ideologi Lab", "SE": "Sexual Lab",
+        "IL": "Illegal Lab", "SI": "Self-Infl Lab"}
+gold_map = {"None": "Safe", "Topical": "Topical", "Intent": "Toxic"}  # "Intent" = Toxic
+pred = harmformer_probs(ev["Body"].astype(str).tolist()).argmax(-1)
+for j, c in enumerate(CATS):
+    gold = ev[cols[c]].map(gold_map)
+    keep = gold.notna()                          # descarta etiquetas raras
+    y_pred = [LEVELS[k] for k in pred[torch.from_numpy(keep.values), j].tolist()]
+    print(f"== {c} ==")
+    print(classification_report(gold[keep], y_pred, labels=LEVELS, zero_division=0))</code></pre>
+    </div>
+    <div class="tip"><strong>Sanity check del orden de clases:</strong> el orden Safe/Topical/Toxic de las 3 salidas viene del model card. Si en TTP-Eval la clase "Safe" (la mayoritaria, ~80% de las páginas) sale con recall bajo y otra con recall alto, el orden está permutado. Con 393 páginas y una Longformer de 149M parámetros, esto corre en minutos en cualquier GPU de 16GB.</div>
+  </div>
+
+  <!-- 5. Etiquetar es/pt -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-tags" aria-hidden="true"></i>5. Etiquetar páginas es/pt con el prompt TTP y vLLM</h2>
+    <p>La receta es la de FineWeb-Edu: un LLM grande etiqueta una muestra, un encoder chico aprende a imitarlo. Reutilizamos el prompt TTP original (definiciones + 5 ejemplos few-shot, ~5k tokens) y le agregamos una instrucción para páginas en español y portugués, manteniendo el formato de salida en inglés para poder parsearlo igual. Como el prefijo es idéntico en todas las llamadas, el prefix caching de vLLM V1 lo calcula una sola vez: solo se paga el documento.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import json
+import re
+import urllib.request
+
+from datasets import load_dataset
+from vllm import LLM, SamplingParams
+
+TTP_URL = ("https://raw.githubusercontent.com/themendu/TowardsSaferPretraining/"
+           "main/prompts/TTP/TTP.txt")
+CATS = ["H", "IH", "SE", "IL", "SI"]
+LEVEL = {"None": 0, "Topical": 1, "Intent": 2}   # 0=Safe, 1=Topical, 2=Toxic
+N_PER_LANG = 25_000
+# 1) Convertir el prompt ChatML del paper en una lista de mensajes
+raw = urllib.request.urlopen(TTP_URL).read().decode("utf-8")
+turns = re.findall(r"&lt;\|im_start\|&gt;(system|user|assistant)\n?(.*?)(?=&lt;\|im_end\|&gt;|&lt;\|im_start\|&gt;|\Z)",
+                   raw, flags=re.S)
+base_msgs = [{"role": r, "content": c.strip()} for r, c in turns if c.strip()]
+assert base_msgs[-1]["role"] == "user" and "#Body#" in base_msgs[-1]["content"]
+base_msgs[0]["content"] += (
+    "\n\nThe web pages may be written in Spanish or Portuguese (including Latin American "
+    "varieties and slang). Apply exactly the same definitions regardless of language, "
+    "do not translate the page, and keep the output format in English."
+)
+
+def build_messages(url: str, body: str) -&gt; list[dict]:
+    msgs = [dict(m) for m in base_msgs]
+    msgs[-1]["content"] = msgs[-1]["content"].replace("#URL#", url).replace("#Body#", body[:6000])
+    return msgs
+def parse_labels(out: str) -&gt; dict | None:
+    m = re.search(r"&lt;Label&gt;\s*\{(.*?)\}", out, flags=re.S)
+    if not m:
+        return None
+    found = dict(re.findall(r"\b(H|IH|SE|IL|SI)\s*:\s*(None|Topical|Intent)", m.group(1)))
+    return {c: LEVEL[found[c]] for c in CATS} if len(found) == 5 else None
+
+# 2) Juez multilingüe (MoE 30B-A3B, sin modo thinking): 1x H100 80GB
+llm = LLM(model="Qwen/Qwen3-30B-A3B-Instruct-2507", max_model_len=16384,
+          gpu_memory_utilization=0.92, enable_prefix_caching=True)
+params = SamplingParams(temperature=0.0, max_tokens=512)
+# 3) Muestra de FineWeb-2 en español y portugués
+with open("ttp_labels_es_pt.jsonl", "w", encoding="utf-8") as f:
+    for lang, cfg in [("es", "spa_Latn"), ("pt", "por_Latn")]:
+        ds = load_dataset("HuggingFaceFW/fineweb-2", name=cfg, split="train", streaming=True)
+        docs = list(ds.shuffle(seed=0, buffer_size=100_000).take(N_PER_LANG))
+        convs = [build_messages(d.get("url", ""), d["text"]) for d in docs]
+        outs = llm.chat(convs, params)
+        ok = 0
+        for d, o in zip(docs, outs):
+            labels = parse_labels(o.outputs[0].text)
+            if labels is None:
+                continue
+            ok += 1
+            f.write(json.dumps({"text": d["text"], "lang": lang, "url": d.get("url", ""),
+                                **labels, "rationale": o.outputs[0].text}, ensure_ascii=False) + "\n")
+        print(f"{lang}: {ok}/{len(docs)} etiquetas parseadas")</code></pre>
+    </div>
+    <div class="warn"><strong>La muestra aleatoria casi no trae Toxic:</strong> con ~2-4% de páginas tóxicas, 50k documentos dejan pocos cientos de positivos por categoría (y casi nada en Self-Inflicted). Haz una segunda pasada de <em>muestreo dirigido</em>: puntúa 1-2M docs con Detoxify o Apertus (sección 3), toma los de puntaje alto y etiquétalos también con TTP. Así obtienes positivos Toxic <em>y</em> negativos difíciles Topical, que es exactamente lo que el clasificador tiene que aprender a separar.</div>
+    <div class="tip"><strong>Valida el juez antes de escalar:</strong> el TTP original fue diseñado y medido con GPT-4o en inglés. Anota a mano 200-300 páginas es/pt (dos anotadores, con las definiciones del prompt) y mide el acuerdo juez-humano por categoría. <strong>Presupuesto reducido:</strong> <code>Qwen/Qwen3-4B-Instruct-2507</code> en una GPU de 24GB con <code>max_model_len=12288</code>; espera más ruido en IH y SE, que son las categorías más sutiles.</div>
+  </div>
+
+  <!-- 6. Entrenar -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-topology-star-3" aria-hidden="true"></i>6. Entrenar un clasificador multi-cabeza es/pt</h2>
+    <p>Replicamos la arquitectura de HarmFormer (encoder + una cabeza de 3 clases por categoría) sobre un encoder multilingüe de contexto largo. <code>jhu-clsp/mmBERT-base</code> (ModernBERT multilingüe, 8k de contexto) permite usar 1024 tokens como HarmFormer; <code>FacebookAI/xlm-roberta-base</code> funciona igual con 512. Guarda el primer bloque como <code>harm_model.py</code>: lo importan las secciones siguientes.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># harm_model.py
+import torch
+import torch.nn as nn
+from transformers import AutoModel
+
+CATS = ["H", "IH", "SE", "IL", "SI"]
+LEVELS = ["Safe", "Topical", "Toxic"]
+
+class MultiHeadHarmClassifier(nn.Module):
+    def __init__(self, backbone: str = "jhu-clsp/mmBERT-base"):
+        super().__init__()
+        self.backbone_name = backbone
+        self.encoder = AutoModel.from_pretrained(backbone)
+        h = self.encoder.config.hidden_size
+        self.heads = nn.ModuleList(
+            nn.Sequential(nn.Dropout(0.1), nn.Linear(h, 256), nn.GELU(), nn.Linear(256, 3))
+            for _ in CATS
+        )
+
+    def forward(self, input_ids, attention_mask):
+        hidden = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state
+        mask = attention_mask.unsqueeze(-1).to(hidden.dtype)
+        pooled = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1e-6)  # mean pooling
+        return torch.stack([head(pooled) for head in self.heads], dim=1)  # (B, 5, 3)
+
+def load_classifier(path: str, device: str = "cuda") -&gt; "MultiHeadHarmClassifier":
+    ckpt = torch.load(path, map_location="cpu")
+    model = MultiHeadHarmClassifier(ckpt["backbone"])
+    model.load_state_dict(ckpt["state_dict"])
+    return model.to(device).eval()</code></pre>
+    </div>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># train_harm.py  (requiere harm_model.py y ttp_labels_es_pt.jsonl de la sección 5)
+import numpy as np
+import torch
+import torch.nn.functional as F
+from datasets import load_dataset
+from sklearn.metrics import f1_score
+from torch.utils.data import DataLoader
+from transformers import AutoTokenizer, get_cosine_schedule_with_warmup
+
+from harm_model import CATS, MultiHeadHarmClassifier
+
+BACKBONE, MAX_LEN, BS, EPOCHS, LR = "jhu-clsp/mmBERT-base", 1024, 16, 3, 3e-5
+device = "cuda"
+ds = load_dataset("json", data_files="ttp_labels_es_pt.jsonl", split="train")
+ds = ds.train_test_split(test_size=0.1, seed=42)
+tok = AutoTokenizer.from_pretrained(BACKBONE)
+
+def collate(batch):
+    enc = tok([b["text"] for b in batch], max_length=MAX_LEN, truncation=True, padding=True, return_tensors="pt")
+    enc["labels"] = torch.tensor([[b[c] for c in CATS] for b in batch])  # (B, 5)
+    return enc
+train_dl = DataLoader(ds["train"], batch_size=BS, shuffle=True, collate_fn=collate, num_workers=4)
+test_dl = DataLoader(ds["test"], batch_size=64, collate_fn=collate, num_workers=4)
+# Pesos por clase y categoría: Toxic es raro, sin esto el modelo predice siempre Safe
+train_df = ds["train"].select_columns(CATS).to_pandas()
+counts = np.stack([np.bincount(train_df[c], minlength=3) for c in CATS]) + 1   # (5, 3)
+class_w = torch.tensor((counts.sum(1, keepdims=True) / (3 * counts)) ** 0.5, dtype=torch.float32).to(device)
+
+model = MultiHeadHarmClassifier(BACKBONE).to(device)
+opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01)
+total = len(train_dl) * EPOCHS
+sched = get_cosine_schedule_with_warmup(opt, num_warmup_steps=int(0.06 * total), num_training_steps=total)
+
+for epoch in range(EPOCHS):
+    model.train()
+    for step, batch in enumerate(train_dl):
+        batch = {k: v.to(device) for k, v in batch.items()}
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            logits = model(batch["input_ids"], batch["attention_mask"])  # (B, 5, 3)
+        loss = sum(F.cross_entropy(logits[:, j].float(), batch["labels"][:, j], weight=class_w[j])
+                   for j in range(len(CATS))) / len(CATS)
+        loss.backward(); torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        opt.step(); sched.step(); opt.zero_grad()
+        if step % 200 == 0:
+            print(f"epoch {epoch} step {step} loss {loss.item():.4f}")
+    # Evaluación: F1 de "Toxic vs resto" por categoría (lo que decide el filtro)
+    model.eval(); preds, golds = [], []
+    with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        for batch in test_dl:
+            preds.append(model(batch["input_ids"].to(device), batch["attention_mask"].to(device)).argmax(-1).cpu())
+            golds.append(batch["labels"])
+    p, g = torch.cat(preds).numpy(), torch.cat(golds).numpy()
+    for j, c in enumerate(CATS):
+        print(f"  {c}: F1(Toxic)={f1_score(g[:, j] == 2, p[:, j] == 2, zero_division=0):.3f} "
+              f"macro-F1={f1_score(g[:, j], p[:, j], average='macro', zero_division=0):.3f}")
+
+torch.save({"backbone": BACKBONE, "state_dict": model.state_dict()}, "harm_es_pt.pt")</code></pre>
+    </div>
+    <div class="tip"><strong>Hardware (50k docs × 3 épocas, tiempos aproximados):</strong> mmBERT-base con 1024 tokens y batch 16 en 1× A100 40GB o H100, 1-2 h. <strong>Presupuesto reducido:</strong> 512 tokens, batch 8 y acumulación de gradiente en una GPU de 24GB (L4, RTX 4090), 2-4 h; o el enfoque de Apertus: XLM-R congelado, cachear los embeddings una vez y entrenar solo las cabezas, que tarda minutos y corre hasta en CPU. <strong>Evalúa por idioma:</strong> separa el test por <code>lang</code> y reporta F1(Toxic) para es y pt por separado. Un modelo con buen promedio puede estar fallando en una de las dos lenguas porque el juez etiquetó distinto o porque hay menos positivos en ella.</div>
+  </div>
+
+  <!-- 7. Scoring a escala -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-server" aria-hidden="true"></i>7. Puntuar el corpus a escala con Datatrove</h2>
+    <p>Un <code>PipelineStep</code> propio agrega a cada documento la probabilidad de Toxic y de Topical por categoría en <code>doc.metadata</code>. No filtramos en el mismo paso: guardar los puntajes permite cambiar el umbral después sin volver a pasar la GPU por todo el corpus.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># score_corpus.py  (requiere harm_model.py y harm_es_pt.pt)
+from datatrove.executor import LocalPipelineExecutor
+from datatrove.pipeline.base import PipelineStep
+from datatrove.pipeline.readers import ParquetReader
+from datatrove.pipeline.writers import JsonlWriter
+
+class HarmScorer(PipelineStep):
+    name = "harm-scorer"
+    type = "ANNOTATOR"
+
+    def __init__(self, ckpt: str, batch_size: int = 128, max_len: int = 1024, n_gpus: int = 1):
+        super().__init__()  # el modelo se carga en run(): cada proceso/GPU carga el suyo
+        self.ckpt, self.batch_size, self.max_len, self.n_gpus = ckpt, batch_size, max_len, n_gpus
+
+    def _score(self, docs):
+        import torch
+        enc = self.tok([d.text for d in docs], max_length=self.max_len, truncation=True,
+                       padding=True, return_tensors="pt").to(self.device)
+        with torch.no_grad(), torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            probs = torch.softmax(self.model(enc["input_ids"], enc["attention_mask"]).float(), -1)
+        for d, p in zip(docs, probs.cpu().tolist()):          # p: 5 x 3
+            for cat, (_, topical, toxic) in zip(self.cats, p):
+                d.metadata[f"toxic_{cat}"] = round(toxic, 4)
+                d.metadata[f"topical_{cat}"] = round(topical, 4)
+            d.metadata["toxic_max"] = max(d.metadata[f"toxic_{c}"] for c in self.cats)
+            self.stat_update("scored")
+        return docs
+
+    def run(self, data, rank: int = 0, world_size: int = 1):
+        from transformers import AutoTokenizer
+        from harm_model import CATS, load_classifier
+        self.device, self.cats = f"cuda:{rank % self.n_gpus}", CATS     # una GPU por tarea
+        self.model = load_classifier(self.ckpt, self.device)
+        self.tok = AutoTokenizer.from_pretrained(self.model.backbone_name)
+        buf = []
+        for doc in data:
+            buf.append(doc)
+            if len(buf) == self.batch_size:
+                yield from self._score(buf)
+                buf = []
+        if buf:
+            yield from self._score(buf)
+
+if __name__ == "__main__":   # necesario: Datatrove lanza los workers con forkserver
+    for cfg in ["spa_Latn", "por_Latn"]:
+        LocalPipelineExecutor(
+            pipeline=[
+                ParquetReader(f"hf://datasets/HuggingFaceFW/fineweb-2/data/{cfg}/train",
+                              limit=25_000),             # limit es POR tarea: 8 x 25k = 200k docs de prueba
+                HarmScorer(ckpt="harm_es_pt.pt", n_gpus=8),
+                JsonlWriter(f"scored/{cfg}"),
+            ],
+            tasks=8, workers=8,                          # una tarea por GPU (rank = GPU)
+            logging_dir=f"logs/score_{cfg}",
+        ).run()</code></pre>
+    </div>
+    <div class="tip"><strong>Throughput y escala:</strong> como orden de magnitud, un encoder base con 1024 tokens en bf16 procesa del orden de cientos a pocos miles de docs/s por H100; mide con <code>limit</code> antes de pedir horas de cluster. Para todo FineWeb-2 es/pt usa <code>SlurmPipelineExecutor</code> con una GPU por tarea (la misma clase <code>HarmScorer</code> sirve sin cambios). <strong>Presupuesto reducido:</strong> trunca a 512 tokens y puntúa solo los documentos que ya pasaron tus filtros de calidad y dedup (ver <a href="filtrado.html">Filtrado de calidad</a>): es mucho menos volumen.</div>
+  </div>
+
+  <!-- 8. Umbral y política -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>8. Elegir umbral y política de filtrado</h2>
+    <p>Dos decisiones independientes: <strong>qué</strong> se filtra (solo Toxic, nunca Topical) y <strong>cuánto</strong>. Apertus elimina el 5% más tóxico por idioma; con un clasificador de intención puedes usar un umbral de probabilidad calibrado y verificar que la tasa eliminada quede en el rango de prevalencia esperado (2-4% según el paper de HarmFormer, puede variar en es/pt).</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+from datasets import load_dataset
+
+CATS = ["H", "IH", "SE", "IL", "SI"]
+TAU = 0.5            # umbral sobre P(Toxic) de cualquier categoría
+EXEMPT = ("wikipedia.org", "scielo", ".edu", ".gob.", ".gov.br")  # ajusta a tu corpus
+
+for cfg in ["spa_Latn", "por_Latn"]:
+    ds = load_dataset("json", data_files=f"scored/{cfg}/*.jsonl.gz", split="train")
+    meta = ds["metadata"]
+    tox = np.array([m["toxic_max"] for m in meta])
+    urls = [m.get("url", "") or "" for m in meta]
+    exempt = np.array([any(e in u for e in EXEMPT) for u in urls])
+
+    p95, drop = np.quantile(tox, 0.95), (tox &gt;= TAU) &amp; ~exempt   # p95 = corte "top-5%" estilo Apertus
+    print(f"\n{cfg}: {len(tox):,} docs | p95(toxic_max)={p95:.3f} | eliminados con TAU={TAU}: {drop.mean():.2%}")
+    for c in CATS:
+        t = np.array([m[f"toxic_{c}"] for m in meta]) &gt;= TAU
+        top = np.array([m[f"topical_{c}"] for m in meta]) &gt;= 0.5
+        print(f"  {c}: Toxic {t.mean():.2%} | Topical (se conserva) {top.mean():.2%}")
+    for i in np.argsort(-tox)[:5]:   # inspección manual: revisa decenas, no solo 5
+        print("  [DROP]", round(float(tox[i]), 3), ds[int(i)]["text"][:200].replace("\n", " "))</code></pre>
+    </div>
+    <p>Con el umbral decidido, el filtrado es una segunda pasada barata (solo CPU) sobre los JSONL ya puntuados: <code>JsonlReader("scored/spa_Latn")</code> → <code>LambdaFilter(lambda doc: doc.metadata["toxic_max"] &lt; TAU, exclusion_writer=JsonlWriter("removed/spa_Latn"))</code> → <code>JsonlWriter("filtered/spa_Latn")</code>. <code>LambdaFilter</code> conserva los documentos para los que la función devuelve <code>True</code>, y el <code>exclusion_writer</code> deja los eliminados en disco para auditoría.</p>
+    <table class="model-table">
+      <tr><th>Tipo de dato</th><th>Política recomendada</th></tr>
+      <tr><td>Web general es/pt</td><td>Quitar Toxic sobre el umbral; conservar Topical</td></tr>
+      <tr><td>Noticias, salud pública, educación, fuentes oficiales</td><td>Exentas o umbral más alto; revisar a mano lo que se elimina</td></tr>
+      <tr><td>Código y matemáticas</td><td>No pasar por este filtro (falsos positivos sin beneficio)</td></tr>
+      <tr><td>Foros y redes (lenguaje coloquial)</td><td>Umbral más estricto en SE/IL, pero muestrear para no borrar variedades dialectales</td></tr>
+      <tr><td>Dato tóxico que se quiere conservar para controlabilidad</td><td>No eliminar: etiquetar (p.ej. un tag de contenido al inicio) o reducir su peso, al estilo Safety Pretraining</td></tr>
+    </table>
+  </div>
+
+  <!-- 9. Validación -->
+  <div class="guide-section">
+    <h2 class="section-title"><i class="ti ti-check" aria-hidden="true"></i>9. Validar: precisión, sesgo por grupo y efecto en el modelo</h2>
+    <p>Tres chequeos antes de dar el corpus por bueno. El primero compara los clasificadores contra datos humanos en español y portugués. Ojo: son textos cortos (tweets, comentarios, frases sintéticas), no páginas web, y binarios, sin la distinción Topical; sirven como sanity check, no como métrica final. El segundo, en el mismo bloque, mide falsos positivos por grupo.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+import torch
+from datasets import load_dataset
+from sklearn.metrics import roc_auc_score
+from transformers import AutoTokenizer
+
+from harm_model import load_classifier
+
+model = load_classifier("harm_es_pt.pt", "cuda")
+tok = AutoTokenizer.from_pretrained(model.backbone_name)
+@torch.no_grad()
+def toxic_max(texts: list[str], bs: int = 64) -&gt; np.ndarray:
+    out = []
+    for i in range(0, len(texts), bs):
+        enc = tok(texts[i:i + bs], max_length=512, truncation=True, padding=True, return_tensors="pt").to("cuda")
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            p = torch.softmax(model(enc["input_ids"], enc["attention_mask"]).float(), -1)
+        out.append(p[..., 2].max(dim=1).values.cpu().numpy())   # max P(Toxic) entre categorías
+    return np.concatenate(out)
+# Conjuntos humanos/sintéticos es/pt con etiqueta binaria
+es = load_dataset("textdetox/multilingual_toxicity_dataset", split="es")
+told = load_dataset("mteb/BrazilianToxicTweetsClassification", split="test")   # ToLD-Br
+toxsyn = load_dataset("AKCIT/ToxSyn-PT", split="test")
+sets = {
+    "es / textdetox": (list(es["text"]), list(es["toxic"])),
+    "pt / ToLD-Br": (list(told["text"]), [int(len(l) &gt; 0) for l in told["label"]]),  # sin etiquetas = no tóxico
+    "pt / ToxSyn-PT": (list(toxsyn["text"]), list(toxsyn["is_toxic"])),
+}
+for name, (x, y) in sets.items():
+    print(f"{name:18s} AUROC = {roc_auc_score(y, toxic_max(x)):.3f}  (n={len(y)})")
+
+# Sesgo: tasa de falsos positivos sobre textos BENIGNOS que mencionan grupos (ToxSyn-PT)
+s = toxic_max(list(toxsyn["text"]))
+groups, labels = np.array(list(toxsyn["group"])), np.array(list(toxsyn["is_toxic"]))
+print("\nFPR por grupo (is_toxic=0, umbral 0.5):")
+for g in sorted(set(groups) - {"neutral"}):
+    m = (groups == g) &amp; (labels == 0)
+    if m.sum() &gt;= 30:
+        print(f"  {g:28s} {np.mean(s[m] &gt;= 0.5):.2%}  (n={m.sum()})")
+m = (groups == "neutral") &amp; (labels == 0)
+print(f"  {'neutral (referencia)':28s} {np.mean(s[m] &gt;= 0.5):.2%}")</code></pre>
+    </div>
+    <div class="warn"><strong>El sesgo por grupo es el riesgo real:</strong> si el filtro tiene una tasa de falsos positivos mucho mayor en textos benignos sobre pueblos indígenas, personas LGBTQIA+ o inmigrantes que en textos neutros, estás borrando del corpus justamente las voces y temas de esos grupos. Es un patrón análogo a la "Selective Safety Trap" que MiJaBench documenta en el alineamiento de seguridad (protección desigual entre grupos). Si ves brechas grandes, agrega esos ejemplos benignos como negativos Topical al set de entrenamiento y reentrena.</div>
+    <p>El tercer chequeo es el que importa: entrenar dos modelos chicos (~1B parámetros, unos pocos miles de millones de tokens) con y sin filtro y comparar cuatro ejes. <strong>Toxicidad de generación</strong> con prompts es/pt (RTP-LX, PolygloToxicityPrompts o prefijos estilo HAVOC traducidos) puntuada con un clasificador externo: debe bajar. <strong>Capacidad general</strong> en benchmarks es/pt (ver <a href="evaluacion-latam.html">Evaluación para Latam</a>): no debe cambiar. <strong>Detección de toxicidad</strong> few-shot sobre textdetox-es y ToLD-Br: no debería caer mucho (Longpre et al.). <strong>Conocimiento de temas sensibles</strong> (historia reciente, salud sexual, derechos humanos en la región): se mantiene si lo Topical se conservó.</p>
+    <div class="tip"><strong>Gobernanza:</strong> documenta en la data card el clasificador (versión y checkpoint), el juez y el prompt usados para etiquetar, el umbral por idioma, las exenciones por dominio y el % eliminado por categoría. Conserva la carpeta <code>removed/</code> para auditoría y para poder revertir decisiones. Con Perspective API cerrando a fines de 2026, tener un clasificador propio versionado deja de ser opcional.</div>
+  </div>
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.02009" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Towards Safer Pretraining / HarmFormer (Mendu et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2305.13169" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>A Pretrainer's Guide (Longpre et al., 2023)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.04741" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>When Bad Data Leads to Good Models (Li et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.16980" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Safety Pretraining (Maini et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2509.14233" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Apertus (Project Apertus, 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2410.22587" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Toxicity of the Commons / Celadon (Arnett et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2404.14397" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>RTP-LX (de Wynter et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2601.04389" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Safety Is Not Universal / MiJaBench (Brito et al., 2026)</a>
+      <a class="source-link" href="https://github.com/themendu/TowardsSaferPretraining" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>TowardsSaferPretraining: TTP, TTP-Eval, HAVOC (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/themendu/HarmFormer" target="_blank" rel="noopener"><i class="ti ti-robot"></i>themendu/HarmFormer (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/themendu/SafeC4" target="_blank" rel="noopener"><i class="ti ti-database"></i>themendu/SafeC4 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/swiss-ai/apertus-pretrain-toxicity" target="_blank" rel="noopener"><i class="ti ti-robot"></i>swiss-ai/apertus-pretrain-toxicity (HF)</a>
+      <a class="source-link" href="https://huggingface.co/PleIAs/celadon" target="_blank" rel="noopener"><i class="ti ti-robot"></i>PleIAs/celadon (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/PleIAs/ToxicCommons" target="_blank" rel="noopener"><i class="ti ti-database"></i>PleIAs/ToxicCommons (HF)</a>
+      <a class="source-link" href="https://github.com/unitaryai/detoxify" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Detoxify (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/textdetox/multilingual_toxicity_dataset" target="_blank" rel="noopener"><i class="ti ti-database"></i>textdetox/multilingual_toxicity_dataset (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/AKCIT/ToxSyn-PT" target="_blank" rel="noopener"><i class="ti ti-database"></i>AKCIT/ToxSyn-PT (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/mteb/BrazilianToxicTweetsClassification" target="_blank" rel="noopener"><i class="ti ti-database"></i>ToLD-Br (mteb, HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>FineWeb-2 (HF)</a>
+      <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>Datatrove (GitHub)</a>
+      <a class="source-link" href="filtrado.html"><i class="ti ti-filter"></i>Guía: Filtrado de calidad</a>
+      <a class="source-link" href="fineweb-edu.html"><i class="ti ti-school"></i>Guía: FineWeb-Edu (clasificador con LLM)</a>
+      <a class="source-link" href="jql-filtrado-multilingue.html"><i class="ti ti-language"></i>Guía: JQL, filtrado multilingüe</a>
+      <a class="source-link" href="clasificador-toxicidad-harmbench.html"><i class="ti ti-shield"></i>Guía: Clasificadores de toxicidad y HarmBench</a>
+      <a class="source-link" href="red-teaming-evaluacion-seguridad.html"><i class="ti ti-target-arrow"></i>Guía: Red teaming y evaluación de seguridad</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación para Latam</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

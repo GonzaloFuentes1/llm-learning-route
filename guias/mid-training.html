@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Diseña la fase final del pretraining para español y portugués: schedule WSD, pool de datos de alto valor, microanneals de 10B tokens contra un baseline de solo web, descontaminación con decon, souping y evaluación de olvido y de preparación para RL.">
+<title>Mid-training y annealing: diseñar la fase final del pretraining — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <div class="guide-title">Mid-training y annealing: diseñar la fase final del pretraining</div>
+    <div class="guide-desc">El 10-20% final del pretraining, con el learning rate bajando a cero y datos de alto valor, es la fase que más rinde por token. Esta guía arma ese tramo para español y portugués. Cubre el schedule WSD, el pool de datos, los microanneals para decidir qué fuentes entran, la descontaminación con decon, el souping de checkpoints y una evaluación que mide ganancia, olvido y preparación para RL.</div>
+  </div>
+
+  <!-- 1. Conceptos -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-timeline" aria-hidden="true"></i>1. Qué es el mid-training (y qué no es)</div>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Warmup</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Fase estable: LR constante, web masiva (80-95% de tokens)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Anneal: LR → 0 con datos de alto valor</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Contexto largo</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">SFT / RL</div>
+    </div>
+
+    <p>Con un schedule <strong>WSD</strong> (warmup-stable-decay) el LR se mantiene constante durante casi todo el entrenamiento y cae a cero en un tramo final corto. Ese tramo es el <em>anneal</em> o <em>cooldown</em>. Como el checkpoint de la fase estable no depende de cuándo termina el entrenamiento, se pueden lanzar varios anneals desde el mismo punto con mezclas distintas y compararlos. El mid-training aprovecha eso: durante el decay se sobremuestrean matemáticas, código, QA, instrucciones y texto web de la mejor calidad, sin dejar de mezclar web general.</p>
+
+    <p>La evidencia es consistente. Blakeney et al. (2024) suben hasta +6.90 pp en MMLU, +8.26 pp en GSM8K y +6.17 pp en HumanEval en un 7B entrenado con 1T tokens, solo sobremuestreando datos de dominio al final. OLMo 2 dedica al mid-training el 5-10% de los FLOPs, con el LR decayendo linealmente a cero. Y para razonamiento hay un efecto de segundo orden: un buen mid-training hace al modelo base mucho más receptivo al RL (OctoThinker, Interplay of Pre-/Mid-Training and RL).</p>
+
+    <table class="model-table">
+      <tr><th></th><th>Mid-training / anneal</th><th>Continual pretraining</th><th>SFT</th></tr>
+      <tr><td>Punto de partida</td><td>Checkpoint de la fase estable (LR aún alto)</td><td>Modelo ya terminado (LR ya en ~0)</td><td>Modelo base terminado</td></tr>
+      <tr><td>LR</td><td>Decae del pico a 0</td><td>Re-warmup y nuevo decay</td><td>Bajo, con warmup corto</td></tr>
+      <tr><td>Datos</td><td>Mezcla curada: 50-80% de alto valor + replay web</td><td>Dominio o idioma nuevo + replay</td><td>Pares instrucción-respuesta</td></tr>
+      <tr><td>Loss</td><td>LM sobre todo el texto</td><td>LM sobre todo el texto</td><td>Solo sobre la respuesta</td></tr>
+      <tr><td>Escala típica</td><td>10B-1.5T tokens</td><td>10B-1T tokens</td><td>10M-1B tokens</td></tr>
+      <tr><td>Riesgo principal</td><td>Olvido si no hay replay; sobreajuste a benchmarks</td><td>Pico de loss al recalentar el LR, olvido</td><td>Formato sin conocimiento nuevo</td></tr>
+    </table>
+
+    <div class="tip"><strong>Si partes de un modelo público ya terminado</strong> (Llama, Qwen, Gemma), su LR ya terminó en ~0. Lo que harás es continual pretraining con re-warmup (ver la <a href="continual-pretraining.html">guía de continual pretraining</a>). Para un anneal "de verdad" necesitas un checkpoint previo al decay final (la meseta de un WSD o, en OLMo 2, el punto donde se cortó el coseno de stage 1). OLMo 2, Olmo 3 y SmolLM3 publican checkpoints intermedios en el Hub, por ejemplo la rama <code>stage1-step1907359-tokens4001B</code> de <code>allenai/OLMo-2-0425-1B</code>, el último checkpoint de stage 1 antes de su anneal. Esta guía la usa como laboratorio.</div>
+  </div>
+
+  <!-- 2. Recetas -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-books" aria-hidden="true"></i>2. Recetas publicadas (2024-2026)</div>
+
+    <p>Todas las recetas abiertas recientes separan una fase larga de pretraining general de un anneal corto con otra mezcla. No todas usan WSD estricto: OLMo 2 y Olmo 3 cortan un schedule coseno antes de terminarlo y desde ahí decaen linealmente a cero. Las diferencias importantes están en cuánto dura el anneal, qué entra y cómo se decide.</p>
+
+    <table class="model-table">
+      <tr><th>Modelo</th><th>Pretraining → anneal</th><th>Qué entra en el anneal</th><th>Detalle útil</th></tr>
+      <tr><td>OLMo 2 (7B-32B)</td><td>~3.9-6T → 50B (7B) o 3×100B + 300B (13B/32B)</td><td>Dolmino Mix 1124: web de alta calidad, matemáticas (incl. sintéticas), FLAN, Wikipedia</td><td>Introduce los <em>microanneals</em> (50% fuente + 50% web) y promedia 3-4 anneals con distinto orden de datos (souping)</td></tr>
+      <tr><td>Olmo 3 (7B/32B)</td><td>~5.9T → 100B</td><td>Dolma 3 Dolmino Mix: 100B muestreados de un pool de ~2.2T (matemáticas, código, QA, instrucciones, trazas de razonamiento; 22.5% de Common Crawl HQ)</td><td>Microanneal estándar: 5B de la fuente + 5B de web frente a 10B de solo web. Dos corridas paralelas de 100B y merge. Descontamina con decon</td></tr>
+      <tr><td>SmolLM3 (3B)</td><td>0-8T → 8-10T → 10-11.1T</td><td>Matemáticas 3% → 10% → 13%, código 12% → 15% → 24%, 12% multilingüe en todas las etapas</td><td>WSD con 2000 pasos de warmup y decay lineal a 0 en el último 10%. Después, 100B de contexto largo y ~140B de mid-training de razonamiento</td></tr>
+      <tr><td>EuroLLM-22B</td><td>3.6T → 400B → fase final</td><td>Annealing de 400B con una mezcla de mayor calidad (LR baja linealmente al 10% del pico) y una fase final con LR a 0 que suma contexto largo</td><td>Receta multilingüe europea: la referencia más cercana para es/pt</td></tr>
+      <tr><td>Nemotron 3 Nano</td><td>23.5T → 1.5T</td><td>Fase 2 con la mezcla de mayor calidad, desde el 94% del entrenamiento</td><td>WSD con decay en el último 20% (~5T); la mezcla de alta calidad ocupa solo el ~6% final</td></tr>
+      <tr><td>OctoThinker (Llama 3.2)</td><td>200B estables → 20B con decay</td><td>MegaMath-Web-Pro, QA y CoT en tres ramas</td><td>MegaMath-Web-Pro mejora base y RL; FineMath-4plus no. CoT largo ayuda, pero da verborrea e inestabilidad en RL</td></tr>
+    </table>
+
+    <div class="tip"><strong>Momento y peso interactúan.</strong> Liu et al. (2025) encuentran que el beneficio del mid-training es mayor en dominios lejanos a la web (código, matemáticas). También muestran que el momento de introducción y el peso interactúan: introducir el dominio temprano tolera pesos altos, pero si entra tarde el peso debe ser bajo, y subir el peso al final no compensa la entrada tardía. Si quieres un peso alto de un dominio nuevo, introdúcelo antes (como en las etapas 2-3 de SmolLM3) y no solo en el último decay.</div>
+  </div>
+
+  <!-- 3. Pool es/pt -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-database-cog" aria-hidden="true"></i>3. Diseñar el pool para español y portugués</div>
+
+    <p>Para LatamGPT, el mid-training es la palanca natural para "latinoamericanizar" un modelo base: subir la proporción de es/pt de alta calidad e inyectar matemáticas y razonamiento en el idioma, sin olvidar inglés ni código. Esta propuesta inicial para un anneal de 100B tokens se ajusta luego con microanneals:</p>
+
+    <table class="model-table">
+      <tr><th>Bloque</th><th>Fuentes (ids reales del Hub)</th><th>Peso inicial</th><th>Notas</th></tr>
+      <tr><td>Web es/pt de alta calidad</td><td><code>epfml/FineWeb2-HQ</code> (spa_Latn, por_Latn); <code>latam-gpt/fineweb2-spa_Latn-edu</code> con <code>int_score ≥ 3</code>; tu subconjunto JQL p70</td><td>30%</td><td>Estratifica por país (ccTLD/URL) para no quedarte solo con España y Brasil</td></tr>
+      <tr><td>PDFs educativos</td><td><code>HuggingFaceFW/finepdfs-edu</code> (spa_Latn ~2.8M docs, por_Latn ~1.3M)</td><td>10%</td><td>Suma PDFs gubernamentales y universitarios de la región procesados con OCR propio</td></tr>
+      <tr><td>Enciclopédico</td><td><code>wikimedia/wikipedia</code> (20231101.es, 20231101.pt)</td><td>4%</td><td>Repetir 2-4 épocas está bien a esta escala</td></tr>
+      <tr><td>Matemáticas</td><td><code>HuggingFaceTB/finemath</code> (finemath-4plus), <code>LLM360/MegaMath</code>, <code>nvidia/Nemotron-CC-Math-v1</code> (gated)</td><td>14%</td><td>Casi todo en inglés: traduce o reescribe al español una parte (con revisión)</td></tr>
+      <tr><td>Código</td><td><code>HuggingFaceTB/stack-edu</code></td><td>8%</td><td>Stack-Edu solo trae <code>blob_id</code>: el contenido se descarga de Software Heritage (ver card)</td></tr>
+      <tr><td>QA, instrucciones y razonamiento</td><td><code>nvidia/Nemotron-Pretraining-SFT-v1</code> (gated), <code>open-thoughts/OpenThoughts3-1.2M</code></td><td>10%</td><td>Controla el largo de las trazas: el CoT muy largo complica el RL posterior</td></tr>
+      <tr><td>Replay</td><td>Muestra de la misma mezcla de la fase estable (en + es/pt + código)</td><td>24%</td><td>Es lo que evita el olvido; Olmo 3 deja ~27.5% de web (22.5% Common Crawl HQ + 5% crawl STEM)</td></tr>
+    </table>
+
+    <div class="warn"><strong>Los benchmarks traducidos también contaminan.</strong> Si traduces GSM8K o MMLU para tener matemáticas en español, esos textos caen en tu pool y después evalúas con MGSM o Global-MMLU, que son traducciones de los mismos ítems. Traduce solo los splits de train y descontamina contra las versiones es/pt de los benchmarks (sección 6).</div>
+
+    <p>Los datasets de referencia en inglés también sirven para el replay de dominio. <code>allenai/dolma3_dolmino_mix-100B-1125</code> (Olmo 3) y <code>allenai/dolmino-mix-1124</code> (OLMo 2) publican la mezcla completa, y <code>HuggingFaceTB/smollm3-configs</code> trae las configuraciones de cada etapa de SmolLM3.</p>
+  </div>
+
+  <!-- 4. WSD -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>4. El schedule: WSD y el decay</div>
+
+    <p>La forma del decay importa menos que llegar a cero. Hägele et al. (2024) muestran que un cooldown de ~10-20% con forma <code>1-sqrt</code> iguala o supera al coseno, y OLMo 2 encuentra que, tras decaer linealmente a cero durante 50B-100B tokens, corridas con distinto LR pico terminan con una loss equivalente. El problema real aparece cuando partes de pesos sin el estado del optimizador (lo normal con checkpoints del Hub): los momentos de AdamW arrancan en cero, así que conviene un re-warmup corto.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — wsd_schedule.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import math
+
+import torch
+from torch.optim.lr_scheduler import LambdaLR
+
+
+def wsd_lambda(step: int, warmup: int, stable: int, decay: int, kind: str = "linear") -&gt; float:
+    """Multiplicador del LR pico: warmup lineal, meseta y decay a 0."""
+    if step &lt; warmup:
+        return (step + 1) / warmup
+    if step &lt; warmup + stable:
+        return 1.0
+    t = min(1.0, (step - warmup - stable) / max(1, decay))  # progreso del decay en [0, 1]
+    return {"linear": 1.0 - t, "1-sqrt": 1.0 - math.sqrt(t),
+            "cosine": 0.5 * (1.0 + math.cos(math.pi * t))}[kind]
+
+
+# Anneal de 10B tokens con batch global de ~1M tokens = ~9.5k pasos, partiendo de un
+# checkpoint estable SIN estado del optimizador: re-warmup de 100 pasos y decay en el resto.
+TOTAL, WARMUP = 9_500, 100
+opt = torch.optim.AdamW(torch.nn.Linear(8, 8).parameters(), lr=4e-4)
+sched = LambdaLR(opt, lambda s: wsd_lambda(s, WARMUP, 0, TOTAL - WARMUP))
+for step in range(TOTAL):
+    opt.step()
+    sched.step()
+    if step in (0, 99, 5_000, TOTAL - 1):
+        print(f"paso {step:&gt;5}: lr = {sched.get_last_lr()[0]:.2e}")</code></pre>
+    </div>
+
+    <div class="tip"><strong>LR pico del anneal:</strong> usa el LR que tenía el modelo en el checkpoint del que partes: el LR de la meseta si fue WSD, o el valor del coseno en ese paso si fue un coseno truncado como en OLMo 2 (está en el paper o en la config y los logs de entrenamiento). Si no lo conoces, prueba 2-3 valores con microanneals pequeños. En transformers v5 no necesitas esta función: <code>lr_scheduler_type="warmup_stable_decay"</code> con <code>lr_scheduler_kwargs={"num_decay_steps": ..., "decay_type": "linear"}</code> hace lo mismo, y es lo que usa el script de la sección 7.</div>
+  </div>
+
+  <!-- 5. Construir el pool -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-filter" aria-hidden="true"></i>5. Materializar el pool con datatrove</div>
+
+    <p>Cada fuente se extrae por separado a JSONL. Así se descontamina cada una y las variantes de microanneal se arman combinando fuentes al entrenar, sin re-extraer nada. Las fuentes se declaran una vez y cada una pasa por su propio pipeline:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — 01_build_pool.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from dataclasses import dataclass
+from typing import Callable
+
+from datatrove.executor import LocalPipelineExecutor
+from datatrove.pipeline.filters import LambdaFilter, SamplerFilter
+from datatrove.pipeline.readers import ParquetReader
+from datatrove.pipeline.writers import JsonlWriter
+
+
+@dataclass
+class Source:
+    name: str
+    path: str                                  # carpeta hf://datasets/... o local
+    glob: str = "*.parquet"
+    id_key: str = "id"
+    read_metadata: bool = False                # True si el filtro necesita columnas extra
+    keep: Callable[[dict], bool] | None = None # filtro sobre doc.metadata
+    rate: float = 1.0                          # fracción de documentos a conservar
+    adapter: Callable | None = None
+
+
+def openthoughts_adapter(self, data: dict, path: str, id_in_file) -&gt; dict:
+    """Convierte una conversación de OpenThoughts3 en texto plano para pretraining."""
+    turns = data["conversations"]
+    question = next(t["value"] for t in turns if t["from"] == "human")
+    answer = next(t["value"] for t in turns if t["from"] == "gpt")
+    return {"text": f"Problem:\n{question}\n\nSolution:\n{answer}",
+            "id": f"{path}/{id_in_file}", "metadata": {"domain": data.get("domain")}}
+
+
+SOURCES = [
+    # FineWeb2-HQ ya es el top 10%: leemos solo text/id (evita bajar la columna de embeddings)
+    Source("fw2hq_spa", "hf://datasets/epfml/FineWeb2-HQ/spa_Latn", glob="000_000[0-4]?.parquet"),
+    Source("fw2hq_por", "hf://datasets/epfml/FineWeb2-HQ/por_Latn", glob="000_000[0-4]?.parquet"),
+    Source("latam_edu_spa", "hf://datasets/latam-gpt/fineweb2-spa_Latn-edu/data",
+           glob="train-0000?-of-00256.parquet", read_metadata=True,
+           keep=lambda m: m.get("int_score", 0) &gt;= 3),
+    Source("finepdfs_edu_spa", "hf://datasets/HuggingFaceFW/finepdfs-edu/data/spa_Latn/train"),
+    Source("finepdfs_edu_por", "hf://datasets/HuggingFaceFW/finepdfs-edu/data/por_Latn/train"),
+    Source("wiki_es", "hf://datasets/wikimedia/wikipedia/20231101.es"),
+    Source("wiki_pt", "hf://datasets/wikimedia/wikipedia/20231101.pt"),
+    Source("finemath4", "hf://datasets/HuggingFaceTB/finemath/finemath-4plus", id_key="url"),
+    Source("openthoughts3", "hf://datasets/open-thoughts/OpenThoughts3-1.2M/data",
+           read_metadata=True, adapter=openthoughts_adapter, rate=0.3),
+    # Replay: una muestra de TU mezcla de la fase estable (placeholder)
+    Source("replay_web", "hf://datasets/&lt;TU_ORG&gt;/&lt;mezcla-fase-estable&gt;", rate=0.02),
+]
+
+for src in SOURCES:
+    pipeline = [
+        ParquetReader(src.path, glob_pattern=src.glob, id_key=src.id_key,
+                      read_metadata=src.read_metadata, adapter=src.adapter),
+    ]
+    if src.keep is not None:
+        pipeline.append(LambdaFilter(lambda doc, keep=src.keep: keep(doc.metadata)))
+    if src.rate &lt; 1.0:
+        pipeline.append(SamplerFilter(rate=src.rate, seed=42))
+    # JSONL por fuente: decon lee un directorio de .jsonl (también .gz/.zst) en el paso siguiente
+    pipeline.append(JsonlWriter(f"pool/raw/{src.name}", compression=None))
+
+    LocalPipelineExecutor(pipeline=pipeline, tasks=32, workers=16,
+                          logging_dir=f"logs/build_pool/{src.name}").run()</code></pre>
+    </div>
+
+    <div class="tip"><strong>Cuánto extraer:</strong> para un microanneal necesitas ~5B tokens de la fuente evaluada y otros ~5B de web, así que no hace falta bajar todo. Los <code>glob</code> de arriba limitan FineWeb2-HQ a 50 archivos por idioma y el corpus edu de LatamGPT a 10. Amplíalos solo para el anneal final. Con <code>read_metadata=False</code>, datatrove lee únicamente las columnas <code>text</code> e <code>id</code> del parquet.</div>
+  </div>
+
+  <!-- 6. Descontaminación -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-shield-check" aria-hidden="true"></i>6. Descontaminar con decon (también contra benchmarks es/pt)</div>
+
+    <p>El anneal es justo donde más daño hace la contaminación: datos de alto valor, al final, con LR que todavía mueve los pesos. Olmo 3 usa <a href="https://github.com/allenai/decon" target="_blank" rel="noopener">decon</a> (Rust). La herramienta muestrea 5-gramas cada 10 tokens contra un índice de los benchmarks y expande cada coincidencia. Luego puntúa pregunta, respuesta y pasaje, y elimina los documentos sobre el umbral (0.8 por defecto). Por defecto trae solo gsm8k, mmlu y agi_eval, así que hay que sumar los benchmarks en español y portugués en su formato de referencia:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — make_decon_evals.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import hashlib
+import itertools
+import json
+from pathlib import Path
+
+from datasets import load_dataset
+
+OUT = Path("evals_es_pt")
+OUT.mkdir(exist_ok=True)
+doc_ids = itertools.count(10_000_000)  # lejos de los doc_id de bundled-evals
+
+
+def record(key, cfg, i, question, answer=None, passage=None, is_correct=None, sub=None) -&gt; dict:
+    """Registro en el formato de referencia de decon (doc/eval-datasets.md)."""
+    fp = hashlib.sha256(f"{passage or ''}{question}{answer or ''}".encode()).hexdigest()[:16]
+    rec = {"eval_key": key, "config": cfg, "split": "test", "eval_instance_index": i,
+           "doc_id": next(doc_ids), "question": question, "fingerprint": fp,
+           "answer": answer, "passage": passage, "is_correct": is_correct, "sub_index": sub}
+    return {k: v for k, v in rec.items() if v is not None}
+
+
+def dump(name: str, rows: list[dict]) -&gt; None:
+    with open(OUT / f"{name}.jsonl", "w", encoding="utf-8") as f:
+        f.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+    print(f"{name}: {len(rows):,} referencias")
+
+
+mgsm = load_dataset("juletxara/mgsm", "es", split="test")
+dump("mgsm_es", [record("mgsm_es", "es", i, ex["question"], str(ex["answer_number"]))
+                 for i, ex in enumerate(mgsm)])
+
+for lang in ("es", "pt"):  # Global-MMLU: una referencia por opción, marcando la correcta
+    ds = load_dataset("CohereLabs/Global-MMLU", lang, split="test")
+    dump(f"global_mmlu_{lang}", [
+        record(f"global_mmlu_{lang}", lang, i, ex["question"], ex[f"option_{c}"],
+               is_correct=(ex["answer"] == c.upper()), sub=j)
+        for i, ex in enumerate(ds) for j, c in enumerate("abcd")])
+
+for cfg in ("spa_Latn", "por_Latn"):  # Belebele: pasaje + pregunta + opciones
+    ds = load_dataset("facebook/belebele", cfg, split="test")
+    dump(f"belebele_{cfg}", [
+        record(f"belebele_{cfg}", cfg, i, ex["question"], ex[f"mc_answer{k}"],
+               passage=ex["flores_passage"], is_correct=(str(k) == str(ex["correct_answer_num"])), sub=k - 1)
+        for i, ex in enumerate(ds) for k in range(1, 5)])
+
+# Agrega con el mismo patrón Trueque, LatamQA, CHOCLO (si tienes acceso) y tus evals internas.</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — 02_decon.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Requiere Rust 1.88 o superior
+git clone https://github.com/allenai/decon
+cd decon
+cargo build --release
+
+# Referencia = benchmarks incluidos (gsm8k, mmlu, agi_eval) + los es/pt generados arriba
+cp bundled-evals/*.jsonl.gz ../evals_es_pt/
+
+for SRC in ../pool/raw/*/; do
+  NAME=$(basename "$SRC")
+  cargo run --release -- detect \
+    --training-dir "$SRC" \
+    --content-key text \
+    --evals-dir ../evals_es_pt \
+    --report-output-dir "../decon/report/$NAME" \
+    --cleaned-output-dir "../pool/clean/$NAME" \
+    --purify
+done
+
+# Qué benchmark contaminó qué fuente
+cargo run --release -- review --stats ../decon/report/finemath4</code></pre>
+    </div>
+
+    <div class="warn"><strong>Límite de los n-gramas:</strong> decon tokeniza con <code>cl100k</code> y compara texto en la misma lengua. Si una fuente en inglés contiene GSM8K y evalúas con MGSM-es, el match no aparece: la contaminación entre idiomas engaña a los detectores por n-gramas (Yao et al., 2024). Si tradujiste datos, descontamina antes de traducir contra los originales en inglés, y después contra las versiones es/pt.</div>
+  </div>
+
+  <!-- 7. Tokenizar y microanneal -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-flask" aria-hidden="true"></i>7. Tokenizar y correr microanneals</div>
+
+    <p>El protocolo de Olmo 3 es simple y barato. Desde el mismo checkpoint estable, se entrena una variante con 5B tokens de la fuente candidata más 5B de web y se compara contra un baseline de 10B de solo web, con el mismo número de tokens y el mismo LR. Así se mide el efecto de la fuente por encima del efecto de seguir entrenando. Primero se tokeniza cada fuente limpia con el tokenizer del modelo base:</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — 03_tokenize.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from pathlib import Path
+
+from datatrove.executor import LocalPipelineExecutor
+from datatrove.pipeline.readers import JsonlReader
+from datatrove.pipeline.tokens import DocumentTokenizer
+from transformers import AutoTokenizer
+
+BASE = "allenai/OLMo-2-0425-1B"
+EOS = AutoTokenizer.from_pretrained(BASE).eos_token  # "&lt;|endoftext|&gt;" en OLMo 2
+
+for src_dir in sorted(p for p in Path("pool/clean").iterdir() if p.is_dir()):
+    LocalPipelineExecutor(
+        pipeline=[
+            JsonlReader(str(src_dir)),
+            DocumentTokenizer(
+                output_folder=f"pool/tokens/{src_dir.name}",
+                tokenizer_name_or_path=BASE,
+                eos_token=EOS,                    # separa documentos al empaquetar
+                shuffle_documents=True,
+                max_tokens_per_file=500_000_000,
+                seed=42,
+            ),
+        ],
+        tasks=16, workers=16, logging_dir=f"logs/tokenize/{src_dir.name}",
+    ).run()</code></pre>
+    </div>
+
+    <p>El script de anneal arma cada variante a partir de los tokens por fuente, así que los pesos de la mezcla quedan exactos en tokens. Usa el <code>Trainer</code> de transformers v5 con el scheduler WSD nativo, que alcanza para modelos de hasta ~8B en un nodo. Si tu fase estable corrió en torchtitan, OLMo-core o nanotron, replica la misma lógica de mezcla y decay ahí y reanuda también el estado del optimizador.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — 04_microanneal.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import argparse
+import os
+
+import torch
+from datatrove.utils.dataset import DatatroveFolderDataset
+from torch.utils.data import ConcatDataset, Subset
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+
+BASE = "allenai/OLMo-2-0425-1B"
+REVISION = "stage1-step1907359-tokens4001B"  # último checkpoint de stage 1, antes del anneal
+SEQ_LEN = 4096
+TOKEN_SIZE = 4         # vocab de ~100k (más de 65k): datatrove guarda tokens de 4 bytes
+PEAK_LR = 4e-4         # valor de ejemplo: usa el LR que tenía tu modelo en ese checkpoint
+WARMUP = 100           # re-warmup corto: los pesos del Hub no traen estado de AdamW
+PER_DEVICE, GRAD_ACC = 4, 8
+
+# "Web" del protocolo: replay de la fase estable + web es/pt de alta calidad
+WEB_MIX = {"replay_web": 0.5, "fw2hq_spa": 0.3, "fw2hq_por": 0.2}
+
+
+def variant(target: str | None, total: float) -&gt; dict[str, float]:
+    """target=None: baseline de solo web. Si no: 50% fuente + 50% web."""
+    web_tokens = total if target is None else total / 2
+    mix = {name: w * web_tokens for name, w in WEB_MIX.items()}
+    if target is not None:
+        mix[target] = mix.get(target, 0.0) + total / 2
+    return mix
+
+
+def build_dataset(mix: dict[str, float], seed: int) -&gt; ConcatDataset:
+    g = torch.Generator().manual_seed(seed)
+    parts = []
+    for name, tokens in mix.items():
+        ds = DatatroveFolderDataset(f"pool/tokens/{name}", seq_len=SEQ_LEN,
+                                    token_size=TOKEN_SIZE, shuffle=True, seed=seed)
+        n = int(tokens // (SEQ_LEN + 1))
+        if n &gt; len(ds):
+            raise ValueError(f"{name}: se piden {n:,} secuencias y hay {len(ds):,}")
+        idx = torch.randperm(len(ds), generator=g)[:n].tolist()
+        parts.append(Subset(ds, idx))
+        print(f"  {name:&lt;18} {tokens / 1e9:5.2f}B tokens ({n:,} secuencias)")
+    return ConcatDataset(parts)
+
+
+def collate(batch: list[dict]) -&gt; dict:
+    ids = torch.stack([b["input_ids"] for b in batch]).long()
+    return {"input_ids": ids, "labels": ids.clone()}  # el modelo desplaza los labels
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--target", default=None, help="fuente candidata; omitir = baseline web")
+parser.add_argument("--tokens", type=float, default=10e9)
+parser.add_argument("--seed", type=int, default=0)
+args = parser.parse_args()
+
+run = f"anneal-{args.target or 'web'}-{args.tokens / 1e9:.0f}B-s{args.seed}"
+train_ds = build_dataset(variant(args.target, args.tokens), args.seed)
+world = int(os.environ.get("WORLD_SIZE", 1))
+max_steps = len(train_ds) // (PER_DEVICE * GRAD_ACC * world)
+
+model = AutoModelForCausalLM.from_pretrained(BASE, revision=REVISION, dtype=torch.float32)
+
+targs = TrainingArguments(
+    output_dir=f"ckpt/{run}",
+    max_steps=max_steps,
+    per_device_train_batch_size=PER_DEVICE,
+    gradient_accumulation_steps=GRAD_ACC,
+    learning_rate=PEAK_LR,
+    warmup_steps=WARMUP,
+    lr_scheduler_type="warmup_stable_decay",
+    lr_scheduler_kwargs={"num_decay_steps": max_steps - WARMUP,
+                         "decay_type": "linear", "min_lr_ratio": 0.0},
+    weight_decay=0.1, adam_beta1=0.9, adam_beta2=0.95, max_grad_norm=1.0,
+    bf16=True, gradient_checkpointing=True, optim="adamw_torch_fused",
+    logging_steps=10, save_strategy="steps", save_steps=2_000, save_total_limit=1,
+    seed=args.seed, data_seed=args.seed, dataloader_num_workers=4,
+    remove_unused_columns=False, report_to="wandb", run_name=run,
+)
+
+trainer = Trainer(model=model, args=targs, train_dataset=train_ds, data_collator=collate)
+trainer.train()
+trainer.save_model(f"ckpt/{run}/final")
+AutoTokenizer.from_pretrained(BASE).save_pretrained(f"ckpt/{run}/final")</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — lanzar baseline y variantes (1 nodo, 8 GPUs)</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">accelerate launch --num_processes 8 04_microanneal.py                      # baseline: 10B solo web
+accelerate launch --num_processes 8 04_microanneal.py --target finemath4   # 5B FineMath + 5B web
+accelerate launch --num_processes 8 04_microanneal.py --target finepdfs_edu_spa
+accelerate launch --num_processes 8 04_microanneal.py --target wiki_es
+
+# Presupuesto reducido: microanneals de 2B (1B fuente + 1B web); repite con --seed 1
+accelerate launch --num_processes 1 04_microanneal.py --tokens 2e9 --seed 0
+accelerate launch --num_processes 1 04_microanneal.py --target finemath4 --tokens 2e9 --seed 0</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Experimento</th><th>Costo estimado (H100-h)</th><th>En 8×H100</th></tr>
+      <tr><td>Microanneal 10B, modelo 1B</td><td>~40</td><td>~5 h</td></tr>
+      <tr><td>Microanneal 10B, modelo 8B</td><td>~330</td><td>~1.7 días</td></tr>
+      <tr><td>Microanneal 10B, modelo 70B</td><td>~2,900</td><td>multinodo (FSDP + TP)</td></tr>
+      <tr><td>Anneal completo 100B, modelo 8B</td><td>~3,300</td><td>multinodo (~2 días en 64 GPUs)</td></tr>
+      <tr><td>Presupuesto reducido: 2B tokens, modelo 1B</td><td>~8</td><td>1×H100 en una noche (~25 h en 1×A100 80GB)</td></tr>
+    </table>
+
+    <div class="tip"><strong>De dónde salen los números:</strong> son estimaciones propias con la regla 6·N·D y ~40% de MFU en H100 bf16, no mediciones. Un modelo 1B con AdamW en fp32 más gradient checkpointing entra cómodo en 80 GB con DDP. Para 8B usa FSDP2 (ver la <a href="entrenamiento.html">guía de entrenamiento</a>). Con microanneals de 2B el ruido sube: corre 2 semillas por variante antes de concluir.</div>
+  </div>
+
+  <!-- 8. Souping -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-soup" aria-hidden="true"></i>8. Souping: promediar anneals</div>
+
+    <p>OLMo 2 7B corre tres anneals de 50B con distinto orden de datos y promedia los pesos. Olmo 3 hace dos corridas paralelas de 100B y las fusiona. Como todos parten del mismo checkpoint estable, los modelos quedan en la misma cuenca y el promedio suele igualar o superar al mejor individual. El script promedia checkpoints guardados con <code>save_pretrained</code> (mismo sharding):</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — 05_soup.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""Uso: python 05_soup.py ckpt/run-s0/final ckpt/run-s1/final ckpt/run-s2/final ckpt/soup"""
+import shutil
+import sys
+from pathlib import Path
+
+from safetensors.torch import load_file, save_file
+
+*inputs, out = sys.argv[1:]
+ckpts = [Path(p) for p in inputs]
+out = Path(out)
+out.mkdir(parents=True, exist_ok=True)
+
+shards = sorted(p.name for p in ckpts[0].glob("*.safetensors"))
+assert all((c / s).exists() for c in ckpts for s in shards), "mismo max_shard_size en todos"
+
+for shard in shards:
+    states = [load_file(str(c / shard)) for c in ckpts]
+    avg = {k: (sum(s[k].float() for s in states) / len(states)).to(v.dtype)
+           for k, v in states[0].items()}
+    save_file(avg, str(out / shard), metadata={"format": "pt"})
+    print(f"{shard}: {len(avg)} tensores promediados")
+
+# config, tokenizer e índice de shards se copian del primer checkpoint
+for f in ckpts[0].iterdir():
+    if f.is_file() and f.suffix != ".safetensors":
+        shutil.copy(f, out / f.name)</code></pre>
+    </div>
+  </div>
+
+  <!-- 9. Evaluación -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>9. Evaluar: ganancia por dominio, olvido y preparación para RL</div>
+
+    <p>Cada microanneal se compara contra el baseline de solo web en tres ejes: el dominio de la fuente, el conocimiento general en es/pt y el olvido en inglés. Con modelos chicos, prioriza tareas con señal: likelihood normalizada (<code>acc_norm</code>), Belebele, Global-MMLU y XStoryCloze, antes que generación libre.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash — 06_eval.sh</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash">MODEL=${1:-ckpt/anneal-finemath4-10B-s0/final}
+OUT=results/$(echo "$MODEL" | tr '/' '_')
+
+ES_PT="belebele_spa_Latn,belebele_por_Latn,global_mmlu_full_es,global_mmlu_full_pt,arc_es,arc_pt,hellaswag_es,hellaswag_pt,xstorycloze_es,assin2_rte"
+MATH="mgsm_native_cot_es,gsm8k"
+EN="arc_challenge,hellaswag,mmlu"
+
+lm_eval --model hf \
+  --model_args pretrained=$MODEL,dtype=bfloat16 \
+  --tasks $ES_PT,$MATH,$EN \
+  --batch_size auto \
+  --output_path "$OUT" \
+  --log_samples</code></pre>
+    </div>
+
+    <table class="model-table">
+      <tr><th>Señal</th><th>Tareas</th><th>Regla práctica para aceptar la fuente</th></tr>
+      <tr><td>Dominio objetivo</td><td>mgsm_native_cot_es, gsm8k (matemáticas); Global-MMLU STEM; código con HumanEval/MBPP</td><td>Mejora mayor a 2 errores estándar sobre el baseline</td></tr>
+      <tr><td>Conocimiento es/pt</td><td>Belebele, Global-MMLU es/pt, ARC/HellaSwag okapi, XStoryCloze, ASSIN2</td><td>No baja más de ~0.5 pp</td></tr>
+      <tr><td>Cultura regional</td><td>Trueque, LatamQA, CHOCLO (ver <a href="evaluacion-latam.html">evaluación Latam</a>)</td><td>No baja; idealmente sube con web/PDFs de la región</td></tr>
+      <tr><td>Olvido en inglés</td><td>arc_challenge, hellaswag, mmlu</td><td>No baja más de ~1 pp (si baja, sube el replay)</td></tr>
+    </table>
+
+    <div class="sub-title">Prueba rápida de preparación para RL</div>
+    <p>El mejor checkpoint en benchmarks no siempre es el que mejor responde al RL. OctoThinker lo muestra con FineMath-4plus, y por eso Olmo 3 evalúa también la capacidad de post-entrenamiento. Una prueba barata consiste en correr el mismo GRPO corto sobre cada candidato y comparar las curvas de reward y el MGSM-es final. El código sigue la <a href="grpo-rl.html">guía de GRPO</a>. Revisa la firma de <code>GRPOTrainer</code> en tu versión de TRL, porque cambió entre versiones.</p>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python — 07_rl_probe.py</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+import sys
+from pathlib import Path
+
+from datasets import load_dataset
+from trl import GRPOConfig, GRPOTrainer
+
+CKPT = sys.argv[1] if len(sys.argv) &gt; 1 else "ckpt/anneal-finemath4-10B-s0/final"
+TRAIN = "openai/gsm8k"  # o "&lt;TU_ORG&gt;/gsm8k-es": traducción revisada del split train
+NUM = re.compile(r"-?\d[\d.,]*\d|-?\d")
+
+
+def parse_num(s: str) -&gt; float | None:
+    s = re.sub(r"[.,](?=\d{3}\b)", "", s).replace(",", ".")  # 1.000,5 / 1,000.5 -&gt; 1000.5
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def to_prompt(ex: dict) -&gt; dict:
+    # Modelo base sin chat template: prompt en texto plano y en español
+    return {"prompt": f"Pregunta: {ex['question']}\nRespuesta: Pensemos paso a paso.",
+            "answer": ex["answer"].split("####")[-1].strip()}
+
+
+def reward_correct(completions: list[str], answer: list[str], **kwargs) -&gt; list[float]:
+    rewards = []
+    for completion, gold in zip(completions, answer):
+        text = completion.split("\nPregunta:")[0]   # el base suele inventar otra pregunta
+        nums = NUM.findall(text)
+        pred = parse_num(nums[-1]) if nums else None
+        ref = parse_num(gold)
+        rewards.append(1.0 if pred is not None and ref is not None and abs(pred - ref) &lt; 1e-6 else 0.0)
+    return rewards
+
+
+train = load_dataset(TRAIN, "main", split="train").map(to_prompt, remove_columns=["question"])
+
+config = GRPOConfig(
+    output_dir=f"rl-probe/{Path(CKPT).parent.name}",
+    max_steps=200,
+    learning_rate=1e-6,
+    per_device_train_batch_size=8,
+    gradient_accumulation_steps=4,   # 32 completions por paso: divisible por num_generations
+    num_generations=8,
+    max_completion_length=512,
+    temperature=1.0,
+    bf16=True,
+    use_vllm=True, vllm_mode="colocate",
+    logging_steps=5, report_to="wandb",
+    run_name=f"rl-probe-{Path(CKPT).parent.name}",
+)
+
+trainer = GRPOTrainer(model=CKPT, reward_funcs=reward_correct, args=config, train_dataset=train)
+trainer.train()
+trainer.save_model(config.output_dir)
+# Después: bash 06_eval.sh rl-probe/&lt;run&gt; y comparar mgsm_native_cot_es entre candidatos</code></pre>
+    </div>
+
+    <div class="tip"><strong>Hardware de la prueba:</strong> con un modelo 1B y vLLM en modo colocate entra en 1×H100 80GB (estimación: 1-3 h para 200 pasos). Lo que importa es la diferencia relativa entre candidatos con la misma receta, no el número absoluto. Si la curva de reward del candidato sube más rápido y el MGSM-es final es mayor, esa mezcla deja un mejor punto de partida para el post-training.</div>
+  </div>
+
+  <!-- 10. Errores comunes -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i>10. Errores comunes</div>
+
+    <table class="model-table">
+      <tr><th>Error</th><th>Síntoma</th><th>Qué hacer</th></tr>
+      <tr><td>Anneal sobre un modelo ya terminado sin re-warmup</td><td>Pico de loss al inicio y olvido</td><td>Re-warmup corto o, mejor, partir de un checkpoint estable</td></tr>
+      <tr><td>Demasiado CoT largo en la mezcla</td><td>Respuestas verborrágicas, RL inestable (OctoThinker)</td><td>Limita el largo de las trazas y mezcla CoT corto con QA</td></tr>
+      <tr><td>SFT masivo después del mid-training</td><td>Se pierde la ventaja del razonamiento inyectado (Front-Loading Reasoning)</td><td>En SFT prioriza calidad sobre volumen</td></tr>
+      <tr><td>Dominio nuevo con peso alto solo en el decay</td><td>Ganancia en el dominio y caída general</td><td>Bajar el peso o introducirlo antes (Liu et al.)</td></tr>
+      <tr><td>Replay insuficiente</td><td>Cae MMLU en inglés y código</td><td>20-25% de la mezcla de la fase estable</td></tr>
+      <tr><td>Comparar microanneals distintos</td><td>Conclusiones que no se replican</td><td>Mismo checkpoint, mismos tokens, mismo LR y al menos 2 semillas a escala chica</td></tr>
+      <tr><td>Descontaminar solo en inglés</td><td>MGSM-es o Global-MMLU inflados</td><td>Indexa las versiones es/pt (sección 6)</td></tr>
+      <tr><td>Instrucciones con un formato distinto al del SFT</td><td>El SFT "pelea" contra el formato aprendido</td><td>Decide si entran como texto plano o con el chat template final, y sé consistente</td></tr>
+    </table>
+
+    <div class="warn"><strong>El español del pool no es el español de la región por defecto.</strong> FineWeb2-HQ y los clasificadores edu tienden a favorecer texto formal y fuentes de España y Brasil. Si el objetivo es un modelo latinoamericano, mide la distribución por país del pool (ccTLD, dominios conocidos) y sobremuestrea fuentes regionales antes del anneal, que es donde ese sesgo pesa más.</div>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.03476" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Does your data spark joy? (Blakeney et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2501.00656" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>2 OLMo 2 Furious (OLMo Team, 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2512.13961" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Olmo 3 (Olmo Team, 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2506.20512" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>OctoThinker: Mid-training Incentivizes RL Scaling (Wang et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2510.14865" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Midtraining Bridges Pretraining and Posttraining Distributions (Liu et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2510.03264" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Front-Loading Reasoning: Pretraining and Post-Training Data (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2512.07783" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>On the Interplay of Pre-Training, Mid-Training, and RL on Reasoning LMs (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2510.06826" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Mid-Training of Large Language Models: A Survey (2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2510.23081" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>A Survey on LLM Mid-Training (Tu et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2405.18392" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Scaling Laws and Compute-Optimal Training Beyond Fixed Training Durations (Hägele et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2602.05879" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>EuroLLM-22B Technical Report (2026)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2512.20848" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Nemotron 3 Nano (NVIDIA, 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.10361" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Enhancing Multilingual LLM Pretraining with Model-Based Data Selection — FineWeb2-HQ (Messmer et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.13236" target="_blank" rel="noopener"><i class="ti ti-file-text" aria-hidden="true"></i>Data Contamination Can Cross Language Barriers (Yao et al., 2024)</a>
+      <a class="source-link" href="https://huggingface.co/blog/smollm3" target="_blank" rel="noopener"><i class="ti ti-external-link" aria-hidden="true"></i>SmolLM3 (blog HF)</a>
+      <a class="source-link" href="https://github.com/allenai/decon" target="_blank" rel="noopener"><i class="ti ti-brand-github" aria-hidden="true"></i>allenai/decon</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-brand-github" aria-hidden="true"></i>lm-evaluation-harness</a>
+      <a class="source-link" href="https://huggingface.co/docs/trl/grpo_trainer" target="_blank" rel="noopener"><i class="ti ti-external-link" aria-hidden="true"></i>TRL GRPOTrainer (docs)</a>
+      <a class="source-link" href="https://huggingface.co/allenai/OLMo-2-0425-1B" target="_blank" rel="noopener"><i class="ti ti-robot" aria-hidden="true"></i>allenai/OLMo-2-0425-1B (con ramas stage1/stage2)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/allenai/dolma3_dolmino_mix-100B-1125" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>Dolma 3 Dolmino Mix 100B (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/epfml/FineWeb2-HQ" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>epfml/FineWeb2-HQ (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/fineweb2-spa_Latn-edu" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>latam-gpt/fineweb2-spa_Latn-edu (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/finepdfs-edu" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>HuggingFaceFW/finepdfs-edu (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceTB/finemath" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>HuggingFaceTB/finemath (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/nvidia/Nemotron-Pretraining-SFT-v1" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>nvidia/Nemotron-Pretraining-SFT-v1 (HF, gated)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/open-thoughts/OpenThoughts3-1.2M" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>open-thoughts/OpenThoughts3-1.2M (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/latam-gpt/Trueque-Benchmark-beta-0.1" target="_blank" rel="noopener"><i class="ti ti-database" aria-hidden="true"></i>Trueque benchmark (LatamGPT, HF)</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat" aria-hidden="true"></i>Guía: Continual pretraining</a>
+      <a class="source-link" href="entrenamiento.html"><i class="ti ti-cpu" aria-hidden="true"></i>Guía: Entrenamiento distribuido</a>
+      <a class="source-link" href="jql-filtrado-multilingue.html"><i class="ti ti-filter" aria-hidden="true"></i>Guía: JQL filtrado multilingüe</a>
+      <a class="source-link" href="fineweb-edu.html"><i class="ti ti-filter" aria-hidden="true"></i>Guía: FineWeb-Edu para es/pt</a>
+      <a class="source-link" href="packing.html"><i class="ti ti-binary" aria-hidden="true"></i>Guía: Packing</a>
+      <a class="source-link" href="grpo-rl.html"><i class="ti ti-route" aria-hidden="true"></i>Guía: GRPO y RL</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-bar" aria-hidden="true"></i>Guía: Evaluación Latam</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>

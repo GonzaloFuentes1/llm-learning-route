@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Replica JQL para español y portugués: elige LLM-jueces por Spearman contra un gold set humano, entrena cabezas MLP sobre embeddings congelados de Arctic-Embed y filtra FineWeb2 por percentiles con un ensamble, reutilizando las anotaciones, cabezas, scores y embeddings públicos.">
+<title>JQL: filtrado multilingüe de calidad para español y portugués — LatamGPT</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<style>
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  :root { --bg:#ffffff; --bg2:#f7f6f2; --bg3:#f1f0eb; --text:#1a1a18; --text2:#5f5e5a; --text3:#888780; --border:rgba(0,0,0,0.10); --border2:rgba(0,0,0,0.18); --radius:10px; --radius-sm:6px; --accent:#3C3489; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1c1c1a; --bg2:#242422; --bg3:#2c2c2a; --text:#e8e6df; --text2:#9c9a92; --text3:#6a6860; --border:rgba(255,255,255,0.09); --border2:rgba(255,255,255,0.16); --accent:#AFA9EC; } }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg2); color:var(--text); line-height:1.6; }
+  .site-header { background:var(--bg); border-bottom:0.5px solid var(--border); padding:0 24px; position:sticky; top:0; z-index:100; }
+  .header-inner { max-width:900px; margin:0 auto; display:flex; align-items:center; gap:8px; height:52px; }
+  .logo { font-size:15px; font-weight:600; color:var(--text); text-decoration:none; display:flex; align-items:center; gap:6px; }
+  .logo-pill { font-size:10px; font-weight:500; padding:1px 6px; border-radius:99px; background:#EEEDFE; color:#3C3489; }
+  @media (prefers-color-scheme:dark) { .logo-pill { background:#3C3489; color:#CECBF6; } }
+  .header-spacer { flex:1; }
+  .nav-link { font-size:12px; color:var(--text2); text-decoration:none; display:flex; align-items:center; gap:4px; padding:4px 10px; border-radius:var(--radius-sm); border:0.5px solid var(--border2); transition:all 0.15s; }
+  .nav-link:hover { background:var(--bg3); color:var(--text); }
+  .page { max-width:900px; margin:0 auto; padding:32px 24px 80px; }
+  .guide-header { margin-bottom:36px; }
+  .breadcrumb { font-size:12px; color:var(--text3); margin-bottom:8px; }
+  .guide-title { font-size:26px; font-weight:700; margin-bottom:10px; }
+  .guide-desc { font-size:14px; color:var(--text2); max-width:620px; line-height:1.7; }
+  .guide-section { margin-bottom:44px; }
+  .section-title { font-size:19px; font-weight:600; margin-bottom:14px; padding-bottom:10px; border-bottom:0.5px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .section-title i { font-size:18px; color:var(--accent); }
+  .sub-title { font-size:15px; font-weight:600; margin:22px 0 8px; }
+  p { font-size:14px; color:var(--text2); margin-bottom:12px; line-height:1.7; }
+  .code-block { border-radius:var(--radius); overflow:hidden; border:0.5px solid var(--border); margin:14px 0; }
+  .code-toolbar { background:var(--bg3); border-bottom:0.5px solid var(--border); padding:5px 12px; display:flex; align-items:center; }
+  .code-lang { font-size:11px; font-weight:500; color:var(--text3); font-family:monospace; flex:1; }
+  .copy-btn { font-size:11px; padding:2px 9px; border-radius:4px; border:0.5px solid var(--border2); background:var(--bg); color:var(--text2); cursor:pointer; font-family:inherit; transition:all 0.15s; }
+  .copy-btn:hover { background:var(--accent); color:#fff; border-color:transparent; }
+  .copy-btn.copied { background:#085041; color:#9FE1CB; border-color:transparent; }
+  .code-block pre { margin:0; overflow-x:auto; }
+  .code-block pre code { font-family:"SF Mono","Consolas","Fira Code",monospace; font-size:13px; }
+  .tip { background:rgba(60,52,137,0.07); border-left:3px solid var(--accent); border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .tip strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .tip { background:rgba(175,169,236,0.08); } }
+  .warn { background:rgba(186,117,23,0.07); border-left:3px solid #FAC775; border-radius:0 var(--radius-sm) var(--radius-sm) 0; padding:10px 16px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.6; }
+  .warn strong { color:var(--text); }
+  @media (prefers-color-scheme:dark) { .warn { background:rgba(250,199,117,0.06); } }
+  .model-table { width:100%; border-collapse:collapse; font-size:13px; margin:14px 0; }
+  .model-table th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:500; border-bottom:0.5px solid var(--border2); }
+  .model-table td { padding:8px 12px; border-bottom:0.5px solid var(--border); color:var(--text2); }
+  .model-table tr:last-child td { border-bottom:none; }
+  .model-table td:first-child { font-weight:500; color:var(--text); }
+  .pipeline-flow { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:16px 0; }
+  .flow-step { background:var(--bg3); border:0.5px solid var(--border2); border-radius:var(--radius-sm); padding:6px 12px; font-size:12px; font-weight:500; color:var(--text); }
+  .flow-arrow { color:var(--text3); font-size:16px; }
+  .sources { margin-top:52px; padding-top:24px; border-top:0.5px solid var(--border); }
+  .sources-title { font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:var(--text3); margin-bottom:12px; }
+  .source-list { display:flex; flex-wrap:wrap; gap:8px; }
+  .source-link { display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:4px 10px; border-radius:var(--radius-sm); background:var(--bg); border:0.5px solid var(--border2); text-decoration:none; color:var(--text2); transition:border-color 0.15s; }
+  .source-link:hover { border-color:var(--accent); color:var(--text); }
+  .source-link.paper { color:#185FA5; }
+  @media (prefers-color-scheme:dark) { .source-link.paper { color:#85B7EB; } }
+  footer { text-align:center; padding:20px; font-size:12px; color:var(--text3); border-top:0.5px solid var(--border); margin-top:40px; }
+  footer a { color:inherit; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a class="logo" href="../index.html">
+      <i class="ti ti-brain" aria-hidden="true"></i>
+      LatamGPT
+      <span class="logo-pill">Engineering Hub</span>
+    </a>
+    <div class="header-spacer"></div>
+    <a class="nav-link" href="../latamgpt-roadmap.html">
+      <i class="ti ti-map-2" aria-hidden="true"></i> Roadmap
+    </a>
+    <a class="nav-link" href="../index.html">
+      <i class="ti ti-layout-grid" aria-hidden="true"></i> Guías
+    </a>
+  </div>
+</header>
+
+<main class="page">
+  <div class="guide-header">
+    <div class="breadcrumb">Guías prácticas → Datos</div>
+    <h1 class="guide-title">JQL: filtrado multilingüe de calidad para español y portugués</h1>
+    <div class="guide-desc">Replica JQL para español y portugués. Eliges LLM-jueces por Spearman contra un gold set humano, entrenas cabezas MLP sobre embeddings congelados de Arctic-Embed y filtras FineWeb2 por percentiles con un ensamble de tres cabezas. Para no recalcular lo caro, la guía reutiliza las anotaciones, cabezas, scores y embeddings que JQL publicó para spa_Latn y por_Latn.</div>
+  </div>
+
+  <!-- 1. Por qué JQL -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-scale" aria-hidden="true"></i>1. Qué es JQL y qué resultados reporta</div>
+
+    <div class="pipeline-flow">
+      <div class="flow-step">Gold set humano (511 docs × 35 idiomas)</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Elegir jueces por Spearman</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">3 LLMs anotan 500k docs/idioma</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Arctic-Embed congelado + 3 MLP</div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">Percentil por cabeza + AND</div>
+    </div>
+
+    <p><strong>JQL</strong> (<em>Judging Quality across Languages</em>, Ali et al., EMNLP 2025) es la receta de 2025 para filtrar por calidad educativa en muchos idiomas a la vez. Arranca con 511 documentos en inglés que anotaron humanos (tres anotaciones independientes por documento, de un grupo de 15 personas) y que luego se tradujeron a 35 idiomas: DeepL para los 22 idiomas que soporta y GPT-4o para el resto. En nuestros dos idiomas, el archivo de español es <code>es_deepl</code> y el de portugués es <code>pt_openai</code>. Con ese gold set se mide qué LLM ordena los documentos como lo harían los humanos. Se usa correlación de Spearman en vez de accuracy porque para filtrar importa el ranking, no acertar el entero exacto.</p>
+    <p>Los tres jueces elegidos, Gemma-3-27B-it, Mistral-Small-3.1-24B-it y Llama-3.3-70B-it, anotan ~500k documentos por idioma. Esas etiquetas se destilan en cabezas MLP de ~0.8M parámetros (768 → 1000 → 1) que van sobre embeddings <strong>congelados</strong> de <code>Snowflake/snowflake-arctic-embed-m-v2.0</code>, un encoder multilingüe con contexto de 8192 tokens. Como el embedding ya está alineado entre idiomas, una sola cabeza funciona en todos ellos e incluso transfiere a idiomas que no vio. La selección final no usa un umbral absoluto. Cada cabeza tiene su propio percentil, calculado sobre FineWeb2 <em>sin filtrar</em> de ese idioma, y un documento entra solo si las tres cabezas superan el suyo.</p>
+
+    <table class="model-table">
+      <tr><th>Configuración (13 idiomas, modelos de 2B)</th><th>Benchmarks vs. FineWeb2</th><th>Tokens vs. FineWeb2 filtered</th></tr>
+      <tr><td>JQL percentil 0.6</td><td>+4.27% promedio</td><td>+4.8%</td></tr>
+      <tr><td>JQL percentil 0.7</td><td>+6.70% promedio</td><td>−15.8%</td></tr>
+      <tr><td>Español, p0.6 (dataset card)</td><td>Supera a FW2 filtered</td><td>+9% de tokens</td></tr>
+    </table>
+    <p>La línea base son las heurísticas de FineWeb2. Los proxies son modelos densos de 2B con arquitectura Llama, entrenados con 27B o 14B tokens monolingües y evaluados con versiones multilingües de MMLU, HellaSwag y ARC. Lo interesante para LatamGPT es que JQL mejora la calidad <strong>sin</strong> perder volumen. En español, que tiene mucho texto pero no infinito, eso pesa más que en inglés.</p>
+  </div>
+
+  <!-- 2. Comparación con FineWeb-Edu -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-arrows-diff" aria-hidden="true"></i>2. JQL frente a la guía FineWeb-Edu</div>
+
+    <p>La guía <a href="fineweb-edu.html">FineWeb-Edu: etiquetar con LLM y clasificador BERT</a> enseña la receta original de 2024. Sigue siendo útil para entender el patrón LLM → clasificador, pero tiene tres debilidades que JQL resuelve.</p>
+
+    <table class="model-table">
+      <tr><th>Aspecto</th><th>Guía fineweb-edu</th><th>JQL (esta guía)</th></tr>
+      <tr><td>Anotador</td><td>Un solo LLM (Llama 70B), nunca contrastado con humanos</td><td>Tres jueces de familias distintas, elegidos por Spearman contra un gold set humano en es y pt</td></tr>
+      <tr><td>Prompt</td><td>Traducido a es/pt y solo pide un dígito, con <code>temperature=0</code></td><td>Prompt aditivo original de FineWeb-Edu en inglés, con justificación y n=3 muestras agregadas</td></tr>
+      <tr><td>Clasificador</td><td>XLM-R-base completo con fine-tuning (~280M parámetros entrenables), contexto de 512 tokens</td><td>Encoder congelado (8192 tokens) + MLP de ~0.8M parámetros que se entrena en minutos</td></tr>
+      <tr><td>Reutilización</td><td>Cada criterio nuevo exige otro fine-tuning y otra pasada por el corpus</td><td>Los mismos embeddings sirven para cabezas nuevas: toxicidad, dominio, variedad regional</td></tr>
+      <tr><td>Umbral</td><td>Fijo, score ≥ 3</td><td>Percentil por cabeza e idioma (p0.6/p0.7) y AND de las tres cabezas</td></tr>
+      <tr><td>Métrica de selección</td><td>MSE/MAE del regresor</td><td>Spearman (ranking), contra jueces y contra humanos</td></tr>
+      <tr><td>Multilingüe</td><td>Un clasificador por idioma o uno unificado es+pt</td><td>Una cabeza para 35 idiomas, con transferencia demostrada</td></tr>
+    </table>
+
+    <div class="tip"><strong>¿Por qué percentiles y no un umbral fijo?</strong> Cada juez usa la escala 0-5 a su manera: en los scores publicados de FineWeb2 español, la cabeza de Gemma suele dar valores más altos que la de Llama para el mismo documento. Un umbral ≥ 3 retiene entonces volúmenes muy distintos según la cabeza y el idioma. Con el percentil fijas el volumen de antemano, y el AND entre jueces hace de "votación" que descarta los documentos en que los jueces no coinciden.</div>
+  </div>
+
+  <!-- 3. Artefactos -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-package" aria-hidden="true"></i>3. Artefactos públicos: qué cómputo te ahorras</div>
+
+    <p>JQL publicó casi todo lo que hace falta. Si partes de esto, el único paso que de verdad cuesta GPU es puntuar el texto final, y hasta eso se puede acotar.</p>
+
+    <table class="model-table">
+      <tr><th>Artefacto (Hugging Face)</th><th>Contenido para es/pt</th><th>Paso que reemplaza</th></tr>
+      <tr><td>JQL-AI/JQL-Human-Edu-Annotations</td><td>511 docs con score humano agregado (<code>..._es_deepl.jsonl</code>, <code>..._pt_openai.jsonl</code>)</td><td>Construir un gold set (pero ver §5)</td></tr>
+      <tr><td>JQL-AI/JQL-LLM-Edu-Annotations</td><td><code>spa_Latn_sampled_500k_merged_scores.jsonl</code> y <code>por_Latn_...</code>: texto + URL + score agregado de los 3 jueces</td><td>Anotar 500k docs × 3 jueces (~100-200 GPU-h)</td></tr>
+      <tr><td>JQL-AI/JQL-Edu-Heads</td><td>6 checkpoints Lightning: <code>edu-{gemma,mistral,llama}-snowflake-{balanced,unbalanced}.ckpt</code></td><td>Entrenar las cabezas</td></tr>
+      <tr><td>JQL-AI/fw2_edu_scores</td><td>Scores de las 3 cabezas para todo FineWeb2: spa_Latn (441M filtered + 431M removed), por_Latn (200M + 286M)</td><td>Puntuar el corpus con las cabezas oficiales</td></tr>
+      <tr><td>JQL-AI/fw2_embeddings</td><td>Embeddings Arctic de 768 dim en HDF5 (<code>train/embeddings</code>, <code>train/document_id</code>); por_Latn filtered ≈ 304 GB</td><td>Embeber ~1.4B documentos para cabezas nuevas</td></tr>
+    </table>
+
+    <div class="warn"><strong>El join con el texto no es trivial.</strong> En <code>fw2_edu_scores</code> y <code>fw2_embeddings</code> la clave es <code>document_id</code> con el formato <code>"&lt;hash&gt;_&lt;n&gt;"</code>. Ese <em>no</em> es el <code>id</code> de FineWeb2 (<code>&lt;urn:uuid:...&gt;</code>), y los shards (<code>000_000_00000.jsonl</code>) no coinciden con los parquet actuales de FineWeb2 (<code>000_00000.parquet</code>), porque JQL trabajó sobre una versión anterior al re-sharding de FineWeb2 v2.1. Los cards no documentan cómo volver al texto. Úsalos sin riesgo para lo que no necesita texto: calibrar percentiles, comparar cabezas y medir la distribución de cabezas nuevas. Para materializar el subconjunto final, puntúa tú el texto (§10) o valida primero un mapeo sobre una muestra.</div>
+  </div>
+
+  <!-- 4. Hardware y entornos -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-server-bolt" aria-hidden="true"></i>4. Hardware, costos y entornos</div>
+
+    <table class="model-table">
+      <tr><th>Paso</th><th>Ruta A: reutilizar artefactos</th><th>Ruta B: jueces propios</th></tr>
+      <tr><td>Evaluar un juez en el gold es+pt</td><td>No hace falta</td><td>1×H100 80GB para modelos de 24-31B; Llama-3.3-70B con TP=4 (o FP8 en 2×H100). Menos de 1 h por juez</td></tr>
+      <tr><td>Anotar 500k docs/idioma</td><td>0 GPU-h (JQL-LLM-Edu-Annotations)</td><td>~100-200 H100-h para 3 jueces con n=3 (estimación propia)</td></tr>
+      <tr><td>Embeddings de la muestra (1M docs)</td><td colspan="2">~1.5 A100-h (JQL reporta ~11k docs/min por A100 con 690 tokens promedio)</td></tr>
+      <tr><td>Entrenar 3 cabezas</td><td colspan="2">Minutos en cualquier GPU; también corre en CPU</td></tr>
+      <tr><td>Calibrar percentiles</td><td colspan="2">CPU + ~5-10 GB de descarga desde fw2_edu_scores</td></tr>
+      <tr><td>Puntuar FineWeb2 completo</td><td colspan="2">spa_Latn (872M docs) ≈ 1,300 A100-h; por_Latn (486M) ≈ 740 A100-h; escala lineal y sin comunicación entre GPUs</td></tr>
+      <tr><td>Proxies downstream</td><td colspan="2">150M con 10B tokens ≈ 6 H100-h; 1B con 30B tokens ≈ 125 H100-h por variante (regla 6·N·D, ~40% MFU)</td></tr>
+    </table>
+
+    <div class="tip"><strong>Presupuesto reducido:</strong> con una sola GPU de 24 GB (L4, RTX 4090) puedes hacer la Ruta A completa. Arctic-Embed-m tiene ~305M parámetros, y lo único que cambia es usar lotes más chicos. En vez del corpus completo, puntúa solo los dumps recientes o solo <code>spa_Latn</code> filtered (441M docs ≈ 670 A100-h), y valida con proxies de 150M.</div>
+
+    <p>Usa dos entornos separados, porque vLLM fija su propia versión de torch y de transformers. Los dos son Python 3.12, que es lo que exigen scipy 1.18 y numpy 2.5.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Entorno 1: LLM-jueces (solo Ruta B)
+uv venv .venv-annot --python 3.12
+source .venv-annot/bin/activate
+uv pip install "vllm&gt;=0.30" pandas pyarrow scipy
+deactivate
+
+# Entorno 2: embeddings, cabezas, percentiles y puntuación masiva
+uv venv .venv-embed --python 3.12
+source .venv-embed/bin/activate
+uv pip install "torch&gt;=2.13" "transformers&gt;=5.17,&lt;6" "huggingface_hub&gt;=1.30,&lt;2.0" \
+  "datatrove[io,processing]==0.10.0" "numpy&lt;2.3" pandas pyarrow h5py scipy \
+  safetensors tldextract
+# Opcional: un wheel de xformers que coincida con tu torch, para unpad + memory-efficient attention.
+# huggingface_hub 2.0 rompe transformers/datasets 5.x: mantenlo en &lt;2.0 y usa "hf download".</code></pre>
+    </div>
+  </div>
+
+  <!-- 5. Gold set -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-certificate" aria-hidden="true"></i>5. Gold set en español y portugués</div>
+
+    <p>El gold de JQL es el punto de partida obligatorio. Con él se puede comparar con el paper.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import pandas as pd
+from huggingface_hub import hf_hub_download
+
+REPO = "JQL-AI/JQL-Human-Edu-Annotations"
+FILES = {
+    "es": "human_aggregated_scores/511_test_documents_educational_content_es_deepl.jsonl",
+    "pt": "human_aggregated_scores/511_test_documents_educational_content_pt_openai.jsonl",
+}
+
+parts = []
+for lang, fname in FILES.items():
+    path = hf_hub_download(REPO, fname, repo_type="dataset")
+    df = pd.read_json(path, lines=True)[["document_id", "text", "score"]]
+    df["lang"] = lang
+    parts.append(df)
+    print(lang, len(df), df["score"].round().value_counts().sort_index().to_dict())
+
+gold = pd.concat(parts, ignore_index=True)
+gold.to_parquet("gold_jql_es_pt.parquet", index=False)</code></pre>
+    </div>
+
+    <div class="warn"><strong>El gold de JQL no es latinoamericano.</strong> Son páginas en inglés traducidas por máquina (DeepL para es, GPT-4o para pt), y ni el paper ni el card dicen a qué variedad. No contiene registros, temas ni dominios locales. Para LatamGPT, suma un <strong>gold nativo</strong> de 300-500 documentos por idioma, muestreados de FineWeb2 por ccTLD y por región (Cono Sur, Andes, México-Centroamérica-Caribe, Brasil). Cada documento lo anotan 3 personas con la misma rúbrica 0-5, y se agrega por mayoría (o por promedio si no hay mayoría). Con Argilla o con una planilla compartida alcanza.</div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Agregar el gold nativo: CSV con columnas doc_id, lang, region, annotator, score, text
+from collections import Counter
+import pandas as pd
+
+raw = pd.read_csv("gold_nativo_anotaciones.csv")
+
+def aggregate(scores: pd.Series) -&gt; float:
+    value, count = Counter(scores.tolist()).most_common(1)[0]
+    return float(value) if count &gt;= 2 else float(scores.mean())
+
+native = (raw.groupby(["doc_id", "lang", "region", "text"], as_index=False)["score"]
+             .agg(aggregate))
+native = native.rename(columns={"doc_id": "document_id"})
+print(native.groupby(["lang", "region"]).size())
+native.to_parquet("gold_nativo_es_pt.parquet", index=False)</code></pre>
+    </div>
+  </div>
+
+  <!-- 6. Elegir jueces -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-tournament" aria-hidden="true"></i>6. Elegir LLM-jueces por Spearman (Ruta B)</div>
+
+    <p>Solo hace falta si quieres jueces más nuevos que los del paper (por ejemplo <code>google/gemma-4-31B-it</code> o <code>Qwen/Qwen3.6-27B</code>) o validar a los originales contra tu gold nativo. Igual que JQL, se usa el prompt de FineWeb-Edu <strong>en inglés</strong> también para documentos en es/pt. Así la rúbrica es la misma en todos los idiomas y los puntajes se pueden comparar; la guía fineweb-edu, en cambio, traduce el prompt. Corre este bloque en el entorno <code>.venv-annot</code>, un juez a la vez.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from huggingface_hub import hf_hub_download
+from scipy.stats import spearmanr
+from vllm import LLM, SamplingParams
+
+JUDGE = sys.argv[1] if len(sys.argv) &gt; 1 else "google/gemma-3-27b-it"
+TP = int(sys.argv[2]) if len(sys.argv) &gt; 2 else 1          # 4 para Llama-3.3-70B en 80 GB
+
+prompt_path = hf_hub_download("HuggingFaceFW/fineweb-edu-classifier", "utils/prompt.txt")
+PROMPT = open(prompt_path, encoding="utf-8").read()       # contiene el marcador &lt;EXAMPLE&gt;
+SCORE_RE = re.compile(r"Educational score:\s*([0-5])")
+
+gold = pd.read_parquet("gold_jql_es_pt.parquet")
+if Path("gold_nativo_es_pt.parquet").exists():                  # gold nativo de la §5, si ya lo tienes
+    native = pd.read_parquet("gold_nativo_es_pt.parquet").assign(lang=lambda d: d["lang"] + "-nativo")
+    gold = pd.concat([gold, native[["document_id", "text", "score", "lang"]]], ignore_index=True)
+
+llm = LLM(model=JUDGE, tensor_parallel_size=TP, max_model_len=8192,
+          enable_prefix_caching=True, gpu_memory_utilization=0.90)
+tok = llm.get_tokenizer()
+
+def truncate(text: str, max_tokens: int = 2000) -&gt; str:
+    return tok.decode(tok.encode(text, add_special_tokens=False)[:max_tokens])
+
+convs = [[{"role": "user", "content": PROMPT.replace("&lt;EXAMPLE&gt;", truncate(t))}]
+         for t in gold["text"]]
+params = SamplingParams(n=3, temperature=0.6, max_tokens=256, seed=0)
+extra = {"enable_thinking": False} if "Qwen3" in JUDGE else None   # Qwen3.x híbridos: sin thinking
+outs = llm.chat(convs, params, chat_template_kwargs=extra, use_tqdm=True)
+
+def aggregate(output) -&gt; tuple[float, int]:
+    votes = [int(m.group(1)) for c in output.outputs if (m := SCORE_RE.search(c.text))]
+    if not votes:
+        return np.nan, 3
+    value, count = Counter(votes).most_common(1)[0]
+    score = float(value) if count &gt;= 2 else float(np.mean(votes))   # mayoría, o promedio
+    return score, 3 - len(votes)
+
+res = [aggregate(o) for o in outs]
+gold["judge"] = [r[0] for r in res]
+gold["invalid"] = [r[1] for r in res]
+
+for lang, g in gold.groupby("lang"):
+    ok = g.dropna(subset=["judge"])
+    rho = spearmanr(ok["judge"], ok["score"]).statistic
+    print(f"{JUDGE:45s} [{lang:9s}] Spearman={rho:.3f}  inválidas={g['invalid'].sum() / (3 * len(g)):.1%}")</code></pre>
+    </div>
+
+    <div class="tip"><strong>Criterio de selección:</strong> quédate con los 3 mejores por Spearman <em>de familias distintas</em>, porque el ensamble AND aprovecha que se equivocan de maneras diferentes. Mide es y pt por separado: la correlación de un mismo juez puede caer bastante en portugués. Descarta los que tengan más de ~5% de respuestas sin parsear. Si un juez se sale del formato con frecuencia, puedes restringir la salida con <code>SamplingParams(structured_outputs=StructuredOutputsParams(regex=...))</code> (vLLM ≥ 0.12 eliminó <code>guided_regex</code>), pero pierdes la justificación previa al score.</div>
+  </div>
+
+  <!-- 7. Anotaciones -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-tags" aria-hidden="true"></i>7. Anotaciones de entrenamiento: reutilizar las de JQL</div>
+
+    <p>En la Ruta A no anotas nada. <code>JQL-LLM-Edu-Annotations</code> trae ~500k documentos de FineWeb2 por idioma, con el texto, los metadatos originales (<code>id</code>, <code>url</code>, <code>dump</code>, <code>filter_reason</code>) y el score agregado de cada juez. Cada archivo pesa ~1.7-1.9 GB.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import pandas as pd
+from huggingface_hub import hf_hub_download
+
+REPO = "JQL-AI/JQL-LLM-Edu-Annotations"
+JUDGES = {
+    "gemma": "gemma-3-27b-it_aggregated_score",
+    "mistral": "Mistral-Small-3.1-24B-Instruct-2503_aggregated_score",
+    "llama": "Llama-3.3-70B-Instruct_aggregated_score",
+}
+
+for lang in ["spa_Latn", "por_Latn"]:
+    path = hf_hub_download(REPO, f"{lang}_sampled_500k_merged_scores.jsonl", repo_type="dataset")
+    rows = []
+    for chunk in pd.read_json(path, lines=True, chunksize=50_000):
+        for r in chunk.itertuples(index=False):
+            scores = r.edu_score or {}
+            rows.append({"id": r.id, "url": r.url, "dump": r.dump, "text": r.text,
+                         "fw2_removed": bool(r.filter_reason),
+                         **{short: scores.get(full) for short, full in JUDGES.items()}})
+    df = pd.DataFrame(rows).dropna(subset=list(JUDGES))
+    df.to_parquet(f"annot_{lang}.parquet", index=False)
+    print(lang, len(df), "| removidos por FW2:", f"{df['fw2_removed'].mean():.1%}")
+    print(df[list(JUDGES)].agg(["mean", "std"]).round(2))</code></pre>
+    </div>
+    <p>En la Ruta B aplicas el mismo motor de la sección 6 a una muestra propia: 250k-500k documentos por idioma de <code>spa_Latn</code>/<code>por_Latn</code> y de sus subconjuntos <code>_removed</code>, estratificada por ccTLD y por dump. Procésalos en lotes de 5-10k que se escriben a parquet, para poder reanudar cada shard si se corta. Sobremuestrea dominios <code>.ar .cl .mx .co .pe .br</code>: el ccTLD es una aproximación imperfecta de la variedad, pero es la única que FineWeb2 permite sin un clasificador de variedad.</p>
+  </div>
+
+  <!-- 8. Embeddings -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-vector" aria-hidden="true"></i>8. Embeddings congelados con Arctic-Embed-m-v2.0</div>
+
+    <p>Hay que reproducir exactamente el embedding de JQL: token CLS de <code>last_hidden_state</code>, normalización L2, hasta 8192 tokens y <strong>sin</strong> el prefijo <code>query: </code>, que solo se usa para consultas de búsqueda. Si cambias cualquiera de esos detalles, las cabezas oficiales y los embeddings publicados dejan de ser compatibles con los tuyos. Guarda este bloque como <code>jql_embed.py</code>: las secciones siguientes lo importan.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">"""jql_embed.py: embeddings Arctic-Embed-m-v2.0 compatibles con JQL (CLS + L2)."""
+import numpy as np
+import torch
+import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer
+
+MODEL_ID = "Snowflake/snowflake-arctic-embed-m-v2.0"
+
+
+class ArcticEmbedder:
+    def __init__(self, device: str = "cuda", max_length: int = 8192, fast_attention: bool = True):
+        # fast_attention=True requiere xformers compatible; si falla, pásalo en False.
+        self.device = device
+        self.max_length = max_length
+        self.tok = AutoTokenizer.from_pretrained(MODEL_ID)
+        self.model = AutoModel.from_pretrained(
+            MODEL_ID,
+            trust_remote_code=True,          # GteModel aún no es nativo en transformers
+            add_pooling_layer=False,
+            dtype=torch.bfloat16,
+            unpad_inputs=fast_attention,
+            use_memory_efficient_attention=fast_attention,
+        ).to(device).eval()
+
+    @torch.inference_mode()
+    def embed(self, texts: list[str]) -&gt; torch.Tensor:
+        batch = self.tok(texts, max_length=self.max_length, padding="longest",
+                         truncation=True, return_tensors="pt").to(self.device)
+        cls = self.model(**batch).last_hidden_state[:, 0]
+        return F.normalize(cls.float(), p=2, dim=1)
+
+    def embed_corpus(self, texts: list[str], max_chars: int = 400_000, max_batch: int = 256) -&gt; np.ndarray:
+        """Lotes por presupuesto de caracteres, de los textos más largos a los más cortos (OOM temprano)."""
+        order = np.argsort([len(t) for t in texts])[::-1]
+        out = np.empty((len(texts), 768), dtype=np.float16)
+        batch, chars = [], 0
+        for idx in order:
+            n = min(len(texts[idx]), self.max_length * 6)
+            if batch and (chars + n &gt; max_chars or len(batch) == max_batch):
+                out[batch] = self.embed([texts[j] for j in batch]).cpu().numpy()
+                batch, chars = [], 0
+            batch.append(int(idx))
+            chars += n
+        if batch:
+            out[batch] = self.embed([texts[j] for j in batch]).cpu().numpy()
+        return out</code></pre>
+    </div>
+
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># embed_all.py: embeber las anotaciones y los gold sets (1M docs ≈ 1.5 A100-h)
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from jql_embed import ArcticEmbedder
+
+emb = ArcticEmbedder(device="cuda")
+for name in ["annot_spa_Latn", "annot_por_Latn", "gold_jql_es_pt", "gold_nativo_es_pt"]:
+    if not Path(f"{name}.parquet").exists():
+        print("sin", name, "(se omite)")
+        continue
+    texts = pd.read_parquet(f"{name}.parquet", columns=["text"])["text"].tolist()
+    X = emb.embed_corpus(texts)
+    np.save(f"{name}.emb.npy", X)
+    print(name, X.shape, "norma media:", float(np.linalg.norm(X[:1000].astype(np.float32), axis=1).mean()))</code></pre>
+    </div>
+    <div class="warn"><strong>No probado con transformers 5.17:</strong> Arctic-Embed-m-v2.0 todavía depende de código remoto (<code>trust_remote_code=True</code>). Ese código solo importa módulos estándar de transformers, pero en esta guía no lo ejecutamos contra la versión 5.x. Antes de lanzar millones de documentos, compara tus embeddings con los de <code>fw2_embeddings</code> para unos cientos de textos. Otra verificación: los scores de tus cabezas sobre el gold deben reproducir los de las cabezas oficiales (§10).</div>
+  </div>
+
+  <!-- 9. Cabezas -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-brain" aria-hidden="true"></i>9. Entrenar las cabezas MLP</div>
+
+    <p>Usamos los hiperparámetros del paper: MLP 768 → 1000 → 1 con ReLU, pérdida MSE, AdamW con lr 5e-4 y schedule coseno, batch 1024, hasta 20 épocas, y early stopping si el Spearman de validación no mejora al menos 1e-3 en 5 épocas seguidas. Se entrena una cabeza por juez con es + pt juntos. La variante <em>balanced</em> sobremuestrea los scores altos (4-5), que son escasos en la web.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import numpy as np
+import pandas as pd
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
+from scipy.stats import spearmanr
+from safetensors.torch import save_file
+
+LANGS = ["spa_Latn", "por_Latn"]
+
+
+def make_head() -&gt; nn.Module:
+    return nn.Sequential(nn.Linear(768, 1000), nn.ReLU(), nn.Linear(1000, 1))
+
+
+def load_xy(judge: str):
+    X = np.concatenate([np.load(f"annot_{l}.emb.npy") for l in LANGS]).astype(np.float32)
+    y = np.concatenate([pd.read_parquet(f"annot_{l}.parquet", columns=[judge])[judge].to_numpy(np.float32)
+                        for l in LANGS])
+    return X, y
+
+
+def train_head(judge: str, balanced: bool = True, epochs: int = 20, patience: int = 5,
+               min_delta: float = 1e-3, device: str = "cuda") -&gt; float:
+    X, y = load_xy(judge)
+    idx = np.random.default_rng(0).permutation(len(y))
+    n_val = int(0.05 * len(y))
+    va, tr = idx[:n_val], idx[n_val:]
+    ds = TensorDataset(torch.from_numpy(X[tr]), torch.from_numpy(y[tr]))
+    if balanced:
+        cls = np.clip(np.rint(y[tr]), 0, 5).astype(int)
+        freq = np.bincount(cls, minlength=6).astype(np.float64)
+        weights = torch.from_numpy(1.0 / freq[cls])
+        loader = DataLoader(ds, batch_size=1024,
+                            sampler=WeightedRandomSampler(weights, num_samples=len(tr), replacement=True))
+    else:
+        loader = DataLoader(ds, batch_size=1024, shuffle=True)
+
+    head = make_head().to(device)
+    opt = torch.optim.AdamW(head.parameters(), lr=5e-4)
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs * len(loader))
+    loss_fn = nn.MSELoss()
+    X_va = torch.from_numpy(X[va]).to(device)
+
+    best, best_state, bad = -1.0, None, 0
+    for ep in range(epochs):
+        head.train()
+        for xb, yb in loader:
+            xb, yb = xb.to(device), yb.to(device)
+            loss = loss_fn(head(xb).squeeze(-1), yb)
+            opt.zero_grad(set_to_none=True)
+            loss.backward()
+            opt.step()
+            sched.step()
+        head.eval()
+        with torch.no_grad():
+            pred = head(X_va).squeeze(-1).cpu().numpy()
+        rho = spearmanr(pred, y[va]).statistic
+        print(f"{judge} ep{ep:02d} loss={loss.item():.3f} val_spearman={rho:.4f}")
+        if rho &gt; best + min_delta:
+            best, bad = rho, 0
+            best_state = {k: v.detach().cpu().clone() for k, v in head.state_dict().items()}
+        else:
+            bad += 1
+            if bad &gt;= patience:
+                break
+    tag = "balanced" if balanced else "unbalanced"
+    save_file(best_state, f"head-{judge}-{tag}.safetensors")
+    return best
+
+
+for judge in ["gemma", "mistral", "llama"]:
+    print(judge, "mejor Spearman de validación:", round(train_head(judge), 4))</code></pre>
+    </div>
+    <div class="tip"><strong>Prueba de transferencia:</strong> entrena una cabeza solo con <code>spa_Latn</code> y evalúala sobre el gold en portugués, y después al revés. Si la caída es pequeña, puedes anotar un solo idioma y ahorrar la mitad del cómputo de jueces. También te sirve como argumento para aplicar la misma cabeza a gallego o catalán (<code>glg_Latn</code>, <code>cat_Latn</code>), que están en FineWeb2 y en los artefactos de JQL.</div>
+  </div>
+
+  <!-- 10. Evaluación -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-bar" aria-hidden="true"></i>10. Evaluar: cabezas oficiales, propias y el clasificador FineWeb-Edu</div>
+
+    <p>Todo se compara con la misma métrica, el Spearman contra los humanos, en el gold traducido y en el gold nativo. Los checkpoints oficiales vienen en formato Lightning, con capas <code>layer1</code>/<code>layer2</code>. Los mapeamos a <code>nn.Sequential</code> para no depender de Lightning.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+from torch import nn
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
+from scipy.stats import spearmanr
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+
+def make_head() -&gt; nn.Module:
+    return nn.Sequential(nn.Linear(768, 1000), nn.ReLU(), nn.Linear(1000, 1))
+
+
+def load_official(judge: str, tag: str = "balanced") -&gt; nn.Module:
+    path = hf_hub_download("JQL-AI/JQL-Edu-Heads", f"checkpoints/edu-{judge}-snowflake-{tag}.ckpt")
+    # Checkpoint de Lightning: weights_only=False SOLO porque es un archivo de confianza.
+    ckpt = torch.load(path, map_location="cpu", weights_only=False)
+    sd = {k.replace("layer1.", "0.").replace("layer2.", "2."): v.float()
+          for k, v in ckpt["state_dict"].items() if k.startswith(("layer1.", "layer2."))}
+    head = make_head()
+    head.load_state_dict(sd)
+    return head.eval()
+
+
+def load_own(judge: str, tag: str = "balanced") -&gt; nn.Module:
+    head = make_head()
+    head.load_state_dict(load_file(f"head-{judge}-{tag}.safetensors"))
+    return head.eval()
+
+
+rows = []
+for gold_name in ["gold_jql_es_pt", "gold_nativo_es_pt"]:
+    if not Path(f"{gold_name}.emb.npy").exists():
+        continue
+    gold = pd.read_parquet(f"{gold_name}.parquet")
+    X = torch.from_numpy(np.load(f"{gold_name}.emb.npy").astype(np.float32))
+    y = gold["score"].to_numpy()
+    preds = {}
+    for judge in ["gemma", "mistral", "llama"]:
+        with torch.no_grad():
+            preds[f"JQL oficial {judge}"] = load_official(judge)(X).squeeze(-1).numpy()
+            preds[f"propia {judge}"] = load_own(judge)(X).squeeze(-1).numpy()
+
+    # Línea base de la guía fineweb-edu: clasificador inglés, 512 tokens.
+    tok = AutoTokenizer.from_pretrained("HuggingFaceFW/fineweb-edu-classifier")
+    clf = AutoModelForSequenceClassification.from_pretrained("HuggingFaceFW/fineweb-edu-classifier").eval()
+    fw = []
+    with torch.no_grad():
+        for i in range(0, len(gold), 32):
+            enc = tok(gold["text"].iloc[i:i + 32].tolist(), truncation=True, max_length=512,
+                      padding=True, return_tensors="pt")
+            fw.append(clf(**enc).logits.squeeze(-1).float().numpy())
+    preds["fineweb-edu-classifier"] = np.concatenate(fw)
+
+    for name, p in preds.items():
+        for lang in gold["lang"].unique():
+            m = (gold["lang"] == lang).to_numpy()
+            rows.append({"modelo": name, "gold": f"{gold_name}:{lang}",
+                         "spearman": spearmanr(p[m], y[m]).statistic})
+
+print(pd.DataFrame(rows).pivot(index="modelo", columns="gold", values="spearman").round(3))</code></pre>
+    </div>
+    <p>Qué esperar. Tus cabezas deberían quedar muy cerca de las oficiales en el gold traducido, porque usan los mismos datos y el mismo embedding; una diferencia grande indica un bug en el embedding. El clasificador FineWeb-Edu suele perder correlación fuera del inglés. Lo más informativo es la columna del gold nativo: si ahí todas las cabezas caen, el problema es el criterio "educativo" aplicado a la web latinoamericana, no la arquitectura. Otras líneas base que valen la pena: <code>HuggingFaceFW/finepdfs_edu_classifier_spa_Latn</code> / <code>_por_Latn</code>, <code>utter-project/EuroFilter-v1</code> y <code>Polygl0t/portuguese-bertimbau-edu-classifier</code>.</p>
+  </div>
+
+  <!-- 11. Percentiles -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-adjustments" aria-hidden="true"></i>11. Umbrales por percentil con los scores publicados</div>
+
+    <p>JQL calcula el percentil de cada cabeza sobre FineWeb2 <strong>sin filtrar</strong> (filtered + removed) de cada idioma. Con <code>fw2_edu_scores</code> no hace falta GPU: basta con descargar algunos shards de cada split y ponderarlos por el tamaño real del split, porque en portugués <em>removed</em> es más grande que <em>filtered</em>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import random
+import numpy as np
+import pandas as pd
+from huggingface_hub import HfApi, hf_hub_download
+
+REPO = "JQL-AI/fw2_edu_scores"
+COLS = ["score_Gemma_Snowflake", "score_Mistral_Snowflake", "score_Llama_Snowflake"]
+DOCS = {  # documentos por split, según el dataset card
+    "spa_Latn": {"filtered": 441_287_261, "removed": 431_159_798},
+    "por_Latn": {"filtered": 199_737_979, "removed": 285_961_147},
+}
+FILES = HfApi().list_repo_files(REPO, repo_type="dataset")
+
+
+def sample_split(lang: str, split: str, n_shards: int = 2, rows_per_shard: int = 500_000) -&gt; pd.DataFrame:
+    shards = sorted(f for f in FILES if f.startswith(f"{lang}/{split}/"))
+    parts = []
+    for f in random.Random(0).sample(shards, n_shards):          # ~1.3-1.5 GB por shard
+        path = hf_hub_download(REPO, f, repo_type="dataset")
+        parts.append(pd.read_json(path, lines=True, nrows=rows_per_shard)[COLS])
+    df = pd.concat(parts, ignore_index=True)
+    df["split"] = split
+    df["w"] = DOCS[lang][split] / len(df)                          # peso = docs reales / docs muestreados
+    return df
+
+
+def weighted_quantile(x: np.ndarray, w: np.ndarray, q: float) -&gt; float:
+    o = np.argsort(x)
+    cw = np.cumsum(w[o])
+    return float(np.interp(q, cw / cw[-1], x[o]))
+
+
+thresholds = {}
+for lang in DOCS:
+    df = pd.concat([sample_split(lang, "filtered"), sample_split(lang, "removed")], ignore_index=True)
+    w = df["w"].to_numpy()
+    for q in (0.6, 0.7):
+        thr = {c: weighted_quantile(df[c].to_numpy(), w, q) for c in COLS}
+        thresholds[(lang, q)] = thr
+        keep = np.all([df[c].to_numpy() &gt; t for c, t in thr.items()], axis=0)   # AND de 3 cabezas
+        kept_docs = (w * keep).sum()
+        rescued = (w * keep)[df["split"].eq("removed").to_numpy()].sum()
+        print(f"{lang} p{q}: umbrales={ {c.split('_')[1]: round(t, 3) for c, t in thr.items()} }")
+        print(f"   retiene {kept_docs / w.sum():.1%} del total = {kept_docs / DOCS[lang]['filtered']:.0%} "
+              f"de los docs de FW2 filtered; {rescued / kept_docs:.1%} vienen de FW2 removed")
+    print(df[COLS].corr(method="spearman").round(3))</code></pre>
+    </div>
+    <p>Fíjate en dos cosas. La primera es la fracción de documentos que JQL "rescata" de <code>_removed</code>: las heurísticas de FineWeb2 descartan texto bueno, y por eso JQL puede ganar tokens. La segunda es la correlación entre cabezas, que suele ser alta pero no perfecta; ese desacuerdo es justamente lo que el AND aprovecha. Los volúmenes salen en documentos; para hablar de tokens necesitas el texto (§12).</p>
+
+    <div class="sub-title">Cabezas nuevas sobre fw2_embeddings, sin re-embeber</div>
+    <p>Continúa el bloque anterior, en la misma sesión. Si entrenaste una cabeza propia (por ejemplo, con jueces 2026 o con un criterio regional), sus percentiles salen de los embeddings publicados sin volver a correr el encoder: es una multiplicación de matrices por shard de ~5.4 GB.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># Continúa el bloque anterior (usa random, np, HfApi, hf_hub_download y weighted_quantile).
+import h5py
+import torch
+from torch import nn
+from safetensors.torch import load_file
+
+EMB_REPO = "JQL-AI/fw2_embeddings"
+emb_files = HfApi().list_repo_files(EMB_REPO, repo_type="dataset")
+head = nn.Sequential(nn.Linear(768, 1000), nn.ReLU(), nn.Linear(1000, 1))
+head.load_state_dict(load_file("head-gemma-balanced.safetensors"))
+head = head.cuda().eval()
+
+scores, weights = [], []
+for split, n_docs in DOCS["spa_Latn"].items():
+    shard = random.Random(1).choice(sorted(f for f in emb_files if f.startswith(f"spa_Latn/{split}/")))
+    path = hf_hub_download(EMB_REPO, shard, repo_type="dataset")
+    with h5py.File(path, "r") as f:
+        E = f["train/embeddings"]
+        part = []
+        for i in range(0, E.shape[0], 1_000_000):
+            x = torch.from_numpy(E[i:i + 1_000_000].astype(np.float32)).cuda()
+            with torch.no_grad():
+                part.append(head(x).squeeze(-1).cpu().numpy())
+    part = np.concatenate(part)
+    scores.append(part)
+    weights.append(np.full(len(part), n_docs / len(part)))
+
+s, w = np.concatenate(scores), np.concatenate(weights)
+print("p60 de la cabeza propia:", round(weighted_quantile(s, w, 0.6), 3),
+      "| p70:", round(weighted_quantile(s, w, 0.7), 3))</code></pre>
+    </div>
+  </div>
+
+  <!-- 12. Puntuación masiva -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-rocket" aria-hidden="true"></i>12. Puntuar el texto con datatrove y seleccionar</div>
+
+    <p>Para materializar el subconjunto necesitas el score junto al texto. Este <code>PipelineStep</code> de datatrove 0.10 embebe, aplica las tres cabezas y escribe <code>score_&lt;cabeza&gt;</code> en los metadatos <strong>sin filtrar todavía</strong>. Guardar todos los scores te deja cambiar de percentil o agregar cabezas sin volver a pasar por la GPU. Ejecuta una task por GPU; en un cluster, cambia <code>LocalPipelineExecutor</code> por <code>SlurmPipelineExecutor</code>.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python"># jql_score.py (necesita jql_embed.py en el mismo directorio)
+import torch
+from datatrove.data import DocumentsPipeline
+from datatrove.executor import LocalPipelineExecutor
+from datatrove.pipeline.base import PipelineStep
+from datatrove.pipeline.readers import ParquetReader
+from datatrove.pipeline.writers import ParquetWriter
+from datatrove.utils.batching import batched
+
+
+class JQLScorer(PipelineStep):
+    name = "JQL scorer"
+    type = "Annotator"
+
+    def __init__(self, head_paths: dict[str, str], batch_size: int = 1024):
+        super().__init__()
+        self.head_paths = head_paths
+        self.batch_size = batch_size
+
+    def run(self, data: DocumentsPipeline, rank: int = 0, world_size: int = 1) -&gt; DocumentsPipeline:
+        from safetensors.torch import load_file
+        from torch import nn
+        from jql_embed import ArcticEmbedder
+
+        device = f"cuda:{rank % torch.cuda.device_count()}"
+        embedder = ArcticEmbedder(device=device)
+        heads = {}
+        for name, path in self.head_paths.items():
+            h = nn.Sequential(nn.Linear(768, 1000), nn.ReLU(), nn.Linear(1000, 1))
+            h.load_state_dict(load_file(path))
+            heads[name] = h.to(device).eval()
+
+        for batch in batched(data, self.batch_size):
+            with self.track_time(unit="batch"):
+                emb = torch.from_numpy(embedder.embed_corpus([d.text for d in batch])).to(device).float()
+                with torch.no_grad():
+                    scores = {n: h(emb).squeeze(-1).cpu().numpy() for n, h in heads.items()}
+            for i, doc in enumerate(batch):
+                for n, s in scores.items():
+                    doc.metadata[f"score_{n}"] = float(s[i])
+                self.stat_update("scored")
+                yield doc
+
+
+if __name__ == "__main__":
+    n_gpus = torch.cuda.device_count()
+    heads = {j: f"head-{j}-balanced.safetensors" for j in ["gemma", "mistral", "llama"]}
+    for subset in ["spa_Latn", "spa_Latn_removed"]:
+        LocalPipelineExecutor(
+            pipeline=[
+                ParquetReader(f"hf://datasets/HuggingFaceFW/fineweb-2/data/{subset}/train",
+                              limit=200_000),          # quita el limit para la corrida real
+                JQLScorer(heads),
+                ParquetWriter(f"jql_scored/{subset}"),
+            ],
+            tasks=n_gpus, workers=n_gpus,
+            logging_dir=f"logs/jql_{subset}",
+        ).run()</code></pre>
+    </div>
+
+    <p>Después, la selección y la auditoría por país. Usamos los umbrales de la §11 (o los recalculados sobre tus propios scores) y contamos palabras, que es la unidad que reporta FineWeb2.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">python</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-python">import glob
+import numpy as np
+import pandas as pd
+import tldextract
+
+HEADS = ["gemma", "mistral", "llama"]
+LATAM = {"ar", "bo", "br", "cl", "co", "cr", "cu", "do", "ec", "gt", "hn", "mx",
+         "ni", "pa", "pe", "py", "sv", "uy", "ve", "pr"}
+
+frames = []
+for split in ["spa_Latn", "spa_Latn_removed"]:
+    for f in glob.glob(f"jql_scored/{split}/*.parquet"):
+        df = pd.read_parquet(f)
+        meta = pd.json_normalize(df["metadata"].tolist()) if "metadata" in df.columns else df
+        meta["words"] = df["text"].str.split().str.len().to_numpy()
+        meta["split"] = split
+        frames.append(meta)
+docs = pd.concat(frames, ignore_index=True)
+
+# Percentiles sobre la población completa (filtered + removed), como en JQL
+q = 0.6
+thr = {h: docs[f"score_{h}"].quantile(q) for h in HEADS}
+docs["keep"] = np.all([docs[f"score_{h}"] &gt; thr[h] for h in HEADS], axis=0)
+
+fw2_words = docs.loc[docs["split"] == "spa_Latn", "words"].sum()
+jql_words = docs.loc[docs["keep"], "words"].sum()
+print(f"JQL p{q}: {jql_words / fw2_words:.1%} de las palabras de FW2 filtered")
+
+docs["tld"] = docs["url"].map(lambda u: tldextract.extract(u).suffix.split(".")[-1])
+docs["region"] = np.where(docs["tld"].isin(LATAM), docs["tld"],
+                          np.where(docs["tld"] == "es", "es (España)", "otros"))
+by_region = docs.groupby("region").agg(docs_total=("keep", "size"), retencion=("keep", "mean"))
+print(by_region.sort_values("docs_total", ascending=False).round(3).head(25))</code></pre>
+    </div>
+    <div class="warn"><strong>Auditoría por país, obligatoria:</strong> si la retención de <code>.cl</code>, <code>.pe</code> o <code>.bo</code> queda muy por debajo de la de <code>.es</code>, el filtro está castigando temas o registros locales y no la calidad. Antes de aplicar un umbral global, inspecciona a mano 50 documentos descartados por país. Si el sesgo se confirma, una opción es usar percentiles por región o garantizar una cuota mínima por país. Para muestras pequeñas, aplica también <em>rehydration</em> por <code>minhash_cluster_size</code>, como en FineWeb2.</div>
+  </div>
+
+  <!-- 13. Validación downstream -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-chart-line" aria-hidden="true"></i>13. Validación downstream con modelos proxy</div>
+
+    <p>El Spearman no reemplaza a entrenar un modelo. Entrena proxies idénticos (mismo tokenizer, misma arquitectura y mismo número de tokens) con cada variante: FW2 filtered, FineWeb2-HQ, JQL p0.6, JQL p0.7 y el clasificador de la guía fineweb-edu con umbral ≥ 3. DataDecide muestra que un ranking obtenido con proxies de 150M acierta ~80% de las comparaciones a 1B. Usa tareas de alta señal y probabilidad normalizada.</p>
+    <div class="code-block">
+      <div class="code-toolbar"><span class="code-lang">bash</span><button class="copy-btn">Copiar</button></div>
+      <pre><code class="language-bash"># Verifica los nombres de tareas en tu versión de lm-eval
+lm-eval ls tasks | grep -E "spanish_bench|portuguese_bench|belebele_(spa|por)_Latn|xstorycloze_es"
+
+for variant in fw2 fw2hq jql_p60 jql_p70 fwedu3; do
+  lm_eval --model hf \
+    --model_args pretrained=checkpoints/proxy-1b-${variant},dtype=bfloat16 \
+    --tasks spanish_bench,portuguese_bench,belebele_spa_Latn,belebele_por_Latn,xstorycloze_es \
+    --batch_size auto \
+    --output_path results/${variant}
+done</code></pre>
+    </div>
+    <p>Mira <code>acc_norm</code> en lugar de <code>acc</code> cuando la tarea lo reporte, y corre al menos 2 semillas por variante si la diferencia es menor a 1 punto. Si JQL no supera a FW2 filtered en tu proxy, revisa el sesgo por país antes de culpar al método: es muy posible que los benchmarks en español, mayormente traducidos del inglés, premien el mismo sesgo "educativo-anglo" que tiene el filtro.</p>
+  </div>
+
+  <!-- 14. Riesgos -->
+  <div class="guide-section">
+    <div class="section-title"><i class="ti ti-alert-triangle" aria-hidden="true"></i>14. Extensiones y riesgos para Latam</div>
+
+    <table class="model-table">
+      <tr><th>Tema</th><th>Recomendación</th></tr>
+      <tr><td>Cabezas extra</td><td>Sobre el mismo embedding puedes entrenar cabezas de toxicidad, dominio (salud, derecho, código) y relevancia regional. Cada una cuesta minutos y se aplica a los embeddings ya calculados</td></tr>
+      <tr><td>Registro coloquial</td><td>El criterio "educativo" castiga foros, diálogo y literatura. No todo el corpus de pretraining debe salir de este filtro: mézclalo con fuentes conversacionales y literarias</td></tr>
+      <tr><td>Lenguas originarias</td><td>No apliques JQL a guaraní, quechua, mapudungun o aimara (<code>gug</code>, <code>quy</code>, <code>arn</code>, <code>ayr</code>). Su volumen en FineWeb2 es mínimo, así que conviene conservarlo todo y solo deduplicar</td></tr>
+      <tr><td>Gold traducido</td><td>Reporta siempre el Spearman en el gold nativo, además del traducido. Si los dos divergen, el nativo manda</td></tr>
+      <tr><td>Licencias y data card</td><td>FineWeb2 y las anotaciones de JQL (humanas y de LLM) se publican bajo ODC-By; los cards de <code>fw2_edu_scores</code> y <code>fw2_embeddings</code> no declaran licencia, así que confírmala con los autores antes de redistribuir derivados. Documenta en el data card qué versión de FW2, qué cabezas, qué percentiles y qué retención por país usaste</td></tr>
+      <tr><td>"Removing Noise, not Finding Gold"</td><td>Hay evidencia de que estos filtros ganan sobre todo por eliminar ruido. Compara también con un filtro de ruido más barato antes de concluir que el criterio educativo es lo que suma</td></tr>
+    </table>
+  </div>
+
+  <div class="sources">
+    <div class="sources-title">Referencias</div>
+    <div class="source-list">
+      <a class="source-link paper" href="https://arxiv.org/abs/2505.22232" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>JQL: Judging Quality Across Languages (Ali et al., 2025)</a>
+      <a class="source-link paper" href="https://aclanthology.org/2025.emnlp-main.449/" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>JQL en ACL Anthology (EMNLP 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2412.04506" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Arctic-Embed 2.0 (Yu et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2506.20920" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb2 (Penedo et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2406.17557" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb / FineWeb-Edu (Penedo et al., 2024)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2502.10361" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>FineWeb2-HQ (Messmer et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2504.11393" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>DataDecide (Magnusson et al., 2025)</a>
+      <a class="source-link paper" href="https://arxiv.org/abs/2510.00866" target="_blank" rel="noopener"><i class="ti ti-file-text"></i>Removing Noise, not Finding Gold (Nait Saada et al., 2025)</a>
+      <a class="source-link" href="https://github.com/JQL-AI/JQL-Annotation-Pipeline" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>JQL-Annotation-Pipeline (GitHub)</a>
+      <a class="source-link" href="https://huggingface.co/JQL-AI/JQL-Edu-Heads" target="_blank" rel="noopener"><i class="ti ti-robot"></i>JQL-AI/JQL-Edu-Heads (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/JQL-AI/JQL-Human-Edu-Annotations" target="_blank" rel="noopener"><i class="ti ti-database"></i>JQL-Human-Edu-Annotations (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/JQL-AI/JQL-LLM-Edu-Annotations" target="_blank" rel="noopener"><i class="ti ti-database"></i>JQL-LLM-Edu-Annotations (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/JQL-AI/fw2_edu_scores" target="_blank" rel="noopener"><i class="ti ti-database"></i>JQL-AI/fw2_edu_scores (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/JQL-AI/fw2_embeddings" target="_blank" rel="noopener"><i class="ti ti-database"></i>JQL-AI/fw2_embeddings (HF)</a>
+      <a class="source-link" href="https://huggingface.co/spaces/JQL-AI/JQL" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>JQL (HF Space)</a>
+      <a class="source-link" href="https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v2.0" target="_blank" rel="noopener"><i class="ti ti-robot"></i>snowflake-arctic-embed-m-v2.0 (HF)</a>
+      <a class="source-link" href="https://huggingface.co/HuggingFaceFW/fineweb-edu-classifier/blob/main/utils/prompt.txt" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>Prompt FineWeb-Edu (HF)</a>
+      <a class="source-link" href="https://huggingface.co/datasets/HuggingFaceFW/fineweb-2" target="_blank" rel="noopener"><i class="ti ti-database"></i>HuggingFaceFW/fineweb-2 (HF)</a>
+      <a class="source-link" href="https://github.com/huggingface/datatrove" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>datatrove (GitHub)</a>
+      <a class="source-link" href="https://docs.vllm.ai/en/latest/features/structured_outputs.html" target="_blank" rel="noopener"><i class="ti ti-external-link"></i>vLLM structured outputs (docs)</a>
+      <a class="source-link" href="https://github.com/EleutherAI/lm-evaluation-harness" target="_blank" rel="noopener"><i class="ti ti-brand-github"></i>lm-evaluation-harness (GitHub)</a>
+      <a class="source-link" href="fineweb-edu.html"><i class="ti ti-filter"></i>Guía: FineWeb-Edu con LLM y clasificador BERT</a>
+      <a class="source-link" href="filtrado.html"><i class="ti ti-filter"></i>Guía: Filtrado de calidad</a>
+      <a class="source-link" href="filtrado-toxicidad-pretraining.html"><i class="ti ti-shield"></i>Guía: Filtrado de toxicidad en pretraining</a>
+      <a class="source-link" href="bert.html"><i class="ti ti-topology-star-3"></i>Guía: Encoders es/pt</a>
+      <a class="source-link" href="evaluacion-latam.html"><i class="ti ti-chart-bar"></i>Guía: Evaluación en español y portugués</a>
+      <a class="source-link" href="continual-pretraining.html"><i class="ti ti-repeat"></i>Guía: Continual Pretraining</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Construido para CENIA · LatamGPT · <a href="../index.html">Engineering Hub</a>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightAll();
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.setAttribute('aria-live', 'polite');
+    btn.addEventListener('click', () => {
+      const code = btn.closest('.code-block').querySelector('code').textContent.trim();
+      const done = (ok) => {
+        btn.textContent = ok ? '¡Copiado!' : 'Selecciona y copia';
+        btn.classList.toggle('copied', ok);
+        setTimeout(() => { btn.textContent = 'Copiar'; btn.classList.remove('copied'); }, 1800);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        ta.remove(); done(ok);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(code).then(() => done(true), fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+</script>
+</body>
+</html>
