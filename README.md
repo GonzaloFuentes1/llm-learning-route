@@ -1,5 +1,9 @@
 # LatamGPT Engineering Hub
 
+**English summary.** This repository is a roadmap of LLM engineering topics, from fundamentals to current research, with topics linked to arXiv papers, plus a set of 44 practical guides with code. It is a static site published at https://gonzalofuentes1.github.io/llm-learning-route/. The roadmap has 13 sections and 302 topics with more than 900 arXiv-linked papers, and a shorter recommended route of 7 stages. The site and the guides are written in Spanish, with a focus on Spanish and Portuguese; the Spanish description follows below.
+
+---
+
 Portal de ingeniería de modelos de lenguaje: una ruta de aprendizaje de fundamentos a SOTA 2026 y guías prácticas con código para quienes construyen LLMs. Nació en [LatamGPT](https://huggingface.co/latam-gpt), el proyecto de LLMs para Latinoamérica de [CENIA](https://cenia.cl), así que los ejemplos ponen foco en español y portugués, pero el contenido sirve para cualquier modelo.
 
 **Sitio:** https://gonzalofuentes1.github.io/llm-learning-route/
@@ -13,7 +17,7 @@ Portal de ingeniería de modelos de lenguaje: una ruta de aprendizaje de fundame
 [`latamgpt-roadmap.html`](latamgpt-roadmap.html) tiene dos vistas:
 
 - **Ruta recomendada** (`#ruta`): el pipeline completo de un LLM en 7 etapas, de fundamentos a deployment, con ~35 temas y una guía práctica por etapa. Es el punto de partida para quien llega nuevo.
-- **Roadmap completo** (`#completo`): 13 secciones con casi 300 temas y más de 900 papers enlazados a arXiv, con búsqueda y filtros por nivel (Básico / Core / Avanzado / SOTA 2026 / LatamGPT).
+- **Roadmap completo** (`#completo`): 13 secciones con 302 temas y más de 900 papers enlazados a arXiv, con búsqueda y filtros por nivel (Básico / Core / Avanzado / SOTA 2026 / LatamGPT).
 
 | Sección | Qué cubre |
 |---|---|
